@@ -606,6 +606,28 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
       <div class="inline-form" style="margin-top:14px;"><button type="button" class="btn" id="btnGenUretimFormu">📄 Üretim Formu Oluştur</button></div>
     </div>
 
+    <!-- BASKI / NAKIŞ FORMU -->
+    <div class="section-title">🖨️ Baskı / Nakış Formu</div>
+    <div class="panel-box">
+      <div class="field" style="max-width:420px;"><label>İşten Bilgileri Doldur (opsiyonel)</label><select id="bnfJobSelect"><option value="">— Seçiniz —</option></select></div>
+      <div class="form-row">
+        <div class="field"><label>Sipariş No</label><input type="text" id="bnfSiparisNo"></div>
+        <div class="field"><label>Sipariş Adı</label><input type="text" id="bnfSiparisAdi"></div>
+      </div>
+      <div class="form-row">
+        <div class="field"><label>Teslim Tarihi</label><input type="date" id="bnfTeslimTarihi"></div>
+        <div class="field"><label>Müşteri</label><input type="text" id="bnfMusteri"></div>
+      </div>
+      <div class="section-title" style="margin:14px 0 8px;font-size:13px;">Ürünler <span style="font-weight:400;color:var(--muted);font-size:12px;">(her ürün için görsel ve adet ekleyin)</span></div>
+      <div id="bnfProductsWrap"></div>
+      <div class="inline-form" style="margin-top:10px;"><button type="button" class="btn small secondary" id="btnAddBnfProduct">+ Ürün Ekle</button></div>
+      <div class="field" style="margin-top:16px;"><label>Baskı / Nakış Talimatı <span style="font-weight:400;color:var(--muted);">(yer, renk, teknik vb.)</span></label><textarea id="bnfNot" placeholder="Örn: Göğüste nakış, sırtta baskı olacak. İplik rengi: Lacivert."></textarea></div>
+      <div class="section-title" style="margin:14px 0 8px;font-size:13px;">Baskı / Nakış Dosyaları <span style="font-weight:400;color:var(--muted);font-size:12px;">(tasarım dosyaları — "Oluştur"a basınca bu formla birlikte Materyaller'e otomatik yüklenir)</span></div>
+      <input type="file" id="bnfFilesInput" multiple>
+      <div id="bnfFilesList" style="margin-top:8px;font-size:12.5px;color:var(--muted);"></div>
+      <div class="inline-form" style="margin-top:14px;"><button type="button" class="btn" id="btnGenBaskiNakisFormu">🖨️ Baskı/Nakış Formu Oluştur</button></div>
+    </div>
+
     <!-- ONAY FORMU -->
     <div class="section-title">✅ Onay Formu</div>
     <div class="panel-box">
@@ -1337,6 +1359,18 @@ async function handleMatFileSelect(slug, e) {
   MAT_LOADED[slug] = false;
   await refreshMatFolderFiles(slug);
   await refreshMatFolderCount(slug);
+}
+// Materyaller'de belirtilen klasör yoksa sessizce oluşturur (yeni belge tiplerinin ilk
+// kullanımında elle klasör açmaya gerek kalmasın diye).
+async function ensureMatFolder(slug, label) {
+  if (!matBackendReady()) return;
+  try {
+    const folders = await (await matApi('/api/folders')).json();
+    if (folders.some(f => f.slug === slug)) return;
+  } catch (e) { /* listeleme başarısızsa yine de oluşturmayı dene */ }
+  try {
+    await matApi('/api/folders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label: label }) });
+  } catch (e) { /* muhtemelen aynı anda başka biri oluşturdu, yoksay */ }
 }
 async function addGeneratedMaterial(slug, name, html) {
   if (!matBackendReady()) return;
@@ -2199,6 +2233,7 @@ function docShell(title, bodyHtml) {
     .print-bar { max-width:794px; margin:12px auto; text-align:right; }
     .print-bar button { background:#12213b; color:#fff; border:none; padding:9px 18px; border-radius:8px; font-size:13px; cursor:pointer; }
     @media print { .print-bar { display:none; } body { background:#fff; } .sheet { box-shadow:none; margin:0; max-width:100%; } }
+    @page { size: A4; margin: 12mm; }
   </style>
   </head><body>
   <div class="print-bar"><button onclick="window.print()">🖨️ Yazdır / PDF Kaydet</button></div>
@@ -2348,7 +2383,7 @@ function sizeStateSummaryLine(stateObj) {
 
 function populateBelgeJobSelects() {
   const opts = '<option value="">— Seçiniz —</option>' + DATA.jobs.slice().sort((a,b)=>(b.order_date||'').localeCompare(a.order_date||'')).map(j=>'<option value="'+j.id+'">'+esc(j.job_no)+' — '+esc(j.title)+'</option>').join('');
-  ['ufJobSelect','ofJobSelect','ftJobSelect'].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = opts; });
+  ['ufJobSelect','ofJobSelect','ftJobSelect','bnfJobSelect'].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = opts; });
 }
 
 function attachImageInput(inputId, previewId, setter) {
@@ -2385,9 +2420,12 @@ function renderBelgeOlusturucu() {
   renderGenericSizeTable('ufSizeTable', UF_SIZE);
   renderGenericSizeTable('ofSizeTable', OF_SIZE);
   renderFiyatItemsTable();
+  renderBnfProducts();
+  renderBnfFilesList();
   if (!document.getElementById('ufTeslimTarihi').value) document.getElementById('ufTeslimTarihi').value = todayISO();
   if (!document.getElementById('ofTarih').value) document.getElementById('ofTarih').value = todayISO();
   if (!document.getElementById('ftTarih').value) document.getElementById('ftTarih').value = todayISO();
+  if (!document.getElementById('bnfTeslimTarihi').value) document.getElementById('bnfTeslimTarihi').value = todayISO();
 
   attachImageInput('ufImgOnInput', 'ufImgOnPreview', v => UF_IMG_ON = v);
   attachImageInput('ufImgArkaInput', 'ufImgArkaPreview', v => UF_IMG_ARKA = v);
@@ -2432,6 +2470,75 @@ function renderBelgeOlusturucu() {
       const desc = job.product_description || job.title || job.product_type || '';
       FIYAT_ITEMS.push({ desc: desc + (job.product_color ? (' — '+job.product_color) : ''), qty: job.quantity||0, price: job.unit_price||0 });
       renderFiyatItemsTable();
+    });
+  }
+  const bnfSel = document.getElementById('bnfJobSelect');
+  if (!bnfSel._wired) {
+    bnfSel._wired = true;
+    bnfSel.addEventListener('change', () => {
+      const job = DATA.jobs.find(j=>j.id===parseInt(bnfSel.value,10));
+      if (!job) return;
+      document.getElementById('bnfSiparisNo').value = job.job_no||'';
+      document.getElementById('bnfSiparisAdi').value = job.title||'';
+      document.getElementById('bnfTeslimTarihi').value = job.delivery_date||'';
+      document.getElementById('bnfMusteri').value = jobCustomerDisplay(job);
+      if (!BNF_PRODUCTS.length) {
+        BNF_PRODUCTS.push({ name: job.product_type || job.title || '', qty: job.quantity || 0, img: null });
+        renderBnfProducts();
+      }
+    });
+  }
+  if (!document.getElementById('btnAddBnfProduct')._wired) {
+    document.getElementById('btnAddBnfProduct')._wired = true;
+    document.getElementById('btnAddBnfProduct').addEventListener('click', () => {
+      BNF_PRODUCTS.push({ name: '', qty: 0, img: null });
+      renderBnfProducts();
+    });
+  }
+  const bnfFilesInputEl = document.getElementById('bnfFilesInput');
+  if (!bnfFilesInputEl._wired) {
+    bnfFilesInputEl._wired = true;
+    bnfFilesInputEl.addEventListener('change', () => {
+      const files = Array.from(bnfFilesInputEl.files || []);
+      BNF_FILES = BNF_FILES.concat(files);
+      bnfFilesInputEl.value = '';
+      renderBnfFilesList();
+    });
+  }
+  if (!document.getElementById('btnGenBaskiNakisFormu')._wired) {
+    document.getElementById('btnGenBaskiNakisFormu')._wired = true;
+    document.getElementById('btnGenBaskiNakisFormu').addEventListener('click', async () => {
+      const data = {
+        siparis_no: document.getElementById('bnfSiparisNo').value,
+        siparis_adi: document.getElementById('bnfSiparisAdi').value,
+        teslim_tarihi: document.getElementById('bnfTeslimTarihi').value,
+        musteri: document.getElementById('bnfMusteri').value,
+        not: document.getElementById('bnfNot').value,
+        products: BNF_PRODUCTS,
+        dosyaAdlari: BNF_FILES.map(f=>f.name),
+      };
+      if (!data.siparis_adi) { flash('Sipariş Adı girin.', 'error'); return; }
+      if (!BNF_PRODUCTS.length) { flash('En az bir ürün ekleyin.', 'error'); return; }
+      const _bnfHtml = buildBaskiNakisFormuHtmlFromForm(data);
+      openPrintableDocument(_bnfHtml);
+      const matName = 'Baskı Nakış Formu - ' + (data.siparis_adi || data.siparis_no || todayISO());
+      await ensureMatFolder('baski_nakis_formu', 'Baskı Nakış Formu');
+      await addGeneratedMaterial('baski_nakis_formu', matName, _bnfHtml);
+      const filesToUpload = BNF_FILES.slice();
+      for (const file of filesToUpload) {
+        try {
+          const compressed = await compressImageFile(file);
+          const fd = new FormData();
+          fd.append('file', compressed, compressed.name);
+          await matApi('/api/materials/baski_nakis_formu/upload', { method: 'POST', body: fd });
+        } catch (e) {
+          flash(file.name + ' yüklenemedi: ' + e.message, 'error');
+        }
+      }
+      if (filesToUpload.length) flash(filesToUpload.length + ' dosya Materyaller > Baskı Nakış Formu klasörüne yüklendi.');
+      else flash('Baskı/Nakış formu oluşturuldu ve Materyaller\'e eklendi.');
+      BNF_FILES = [];
+      renderBnfFilesList();
     });
   }
 
@@ -2519,9 +2626,9 @@ function buildUretimFormuHtmlFromForm(d) {
     return '<tr><td style="text-align:left;font-weight:700;">'+label+'</td>' + cols.map(c => '<td>' + (d.placement[row][c] ? '✓' : '') + '</td>').join('') + '</tr>';
   }).join('');
   const images = (d.img_on || d.img_arka) ? `
-    <div style="display:flex;gap:20px;justify-content:center;margin:16px 0;">
-      ${d.img_on ? '<div style="text-align:center;"><div style="font-weight:700;font-family:-apple-system,Arial,sans-serif;font-size:12px;margin-bottom:6px;">ÖN</div><img src="'+d.img_on+'" style="max-width:260px;max-height:320px;border:1px solid #e4e8f0;border-radius:8px;"></div>' : ''}
-      ${d.img_arka ? '<div style="text-align:center;"><div style="font-weight:700;font-family:-apple-system,Arial,sans-serif;font-size:12px;margin-bottom:6px;">ARKA</div><img src="'+d.img_arka+'" style="max-width:260px;max-height:320px;border:1px solid #e4e8f0;border-radius:8px;"></div>' : ''}
+    <div style="display:flex;gap:18px;justify-content:center;margin:16px 0;">
+      ${d.img_on ? '<div style="text-align:center;width:330px;"><div style="font-weight:700;font-family:-apple-system,Arial,sans-serif;font-size:12px;margin-bottom:6px;">ÖN</div><img src="'+d.img_on+'" style="width:100%;max-height:420px;object-fit:contain;border:1px solid #e4e8f0;border-radius:8px;"></div>' : ''}
+      ${d.img_arka ? '<div style="text-align:center;width:330px;"><div style="font-weight:700;font-family:-apple-system,Arial,sans-serif;font-size:12px;margin-bottom:6px;">ARKA</div><img src="'+d.img_arka+'" style="width:100%;max-height:420px;object-fit:contain;border:1px solid #e4e8f0;border-radius:8px;"></div>' : ''}
     </div>` : '';
   const body = `
     <div class="doc-logo-row">${DOC_LOGO_SVG}</div>
@@ -2547,11 +2654,98 @@ function buildUretimFormuHtmlFromForm(d) {
   return docShell('Üretim Formu - ' + (d.siparis_no||''), body);
 }
 
+// ---------------- BASKI / NAKIŞ FORMU ----------------
+let BNF_PRODUCTS = [];
+let BNF_FILES = [];
+function renderBnfProducts() {
+  const wrap = document.getElementById('bnfProductsWrap');
+  if (!wrap) return;
+  if (!BNF_PRODUCTS.length) { wrap.innerHTML = '<div class="kanban-empty">Henüz ürün eklenmedi. "+ Ürün Ekle" ile başlayın.</div>'; return; }
+  wrap.innerHTML = BNF_PRODUCTS.map((p, idx) => `
+    <div class="panel-box" style="margin-bottom:10px;background:#f8f9fc;">
+      <div class="form-row">
+        <div class="field"><label>Ürün Adı / Açıklama</label><input type="text" class="bnfProdName" data-idx="${idx}" value="${esc(p.name)}"></div>
+        <div class="field"><label>Adet</label><input type="number" class="bnfProdQty" data-idx="${idx}" value="${p.qty||0}"></div>
+      </div>
+      <div class="field"><label>Ürün Görseli</label>
+        <input type="file" accept="image/*" class="bnfProdImgInput" data-idx="${idx}">
+        ${p.img ? '<img src="'+p.img+'" style="display:block;max-width:120px;max-height:120px;margin-top:8px;border:1px solid var(--border);border-radius:8px;">' : ''}
+      </div>
+      <div class="inline-form" style="margin-top:8px;"><button type="button" class="btn danger small bnfProdDel" data-idx="${idx}">Bu Ürünü Sil</button></div>
+    </div>`).join('');
+  wrap.querySelectorAll('.bnfProdName').forEach(inp => inp.addEventListener('input', () => { BNF_PRODUCTS[parseInt(inp.dataset.idx,10)].name = inp.value; }));
+  wrap.querySelectorAll('.bnfProdQty').forEach(inp => inp.addEventListener('input', () => { BNF_PRODUCTS[parseInt(inp.dataset.idx,10)].qty = parseFloat(inp.value)||0; }));
+  wrap.querySelectorAll('.bnfProdImgInput').forEach(inp => inp.addEventListener('change', () => {
+    const idx = parseInt(inp.dataset.idx,10);
+    const file = inp.files && inp.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => { BNF_PRODUCTS[idx].img = e.target.result; renderBnfProducts(); };
+    reader.readAsDataURL(file);
+  }));
+  wrap.querySelectorAll('.bnfProdDel').forEach(btn => btn.addEventListener('click', () => {
+    BNF_PRODUCTS.splice(parseInt(btn.dataset.idx,10), 1);
+    renderBnfProducts();
+  }));
+}
+function renderBnfFilesList() {
+  const box = document.getElementById('bnfFilesList');
+  if (!box) return;
+  if (!BNF_FILES.length) { box.innerHTML = ''; return; }
+  box.innerHTML = 'Eklenecek dosyalar: ' + BNF_FILES.map((f,idx) =>
+    esc(f.name) + ' <button type="button" class="bnfFileDel" data-idx="'+idx+'" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:11px;">✕</button>'
+  ).join(', ');
+  box.querySelectorAll('.bnfFileDel').forEach(btn => btn.addEventListener('click', () => {
+    BNF_FILES.splice(parseInt(btn.dataset.idx,10), 1);
+    renderBnfFilesList();
+  }));
+}
+function buildBaskiNakisFormuHtmlFromForm(d) {
+  const totalQty = (d.products||[]).reduce((s,p)=>s+(parseFloat(p.qty)||0),0);
+  // Görseller baskı/nakış ekibinin doğrudan bakacağı asıl unsur olduğu için büyük ve öne
+  // çıkan kartlar halinde gösteriliyor — küçük tablo hücresi değil.
+  const productCards = (d.products||[]).map(p => `
+    <div style="width:330px;text-align:center;">
+      ${p.img
+        ? '<img src="'+p.img+'" style="width:100%;max-height:420px;object-fit:contain;border:1px solid #e4e8f0;border-radius:8px;background:#fff;">'
+        : '<div style="width:100%;height:240px;display:flex;align-items:center;justify-content:center;border:2px dashed #cfd6e2;border-radius:12px;color:#999;font-family:-apple-system,Arial,sans-serif;font-size:13px;">Görsel eklenmemiş</div>'}
+      <div style="margin-top:10px;font-family:-apple-system,Arial,sans-serif;">
+        <div style="font-weight:700;font-size:17px;color:#12213b;">${esc(p.name||'-')}</div>
+        <div style="font-size:16px;color:#333;margin-top:3px;">Adet: <b>${fmtNum(p.qty||0)}</b></div>
+      </div>
+    </div>`).join('');
+  const filesNote = (d.dosyaAdlari && d.dosyaAdlari.length)
+    ? '<div class="desc-box" style="margin-top:10px;"><b>Ekli Baskı/Nakış Dosyaları:</b> ' + d.dosyaAdlari.map(n=>esc(n)).join(', ') + ' <span style="color:#888;font-size:11.5px;">(Materyaller &gt; Baskı Nakış Formu klasöründe)</span></div>'
+    : '';
+  const body = `
+    <div class="doc-logo-row">${DOC_LOGO_SVG}</div>
+    <h1 class="doctitle">Baskı / Nakış Formu</h1>
+    <div class="field-row">
+      <div><b>Sipariş No:</b> ${esc(d.siparis_no||'-')}</div>
+      <div><span class="badge-date">Teslim Tarihi: ${esc(fmtDate(d.teslim_tarihi))}</span></div>
+    </div>
+    <div class="field-row">
+      <div><b>Sipariş Adı:</b> ${esc(d.siparis_adi||'-')}</div>
+      <div><b>Müşteri:</b> ${esc(d.musteri||'-')}</div>
+    </div>
+    <div style="font-family:-apple-system,Arial,sans-serif;font-size:13px;font-weight:700;color:#12213b;margin:16px 0 10px;">Ürünler</div>
+    <div style="display:flex;flex-wrap:wrap;gap:22px;justify-content:center;margin-bottom:10px;">
+      ${productCards || '<div style="color:#999;font-family:-apple-system,Arial,sans-serif;font-size:13px;">Ürün eklenmemiş.</div>'}
+    </div>
+    <div style="text-align:right;font-family:-apple-system,Arial,sans-serif;font-weight:700;font-size:14px;color:#12213b;margin-top:6px;">Toplam Adet: ${fmtNum(totalQty)}</div>
+    <div style="font-family:-apple-system,Arial,sans-serif;font-size:13px;font-weight:700;color:#12213b;margin-top:16px;">Baskı / Nakış Talimatı</div>
+    <div class="desc-box">${d.not ? esc(d.not).replace(/\n/g,'<br>') : '<i style="color:#999;">Talimat girilmemiş.</i>'}</div>
+    ${filesNote}
+    <div class="footer-contact">${esc(COMPANY_INFO.name)} · ${esc(COMPANY_INFO.phone)} · ${esc(COMPANY_INFO.website)}</div>
+  `;
+  return docShell('Baskı Nakış Formu', body);
+}
+
 function buildOnayFormuHtmlFromForm(d) {
   const images = (d.img_on || d.img_arka) ? `
-    <div style="display:flex;gap:20px;justify-content:center;margin:16px 0;">
-      ${d.img_on ? '<div style="text-align:center;"><div style="font-weight:700;font-family:-apple-system,Arial,sans-serif;font-size:12px;margin-bottom:6px;">ÖN</div><img src="'+d.img_on+'" style="max-width:260px;max-height:320px;border:1px solid #e4e8f0;border-radius:8px;"></div>' : ''}
-      ${d.img_arka ? '<div style="text-align:center;"><div style="font-weight:700;font-family:-apple-system,Arial,sans-serif;font-size:12px;margin-bottom:6px;">ARKA</div><img src="'+d.img_arka+'" style="max-width:260px;max-height:320px;border:1px solid #e4e8f0;border-radius:8px;"></div>' : ''}
+    <div style="display:flex;gap:18px;justify-content:center;margin:16px 0;">
+      ${d.img_on ? '<div style="text-align:center;width:330px;"><div style="font-weight:700;font-family:-apple-system,Arial,sans-serif;font-size:12px;margin-bottom:6px;">ÖN</div><img src="'+d.img_on+'" style="width:100%;max-height:420px;object-fit:contain;border:1px solid #e4e8f0;border-radius:8px;"></div>' : ''}
+      ${d.img_arka ? '<div style="text-align:center;width:330px;"><div style="font-weight:700;font-family:-apple-system,Arial,sans-serif;font-size:12px;margin-bottom:6px;">ARKA</div><img src="'+d.img_arka+'" style="width:100%;max-height:420px;object-fit:contain;border:1px solid #e4e8f0;border-radius:8px;"></div>' : ''}
     </div>` : '';
   const body = `
     <h1 class="doctitle">Onay Formu</h1>
