@@ -2242,11 +2242,26 @@ function docShell(title, bodyHtml) {
 }
 
 function openPrintableDocument(html) {
-  const w = window.open('', '_blank');
-  if (!w) { flash('Açılır pencere engellendi. Lütfen tarayıcı ayarlarından izin verin.', 'error'); return; }
-  w.document.open();
-  w.document.write(html);
-  w.document.close();
+  // Safari'de window.open('','_blank') + document.write ile açılan pencerelerin
+  // "Yazdır > PDF olarak kaydet" çıktısı bazen tamamen boş geliyor (bilinen Safari
+  // WebKit hatası: about:blank + document.write sayfalarının print/PDF motoru
+  // içeriği doğru şekilde render edemiyor). Bunun yerine sayfayı gerçek bir Blob
+  // adresi (blob:...) olarak açıyoruz; bu şekilde pencerenin gerçek bir belgesi
+  // oluyor ve yazdırma/PDF kaydetme sorunsuz çalışıyor.
+  try {
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const w = window.open(url, '_blank');
+    if (!w) { flash('Açılır pencere engellendi. Lütfen tarayıcı ayarlarından izin verin.', 'error'); URL.revokeObjectURL(url); return; }
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (e) {
+    // Blob desteklenmiyorsa eski yönteme geri dön.
+    const w = window.open('', '_blank');
+    if (!w) { flash('Açılır pencere engellendi. Lütfen tarayıcı ayarlarından izin verin.', 'error'); return; }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+  }
 }
 
 function sizeBreakdownSummaryLine(job) {
