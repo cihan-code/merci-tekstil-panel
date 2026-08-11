@@ -199,6 +199,10 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
 .modal-overlay.active { display:flex; }
 .modal-box { background:#fff; border-radius:14px; padding:26px 28px; width:100%; max-width:640px; max-height:88vh; overflow-y:auto; }
 .modal-box h3 { margin-top:0; color:var(--navy); }
+.doc-preview-box { width:100%; max-width:860px; height:92vh; display:flex; flex-direction:column; }
+.doc-preview-toolbar { display:flex; justify-content:flex-end; margin-bottom:8px; }
+.doc-preview-toolbar button { background:#fff; color:var(--navy); }
+.doc-preview-frame { flex:1; width:100%; border:none; border-radius:10px; background:#fff; box-shadow:0 8px 40px rgba(0,0,0,0.35); }
 .back-link { font-size:13px; color:var(--muted); text-decoration:none; cursor:pointer; }
 .back-link:hover { color:var(--navy); }
 .hidden { display:none !important; }
@@ -554,15 +558,19 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
       <h3>Yeni Tedarikçi</h3>
       <form class="inline-form" id="formTedarikci">
         <div class="field"><label>Kategori</label>
-          <select name="category">
-            <option>Kumaş</option><option>Dikim</option><option>Nakliye</option><option>Baskı-Nakış</option><option>Hazır Ürün</option><option>Diğer</option>
-          </select>
+          <select name="category" id="tedarikciCategorySelect"></select>
         </div>
         <div class="field"><label>Firma / Kişi</label><input type="text" name="name" required></div>
         <div class="field"><label>Telefon</label><input type="text" name="phone"></div>
         <div class="field"><label>Not</label><input type="text" name="note"></div>
         <button type="submit" class="btn">Ekle</button>
       </form>
+      <div class="section-title" style="margin:16px 0 8px;font-size:12.5px;">Kategoriler</div>
+      <div class="inline-form" style="align-items:center;">
+        <input type="text" id="newSupplierCategoryName" placeholder="Yeni kategori adı" style="max-width:220px;">
+        <button type="button" class="btn small secondary" id="btnAddSupplierCategory">+ Kategori Ekle</button>
+      </div>
+      <div id="supplierCategoryChips" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;"></div>
     </div>
     <div class="section-title">Tüm Tedarikçiler <span style="font-weight:400;color:var(--muted);font-size:12.5px;">(Excel'deki kategorilere göre gruplanmıştır)</span></div>
     <div class="panel-box">
@@ -877,6 +885,14 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
     </div>
   </div>
 
+  <!-- BELGE ÖNİZLEME (Üretim/Onay/Baskı-Nakış Formu vb. yazdırma önizlemesi) -->
+  <div class="modal-overlay" id="docPreviewModalOverlay">
+    <div class="doc-preview-box">
+      <div class="doc-preview-toolbar"><button type="button" class="btn secondary small" id="docPreviewCloseBtn">✕ Kapat</button></div>
+      <iframe id="docPreviewFrame" class="doc-preview-frame"></iframe>
+    </div>
+  </div>
+
   <!-- YÖNETİCİLER -->
   <section class="view" id="view-yoneticiler">
     <div class="page-header"><h2>🔐 Yöneticiler &amp; Ayarlar</h2></div>
@@ -1082,6 +1098,14 @@ let DATA = loadData();
 migrateTasksSchema();
 migratePriceTiersV2();
 migrateHedeflerAylik();
+migrateSupplierCategories();
+// Tedarikçi kategorileri artık sabit değil, kullanıcı ekleyip silebiliyor. İlk kez
+// karşılaşıldığında eskiden sabit olan 6 kategoriyle başlatılır, sonrasında dokunmaz.
+function migrateSupplierCategories() {
+  if (Array.isArray(DATA.supplierCategories) && DATA.supplierCategories.length) return;
+  DATA.supplierCategories = ['Kumaş','Dikim','Nakliye','Baskı-Nakış','Hazır Ürün','Diğer'];
+  saveData();
+}
 // Aylık hedefler yıllık hedeflerden ayrı bir liste — ilk kez karşılaşıldığında varsayılan
 // hedeflerle oluşturulur (gider hedefi kasıtlı olarak yok). Zaten varsa dokunmaz.
 function migrateHedeflerAylik() {
@@ -1341,6 +1365,14 @@ async function compressImageFile(file) {
     const newName = file.name.replace(/\.[^.]+$/, '') + '.jpg';
     return new File([blob], newName, { type: 'image/jpeg' });
   } catch (e) { return file; }
+}
+function readFileAsDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 async function handleMatFileSelect(slug, e) {
   const files = Array.from(e.target.files || []);
@@ -1656,7 +1688,7 @@ const ENTITY_CONFIGS = {
     {name:'problem_note', label:'Problem Durumu', type:'textarea'},
   ]},
   supplier: { arrayName: 'suppliers', title: 'Tedarikçiyi Düzenle', rerender: ()=>renderTedarikci(), fields: [
-    {name:'category', label:'Kategori', type:'select', options:['Kumaş','Dikim','Nakliye','Baskı-Nakış','Hazır Ürün','Diğer']},
+    {name:'category', label:'Kategori', type:'select', options: () => DATA.supplierCategories},
     {name:'name', label:'Firma / Kişi', type:'text', required:true},
     {name:'phone', label:'Telefon', type:'text'},
     {name:'note', label:'Not', type:'text'},
@@ -2234,6 +2266,10 @@ function docShell(title, bodyHtml) {
     .print-bar button { background:#12213b; color:#fff; border:none; padding:9px 18px; border-radius:8px; font-size:13px; cursor:pointer; }
     @media print { .print-bar { display:none; } body { background:#fff; } .sheet { box-shadow:none; margin:0; max-width:100%; } }
     @page { size: A4; margin: 12mm; }
+    .doc-page-break { page-break-before: always; break-before: page; padding-top:18px; }
+    .doc-page-break .doc-page-label { text-align:center; font-family:-apple-system,Arial,sans-serif; font-size:12px; color:#888; margin-bottom:12px; }
+    .doc-page-break .doc-page-imgwrap { display:flex; align-items:center; justify-content:center; min-height:600px; }
+    .doc-page-break .doc-page-imgwrap img { max-width:100%; max-height:900px; object-fit:contain; }
   </style>
   </head><body>
   <div class="print-bar"><button onclick="window.print()">🖨️ Yazdır / PDF Kaydet</button></div>
@@ -2242,27 +2278,27 @@ function docShell(title, bodyHtml) {
 }
 
 function openPrintableDocument(html) {
-  // Safari'de window.open('','_blank') + document.write ile açılan pencerelerin
-  // "Yazdır > PDF olarak kaydet" çıktısı bazen tamamen boş geliyor (bilinen Safari
-  // WebKit hatası: about:blank + document.write sayfalarının print/PDF motoru
-  // içeriği doğru şekilde render edemiyor). Bunun yerine sayfayı gerçek bir Blob
-  // adresi (blob:...) olarak açıyoruz; bu şekilde pencerenin gerçek bir belgesi
-  // oluyor ve yazdırma/PDF kaydetme sorunsuz çalışıyor.
-  try {
-    const blob = new Blob([html], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const w = window.open(url, '_blank');
-    if (!w) { flash('Açılır pencere engellendi. Lütfen tarayıcı ayarlarından izin verin.', 'error'); URL.revokeObjectURL(url); return; }
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-  } catch (e) {
-    // Blob desteklenmiyorsa eski yönteme geri dön.
-    const w = window.open('', '_blank');
-    if (!w) { flash('Açılır pencere engellendi. Lütfen tarayıcı ayarlarından izin verin.', 'error'); return; }
-    w.document.open();
-    w.document.write(html);
-    w.document.close();
-  }
+  // Safari, window.open() ile açılan AYRI bir pencerede "Yazdır > PDF olarak Kaydet"
+  // yapıldığında çıktıyı bazen tamamen boş üretiyor (bilinen Safari WebKit hatası,
+  // hem document.write hem de blob: URL yöntemlerinde görülüyor). Bunu kesin olarak
+  // aşmak için belgeyi ayrı bir pencerede DEĞİL, mevcut sayfanın içine gömülü bir
+  // <iframe> içinde açıyoruz. Kullanıcı önizlemeyi bu iframe üzerinden görür ve
+  // belgenin kendi "Yazdır / PDF Kaydet" butonu iframe'in kendi penceresini yazdırır
+  // — Safari bunu güvenilir şekilde destekliyor.
+  const overlay = document.getElementById('docPreviewModalOverlay');
+  const frame = document.getElementById('docPreviewFrame');
+  if (!overlay || !frame) { flash('Önizleme alanı bulunamadı.', 'error'); return; }
+  frame.srcdoc = html;
+  overlay.classList.add('active');
 }
+function closeDocPreview() {
+  const overlay = document.getElementById('docPreviewModalOverlay');
+  const frame = document.getElementById('docPreviewFrame');
+  if (overlay) overlay.classList.remove('active');
+  if (frame) frame.srcdoc = '<!doctype html><html><body></body></html>';
+}
+document.getElementById('docPreviewCloseBtn').addEventListener('click', closeDocPreview);
+document.getElementById('docPreviewModalOverlay').addEventListener('click', (e) => { if (e.target.id === 'docPreviewModalOverlay') closeDocPreview(); });
 
 function sizeBreakdownSummaryLine(job) {
   if (!job.size_breakdown) return 'Toplam:' + fmtNum(job.quantity||0);
@@ -2534,6 +2570,17 @@ function renderBelgeOlusturucu() {
       };
       if (!data.siparis_adi) { flash('Sipariş Adı girin.', 'error'); return; }
       if (!BNF_PRODUCTS.length) { flash('En az bir ürün ekleyin.', 'error'); return; }
+      // Görsel baskı/nakış dosyalarını (resim dosyalarını) formun ek sayfaları olarak göm.
+      // AI/PDF gibi görsel olmayan dosyalar sayfa olarak eklenemez, sadece dosya listesinde görünür.
+      const bnfImageFiles = BNF_FILES.filter(f => f.type && f.type.startsWith('image/'));
+      data.desenSayfalari = [];
+      for (const file of bnfImageFiles) {
+        try {
+          const compressed = await compressImageFile(file);
+          const dataUrl = await readFileAsDataURL(compressed);
+          data.desenSayfalari.push({ name: file.name, dataUrl });
+        } catch (e) { /* okunamayan görsel sayfa olarak eklenmez */ }
+      }
       const _bnfHtml = buildBaskiNakisFormuHtmlFromForm(data);
       openPrintableDocument(_bnfHtml);
       const matName = 'Baskı Nakış Formu - ' + (data.siparis_adi || data.siparis_no || todayISO());
@@ -2732,6 +2779,14 @@ function buildBaskiNakisFormuHtmlFromForm(d) {
   const filesNote = (d.dosyaAdlari && d.dosyaAdlari.length)
     ? '<div class="desc-box" style="margin-top:10px;"><b>Ekli Baskı/Nakış Dosyaları:</b> ' + d.dosyaAdlari.map(n=>esc(n)).join(', ') + ' <span style="color:#888;font-size:11.5px;">(Materyaller &gt; Baskı Nakış Formu klasöründe)</span></div>'
     : '';
+  // Yüklenen desen görselleri, baskı/nakış ekibinin doğrudan çalışacağı asıl referans
+  // olduğu için formun ilk sayfasından sonra her biri kendi tam A4 sayfasında (sayfa
+  // sonu ile) büyük şekilde gösterilir.
+  const desenSayfalari = (d.desenSayfalari || []).map(p => `
+    <div class="doc-page-break">
+      <div class="doc-page-label">${esc(p.name || '')}</div>
+      <div class="doc-page-imgwrap"><img src="${p.dataUrl}"></div>
+    </div>`).join('');
   const body = `
     <div class="doc-logo-row">${DOC_LOGO_SVG}</div>
     <h1 class="doctitle">Baskı / Nakış Formu</h1>
@@ -2752,6 +2807,7 @@ function buildBaskiNakisFormuHtmlFromForm(d) {
     <div class="desc-box">${d.not ? esc(d.not).replace(/\n/g,'<br>') : '<i style="color:#999;">Talimat girilmemiş.</i>'}</div>
     ${filesNote}
     <div class="footer-contact">${esc(COMPANY_INFO.name)} · ${esc(COMPANY_INFO.phone)} · ${esc(COMPANY_INFO.website)}</div>
+    ${desenSayfalari}
   `;
   return docShell('Baskı Nakış Formu', body);
 }
@@ -3203,6 +3259,8 @@ function renderTedarikci() {
     edit: id => openGenericEditModal('supplier', id),
     del: id => { if(!confirm('Bu tedarikçi silinsin mi?')) return; DATA.suppliers = DATA.suppliers.filter(x=>x.id!==id); saveData(); flash('Kayıt silindi.'); renderTedarikci(); }
   }});
+  populateSupplierCategorySelect();
+  renderSupplierCategoryChips();
 }
 document.getElementById('formTedarikci').addEventListener('submit', (e) => {
   e.preventDefault();
@@ -3210,6 +3268,49 @@ document.getElementById('formTedarikci').addEventListener('submit', (e) => {
   DATA.suppliers.push({ id: nextId(DATA.suppliers), category: fd.get('category'), name: fd.get('name'), phone: fd.get('phone')||'', note: fd.get('note')||'' });
   saveData(); e.target.reset();
   flash('Tedarikçi eklendi.'); renderTedarikci();
+});
+// Tedarikçi kategorileri artık kullanıcı tarafından yönetilebiliyor (DATA.supplierCategories).
+function populateSupplierCategorySelect() {
+  const sel = document.getElementById('tedarikciCategorySelect');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = (DATA.supplierCategories||[]).map(c => '<option value="'+esc(c)+'">'+esc(c)+'</option>').join('');
+  if (current && (DATA.supplierCategories||[]).includes(current)) sel.value = current;
+}
+function renderSupplierCategoryChips() {
+  const wrap = document.getElementById('supplierCategoryChips');
+  if (!wrap) return;
+  wrap.innerHTML = (DATA.supplierCategories||[]).map(c => (
+    '<span style="display:inline-flex;align-items:center;gap:6px;background:#eef0f4;color:var(--navy);padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600;">'
+    + esc(c)
+    + '<button type="button" class="supplierCategoryDel" data-cat="'+esc(c)+'" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:13px;line-height:1;padding:0;">✕</button></span>'
+  )).join('');
+  wrap.querySelectorAll('.supplierCategoryDel').forEach(btn => btn.addEventListener('click', () => {
+    const cat = btn.dataset.cat;
+    const usedCount = DATA.suppliers.filter(s => s.category === cat).length;
+    const msg = usedCount ? ('"'+cat+'" kategorisi '+usedCount+' tedarikçide kullanılıyor. Kategori listeden silinsin mi? (Mevcut tedarikçilerin kaydı değişmez.)') : ('"'+cat+'" kategorisi silinsin mi?');
+    if (!confirm(msg)) return;
+    DATA.supplierCategories = DATA.supplierCategories.filter(c => c !== cat);
+    saveData();
+    populateSupplierCategorySelect();
+    renderSupplierCategoryChips();
+    flash('Kategori silindi.');
+  }));
+}
+document.getElementById('btnAddSupplierCategory').addEventListener('click', () => {
+  const inp = document.getElementById('newSupplierCategoryName');
+  const name = (inp.value||'').trim();
+  if (!name) { flash('Kategori adı girin.', 'error'); return; }
+  if (!Array.isArray(DATA.supplierCategories)) DATA.supplierCategories = [];
+  if (DATA.supplierCategories.some(c => c.toLowerCase() === name.toLowerCase())) { flash('Bu kategori zaten var.', 'error'); return; }
+  DATA.supplierCategories.push(name);
+  saveData();
+  inp.value = '';
+  populateSupplierCategorySelect();
+  renderSupplierCategoryChips();
+  const sel = document.getElementById('tedarikciCategorySelect');
+  if (sel) sel.value = name;
+  flash('Kategori eklendi.');
 });
 
 // ---------------- OKUL MAİL ----------------
@@ -4098,6 +4199,7 @@ function initSession() {
     migrateTasksSchema();
     migratePriceTiersV2();
     migrateHedeflerAylik();
+    migrateSupplierCategories();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA));
     localStorage.setItem(AUTH_KEY, JSON.stringify(AUTH));
   }
@@ -4132,6 +4234,7 @@ setInterval(async () => {
   migrateTasksSchema();
   migratePriceTiersV2();
   migrateHedeflerAylik();
+  migrateSupplierCategories();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA));
   localStorage.setItem(AUTH_KEY, JSON.stringify(AUTH));
   renderAll();
