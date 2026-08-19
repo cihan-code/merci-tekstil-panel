@@ -163,6 +163,27 @@ table.data-table tr:hover td { background:#fbfbfe; }
 .badge.red { background:#fbeae8; color:var(--red); }
 .badge.orange { background:#fdf0e4; color:var(--accent); }
 .badge.gray { background:#eef0f4; color:var(--muted); }
+.notif-bell-wrap { position:relative; }
+.notif-bell-btn { position:relative; background:none; border:1px solid rgba(255,255,255,0.4); color:#fff; border-radius:8px; width:34px; height:34px; display:flex; align-items:center; justify-content:center; font-size:15px; cursor:pointer; padding:0; }
+.notif-bell-btn:hover { background: rgba(255,255,255,0.12); }
+.notif-bell-count { position:absolute; top:-6px; right:-6px; background:var(--red); color:#fff; border-radius:20px; min-width:17px; height:17px; padding:0 4px; font-size:10px; font-weight:700; display:none; align-items:center; justify-content:center; line-height:1; }
+.notif-dropdown { display:none; position:absolute; top:44px; right:0; width:340px; max-height:420px; overflow-y:auto; background:#fff; border-radius:12px; box-shadow:0 10px 40px rgba(0,0,0,0.28); z-index:80; }
+.notif-dropdown.active { display:block; }
+.notif-dropdown-header { padding:12px 16px; font-weight:700; font-size:13px; color:var(--navy); border-bottom:1px solid var(--border); }
+.notif-item { padding:11px 16px; border-bottom:1px solid var(--border); cursor:pointer; font-size:12.5px; color:var(--text); display:flex; gap:8px; align-items:flex-start; }
+.notif-item:hover { background:#f4f6fa; }
+.notif-item:last-child { border-bottom:none; }
+.notif-item .dot { width:8px; height:8px; border-radius:50%; margin-top:4px; flex-shrink:0; }
+.notif-item .dot.urgent { background:var(--red); }
+.notif-item .dot.warning { background:var(--accent); }
+.notif-item .dot.info { background:var(--muted); }
+.notif-empty { padding:20px 16px; color:var(--muted); font-size:12.5px; text-align:center; }
+.notif-banner { position:relative; background:#fdf0e4; border:1px solid #f0c896; color:#7a4a1a; padding:12px 40px 12px 16px; border-radius:10px; margin-bottom:14px; font-size:13px; }
+.notif-banner.urgent { background:#fbeae8; border-color:#eab5ac; color:#8a2a1f; }
+.notif-banner-list { margin-top:6px; }
+.notif-banner-list div { margin-top:3px; }
+.notif-banner-close { position:absolute; top:8px; right:10px; background:none; border:none; cursor:pointer; font-size:14px; color:inherit; font-weight:700; opacity:0.7; }
+.notif-banner-close:hover { opacity:1; }
 .neg-text { color: var(--red); font-weight:600; }
 .pos-text { color: var(--green); font-weight:600; }
 form.stack { display:flex; flex-direction:column; gap:14px; max-width:640px; }
@@ -246,6 +267,13 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
     </div>
   </div>
   <div class="user-box">
+    <div class="notif-bell-wrap">
+      <button class="notif-bell-btn" id="notifBellBtn" type="button" title="Bildirimler">🔔<span class="notif-bell-count" id="notifBellCount">0</span></button>
+      <div class="notif-dropdown" id="notifDropdown">
+        <div class="notif-dropdown-header">Bildirimler</div>
+        <div id="notifDropdownBody"></div>
+      </div>
+    </div>
     <span id="currentUserLabel"></span>
     <button class="btn-ghost" id="logoutBtn">Çıkış</button>
   </div>
@@ -299,6 +327,7 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
 </aside>
 
 <main>
+  <div id="notifBannerArea"></div>
   <div id="flashArea"></div>
 
   <!-- DASHBOARD (simplified) -->
@@ -4114,6 +4143,182 @@ function switchView(name) {
   document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('active', b.dataset.view===name));
 }
 
+// ---------------- BİLDİRİMLER (teslimi yaklaşan işler, bekleyen kayıtlar, güncellenmeyen sekmeler) ----------------
+const NOTIF_DELIVERY_WARN_DAYS = 2;   // teslim tarihine kaç gün kala uyarılsın
+const NOTIF_STALE_TAB_DAYS = 3;       // bir sekmede kaç gündür kayıt yoksa uyarılsın
+let NOTIF_BANNER_SHOWN_THIS_SESSION = false;
+
+function notifDaysBetween(fromISO, toISO) {
+  const d1 = new Date(fromISO + 'T00:00:00');
+  const d2 = new Date(toISO + 'T00:00:00');
+  if (isNaN(d1) || isNaN(d2)) return null;
+  return Math.round((d2 - d1) / 86400000);
+}
+
+const NOTIF_OFFER_STALE_DAYS = 5;     // 'Teklif' durumunda kaç gündür cevap yoksa uyarılsın
+const NOTIF_PIPELINE_STUCK_DAYS = 7;  // 'Görüşülüyor' aşamasında kaç gündür takılıysa uyarılsın
+const NOTIF_TARGET_DAYS_LEFT = 5;     // ay sonuna kaç gün kala hedef gerisi kontrolü başlasın
+const NOTIF_TARGET_PACE_RATIO = 0.7;  // beklenen tempo yüzde kaçının altındaysa uyarılsın
+
+function notifJobLabel(j) {
+  return j.title || j.customer_name_free || ('İş #' + (j.job_no || j.id));
+}
+
+function computeNotifications() {
+  const notifs = [];
+  const today = todayISO();
+
+  // 1) Teslimi yaklaşan / geçen işler
+  (DATA.jobs || []).forEach(j => {
+    if (!j.delivery_date) return;
+    if (['Teslim Edildi', 'İptal'].includes(j.status)) return;
+    const diff = notifDaysBetween(today, j.delivery_date);
+    if (diff === null) return;
+    const label = notifJobLabel(j);
+    if (diff < 0) {
+      notifs.push({ level: 'urgent', view: 'isler', text: `${label}: teslim tarihi geçti (${fmtDate(j.delivery_date)}, ${Math.abs(diff)} gün gecikti)` });
+    } else if (diff <= NOTIF_DELIVERY_WARN_DAYS) {
+      notifs.push({ level: 'warning', view: 'isler', text: `${label}: teslim tarihine ${diff === 0 ? 'bugün' : diff + ' gün'} kaldı (${fmtDate(j.delivery_date)})` });
+    }
+  });
+
+  // 1b) Uzun süredir cevap bekleyen teklifler
+  (DATA.jobs || []).forEach(j => {
+    if (j.status !== 'Teklif' || !j.order_date) return;
+    const diff = notifDaysBetween(j.order_date, today);
+    if (diff !== null && diff >= NOTIF_OFFER_STALE_DAYS) {
+      notifs.push({ level: 'warning', view: 'isler', text: `${notifJobLabel(j)}: ${diff} gündür teklif aşamasında, henüz cevap gelmedi` });
+    }
+  });
+
+  // 1c) Takılı kalan potansiyel işler
+  (DATA.pipeline || []).forEach(p => {
+    if (p.status !== 'Görüşülüyor' || !p.date) return;
+    const diff = notifDaysBetween(p.date, today);
+    if (diff !== null && diff >= NOTIF_PIPELINE_STUCK_DAYS) {
+      notifs.push({ level: 'warning', view: 'potansiyel', text: `${p.customer_name || 'Potansiyel iş'}: ${diff} gündür 'Görüşülüyor' aşamasında takılı` });
+    }
+  });
+
+  // 1d) Aylık hedefin gerisinde kalma (ay sonuna yaklaşırken)
+  (function checkAylikHedefler() {
+    const ym = currentMonthPrefix();
+    const [yy, mm] = ym.split('-').map(Number);
+    const dim = new Date(yy, mm, 0).getDate();
+    const dayOfMonth = Number(today.slice(8, 10));
+    const daysRemaining = dim - dayOfMonth;
+    if (daysRemaining > NOTIF_TARGET_DAYS_LEFT) return;
+    (DATA.hedeflerAylik || []).forEach(h => {
+      if (!h.aylik_hedef) return;
+      const gerceklesen = computeHedefAylikGerceklesen(h);
+      const expectedPace = h.aylik_hedef * (dayOfMonth / dim);
+      if (gerceklesen < expectedPace * NOTIF_TARGET_PACE_RATIO) {
+        const fv = v => h.is_currency ? fmtCurrency(v) : Math.round(v);
+        notifs.push({ level: 'info', view: 'hedefler', text: `${h.hedef_adi}: ay sonuna ${daysRemaining} gün kala hedefin gerisinde (${fv(gerceklesen)} / ${fv(h.aylik_hedef)})` });
+      }
+    });
+  })();
+
+  // 2) İşlem bekleyen kayıtlar — gecikmiş görevler
+  const overdueTasks = (DATA.tasks || []).filter(t => !t.done && t.date && t.date < today);
+  if (overdueTasks.length) {
+    notifs.push({ level: 'warning', view: 'gorevler', text: `${overdueTasks.length} adet görev gecikmiş durumda` });
+  }
+
+  // 2b) İşlem bekleyen kayıtlar — takip zamanı gelmiş potansiyel işler
+  const followupDue = (DATA.pipeline || []).filter(p =>
+    !['Kazanıldı', 'Kaybedildi'].includes(p.status) && p.follow_up_date && p.follow_up_date <= today
+  );
+  if (followupDue.length) {
+    notifs.push({ level: 'warning', view: 'potansiyel', text: `${followupDue.length} adet potansiyel işte takip zamanı geldi/geçti` });
+  }
+
+  // 2c) İşlem bekleyen kayıtlar — vadesi geçmiş borç/alacak
+  const overdueDebts = (DATA.debts || []).filter(d => debtOverdue(d));
+  overdueDebts.forEach(d => {
+    const kind = d.type === 'Alacak' ? 'alacağınız' : 'borcunuz';
+    notifs.push({ level: 'urgent', view: 'borc', text: `${d.party_name}: ${kind} vadesi geçti (${fmtDate(d.due_date)}, kalan ${fmtCurrency(debtRemaining(d))})` });
+  });
+
+  // 3) Uzun süredir güncellenmeyen sekmeler
+  function staleTabCheck(arr, dateField, label, view) {
+    const dates = (arr || []).map(x => x[dateField]).filter(Boolean).sort();
+    if (!dates.length) return;
+    const last = dates[dates.length - 1];
+    const diff = notifDaysBetween(last, today);
+    if (diff !== null && diff >= NOTIF_STALE_TAB_DAYS) {
+      notifs.push({ level: 'info', view, text: `${label} sekmesine ${diff} gündür yeni kayıt girilmedi (son kayıt: ${fmtDate(last)})` });
+    }
+  }
+  staleTabCheck(DATA.incomes, 'date', 'Gelir', 'gelir');
+  staleTabCheck(DATA.expenses, 'date', 'Gider', 'gider');
+  staleTabCheck(DATA.jobs, 'order_date', 'İş Takip', 'isler');
+  staleTabCheck(DATA.customers, 'created_date', 'Müşteriler', 'musteriler');
+  staleTabCheck(DATA.debts, 'update_date', 'Borç-Alacak', 'borc');
+
+  const levelOrder = { urgent: 0, warning: 1, info: 2 };
+  notifs.sort((a, b) => levelOrder[a.level] - levelOrder[b.level]);
+  return notifs;
+}
+
+function renderNotifications() {
+  const countEl = document.getElementById('notifBellCount');
+  const bodyEl = document.getElementById('notifDropdownBody');
+  const bannerArea = document.getElementById('notifBannerArea');
+  if (!countEl || !bodyEl) return;
+
+  const notifs = computeNotifications();
+
+  if (notifs.length) {
+    countEl.style.display = 'flex';
+    countEl.textContent = notifs.length > 99 ? '99+' : notifs.length;
+  } else {
+    countEl.style.display = 'none';
+  }
+
+  if (!notifs.length) {
+    bodyEl.innerHTML = '<div class="notif-empty">Şu an bekleyen bir bildirim yok 🎉</div>';
+  } else {
+    bodyEl.innerHTML = notifs.map(n =>
+      `<div class="notif-item" data-view="${esc(n.view)}"><span class="dot ${n.level}"></span><span>${esc(n.text)}</span></div>`
+    ).join('');
+    bodyEl.querySelectorAll('.notif-item').forEach(item => {
+      item.addEventListener('click', () => {
+        switchView(item.dataset.view);
+        document.getElementById('notifDropdown').classList.remove('active');
+      });
+    });
+  }
+
+  if (bannerArea && !NOTIF_BANNER_SHOWN_THIS_SESSION) {
+    const important = notifs.filter(n => n.level === 'urgent' || n.level === 'warning');
+    if (important.length) {
+      const hasUrgent = important.some(n => n.level === 'urgent');
+      bannerArea.innerHTML = `<div class="notif-banner ${hasUrgent ? 'urgent' : ''}">` +
+        `<button type="button" class="notif-banner-close" id="notifBannerCloseBtn">✕</button>` +
+        `<strong>${important.length} bildirim dikkat bekliyor:</strong>` +
+        `<div class="notif-banner-list">${important.slice(0, 6).map(n => `<div>• ${esc(n.text)}</div>`).join('')}` +
+        (important.length > 6 ? `<div>...ve ${important.length - 6} tane daha (🔔 simgesine bakın)</div>` : '') +
+        `</div></div>`;
+      const closeBtn = document.getElementById('notifBannerCloseBtn');
+      if (closeBtn) closeBtn.addEventListener('click', () => { bannerArea.innerHTML = ''; });
+    }
+    NOTIF_BANNER_SHOWN_THIS_SESSION = true;
+  }
+}
+
+document.getElementById('notifBellBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  document.getElementById('notifDropdown').classList.toggle('active');
+});
+document.addEventListener('click', (e) => {
+  const dropdown = document.getElementById('notifDropdown');
+  const bellBtn = document.getElementById('notifBellBtn');
+  if (dropdown && dropdown.classList.contains('active') && !dropdown.contains(e.target) && e.target !== bellBtn) {
+    dropdown.classList.remove('active');
+  }
+});
+
 function renderAll() {
   renderDashboard();
   renderIsler();
@@ -4133,6 +4338,7 @@ function renderAll() {
   renderBelgeOlusturucu();
   renderYoneticiler();
   renderMateryaller();
+  renderNotifications();
 }
 
 const VIEW_RENDER_MAP = {
