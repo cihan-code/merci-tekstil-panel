@@ -1007,19 +1007,21 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
             <div></div>
           </div>
           <div id="templateExtrasArea"></div>
-          <div class="section-title" style="margin:10px 0 6px;font-size:13px;">Baskı / Nakış <span style="font-weight:400;color:var(--muted);">(bir üründe birden fazla baskı/nakış olabilir, tek tek ekleyin)</span></div>
-          <div class="form-row">
-            <div class="field"><label>Baskı Boyutu</label><select id="jobBaskiSize"><option value="">— Seçiniz —</option></select></div>
-            <div class="field"><label>Nakış Boyutu</label><select id="jobNakisSize"><option value="">— Seçiniz —</option></select></div>
+          <div style="margin:14px 0 12px;padding:12px;border:1px solid var(--border);border-radius:10px;background:#fafbfd;">
+            <div class="section-title" style="margin:0 0 8px;font-size:13px;">Baskı / Nakış <span style="font-weight:400;color:var(--muted);">(bir üründe birden fazla baskı/nakış olabilir, tek tek ekleyin — eklenince maliyete otomatik yansır)</span></div>
+            <div class="form-row">
+              <div class="field"><label>Baskı Boyutu</label><select id="jobBaskiSize"><option value="">— Seçiniz —</option></select></div>
+              <div class="field"><label>Nakış Boyutu</label><select id="jobNakisSize"><option value="">— Seçiniz —</option></select></div>
+            </div>
+            <div class="inline-form" style="margin-top:8px;">
+              <button type="button" class="btn small secondary" id="btnAddBaskiItem">+ Baskı Ekle</button>
+              <button type="button" class="btn small secondary" id="btnAddNakisItem">+ Nakış Ekle</button>
+            </div>
+            <div id="jobBaskiNakisList" style="margin:10px 0 0;"></div>
           </div>
-          <div class="inline-form">
-            <button type="button" class="btn small secondary" id="btnAddBaskiItem">+ Baskı Ekle</button>
-            <button type="button" class="btn small secondary" id="btnAddNakisItem">+ Nakış Ekle</button>
-          </div>
-          <div id="jobBaskiNakisList" style="margin:8px 0;"></div>
           <div class="inline-form">
             <button type="button" class="btn secondary small" id="btnAutoCalc">Maliyeti Otomatik Hesapla</button>
-            <span style="font-size:12px;color:var(--muted);">Şablon + adet + eklenen baskı/nakış kalemlerine göre maliyet kalemlerini doldurur</span>
+            <span style="font-size:12px;color:var(--muted);">Şablon + adet seçiminize göre şablon kalemlerini yeniden hesaplar (baskı/nakış zaten yukarıdan otomatik eklenir)</span>
           </div>
           <div class="section-title" style="margin:12px 0 6px;font-size:13px;">Maliyet Kalemleri</div>
           <div class="table-wrap"><table class="data-table" id="costItemsTable"></table></div>
@@ -2156,8 +2158,16 @@ function renderBaskiNakisList() {
   }).join('');
   wrap.querySelectorAll('.baskiNakisRemoveBtn').forEach(btn => {
     btn.addEventListener('click', () => {
-      CURRENT_JOB_BASKI_NAKIS.splice(parseInt(btn.dataset.idx, 10), 1);
+      const idx = parseInt(btn.dataset.idx, 10);
+      const removed = CURRENT_JOB_BASKI_NAKIS[idx];
+      CURRENT_JOB_BASKI_NAKIS.splice(idx, 1);
       renderBaskiNakisList();
+      // Eklerken otomatik oluşturulan eşleşen maliyet kalemini de kaldır (varsa).
+      if (removed) {
+        const label = (removed.type === 'baski' ? 'Baskı' : 'Nakış') + ' (' + removed.size + ')';
+        const costIdx = CURRENT_JOB_COST_ITEMS.findIndex(c => c.category === label);
+        if (costIdx !== -1) { CURRENT_JOB_COST_ITEMS.splice(costIdx, 1); renderCostItemsTable(); }
+      }
     });
   });
 }
@@ -2248,24 +2258,36 @@ document.getElementById('btnAddCostItem').addEventListener('click', () => {
   renderCostItemsTable();
 });
 
+function addBaskiNakisItem(type, size) {
+  const qty = parseInt(document.getElementById('formJob').elements['quantity'].value, 10) || 0;
+  CURRENT_JOB_BASKI_NAKIS.push({ type, size });
+  renderBaskiNakisList();
+  const dict = type === 'baski' ? DATA.costTemplates.baski : DATA.costTemplates.nakis;
+  const label = (type === 'baski' ? 'Baskı' : 'Nakış') + ' (' + size + ')';
+  const price = dict ? dict[size] : 0;
+  if (price && qty) {
+    CURRENT_JOB_COST_ITEMS.push({ category: label, amount: round2(price * qty) });
+    renderCostItemsTable();
+  } else if (!qty) {
+    flash('Eklendi, ama maliyete yansıması için önce üstteki "Adet" alanını doldurun.', 'error');
+  }
+}
 document.getElementById('btnAddBaskiItem').addEventListener('click', () => {
   const size = document.getElementById('jobBaskiSize').value;
   if (!size) { flash('Bir baskı boyutu seçin.', 'error'); return; }
-  CURRENT_JOB_BASKI_NAKIS.push({ type: 'baski', size });
-  renderBaskiNakisList();
+  addBaskiNakisItem('baski', size);
 });
 document.getElementById('btnAddNakisItem').addEventListener('click', () => {
   const size = document.getElementById('jobNakisSize').value;
   if (!size) { flash('Bir nakış boyutu seçin.', 'error'); return; }
-  CURRENT_JOB_BASKI_NAKIS.push({ type: 'nakis', size });
-  renderBaskiNakisList();
+  addBaskiNakisItem('nakis', size);
 });
 
 document.getElementById('btnAutoCalc').addEventListener('click', () => {
   const form = document.getElementById('formJob');
   const templateName = document.getElementById('jobProductTemplate').value;
   const qty = parseInt(form.elements['quantity'].value, 10) || 0;
-  if (!templateName) { flash('Önce bir ürün şablonu seçin.', 'error'); return; }
+  if (!templateName && !CURRENT_JOB_BASKI_NAKIS.length) { flash('Önce bir ürün şablonu seçin veya baskı/nakış ekleyin.', 'error'); return; }
   if (!qty) { flash('Önce adet girin.', 'error'); return; }
   const extraNames = [...document.querySelectorAll('.tplExtraCheckbox:checked')].map(cb=>cb.value);
   CURRENT_JOB_COST_ITEMS = calcTemplateCostItems(templateName, qty, extraNames, CURRENT_JOB_BASKI_NAKIS);
