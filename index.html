@@ -1007,13 +1007,19 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
             <div></div>
           </div>
           <div id="templateExtrasArea"></div>
+          <div class="section-title" style="margin:10px 0 6px;font-size:13px;">Baskı / Nakış <span style="font-weight:400;color:var(--muted);">(bir üründe birden fazla baskı/nakış olabilir, tek tek ekleyin)</span></div>
           <div class="form-row">
-            <div class="field"><label>Baskı</label><select id="jobBaskiSize"><option value="">Yok</option></select></div>
-            <div class="field"><label>Nakış</label><select id="jobNakisSize"><option value="">Yok</option></select></div>
+            <div class="field"><label>Baskı Boyutu</label><select id="jobBaskiSize"><option value="">— Seçiniz —</option></select></div>
+            <div class="field"><label>Nakış Boyutu</label><select id="jobNakisSize"><option value="">— Seçiniz —</option></select></div>
           </div>
           <div class="inline-form">
+            <button type="button" class="btn small secondary" id="btnAddBaskiItem">+ Baskı Ekle</button>
+            <button type="button" class="btn small secondary" id="btnAddNakisItem">+ Nakış Ekle</button>
+          </div>
+          <div id="jobBaskiNakisList" style="margin:8px 0;"></div>
+          <div class="inline-form">
             <button type="button" class="btn secondary small" id="btnAutoCalc">Maliyeti Otomatik Hesapla</button>
-            <span style="font-size:12px;color:var(--muted);">Şablon + adet + baskı/nakış seçimine göre maliyet kalemlerini doldurur</span>
+            <span style="font-size:12px;color:var(--muted);">Şablon + adet + eklenen baskı/nakış kalemlerine göre maliyet kalemlerini doldurur</span>
           </div>
           <div class="section-title" style="margin:12px 0 6px;font-size:13px;">Maliyet Kalemleri</div>
           <div class="table-wrap"><table class="data-table" id="costItemsTable"></table></div>
@@ -1023,17 +1029,6 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
             <button type="button" class="btn small secondary" id="btnAddCostItem">Ekle</button>
           </div>
           <div class="field"><label>Kalemlerden Toplam: <b id="jobTotalCostPreview">₺0</b> <span style="font-weight:400;color:var(--muted);">(kaydedince yukarıdaki "Toplam Maliyet" alanını doldurur)</span></label></div>
-        </div>
-      </details>
-
-      <details id="formsDetails">
-        <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--navy);padding:6px 0;">📄 Üretim / Onay / Fiyat Teklifi Bilgileri (opsiyonel — belge oluşturmak için)</summary>
-        <div style="padding:12px 0 0;">
-          <div class="field"><label>Ürün Açıklaması <span style="font-weight:400;color:var(--muted);">(Üretim Formunda görünür — kumaş, renk, baskı/nakış yeri, kalıp vb.)</span></label><textarea name="product_description" placeholder='Örn: "LACİVERT" T-shirt, Göğüste ve Sırtta "NAKIŞ", Normal kalıp olacak'></textarea></div>
-          <div class="field"><label>Ürün Rengi</label><input type="text" name="product_color" placeholder="Lacivert, Siyah..."></div>
-          <div class="section-title" style="margin:14px 0 8px;font-size:13px;">Beden Dağılımı (adet)</div>
-          <div class="table-wrap"><table class="data-table" id="sizeBreakdownTable"></table></div>
-          <div style="font-size:12.5px;color:var(--muted);margin-top:6px;">Beden dağılımı toplamı, üstteki "Adet" alanına otomatik yazılır.</div>
         </div>
       </details>
 
@@ -1599,6 +1594,17 @@ let AUTH = loadAuth();
 let CURRENT_USER = null;
 
 function nextId(list) { return list.length ? Math.max(...list.map(x=>x.id)) + 1 : 1; }
+// İş no'ları eski kodda dizi uzunluğuna göre üretiliyordu (bir iş silinince sayaç geri düşüp
+// aynı numara başka bir işe tekrar veriliyordu). Artık mevcut job_no'ların içindeki en büyük
+// sayıya göre üretiliyor, silme/boşluk durumlarında da çakışma olmaz.
+function nextJobNo() {
+  const maxNum = (DATA.jobs || []).reduce((max, j) => {
+    const m = String(j.job_no || '').match(/(\d+)\s*$/);
+    const n = m ? parseInt(m[1], 10) : 0;
+    return Math.max(max, n);
+  }, 0);
+  return 'MRC-' + String(maxNum + 1).padStart(3, '0');
+}
 
 // ---------------- computed helpers: JOB ----------------
 const SIZE_LABELS = ['XS','S','M','L','XL','XXL','3XL','4XL','5XL'];
@@ -1654,7 +1660,18 @@ function pipelineExpectedValue(p) { return round2(pipelineEstTotal(p) * (p.proba
 
 // ---------------- cost template helpers ----------------
 function getTemplate(name) { return (DATA.costTemplates.products||[]).find(p=>p.name===name); }
-function calcTemplateCostItems(templateName, qty, extraNames, baskiSize, nakisSize) {
+// Eski kayıtlarda job.baski_nakis_secim = {template, extras, baski:'X', nakis:'Y'} (tekli) şeklindeydi.
+// Artık birden fazla baskı/nakış eklenebildiği için {template, extras, items:[{type,size}, ...]} kullanılıyor.
+// Bu fonksiyon eski/yeni her iki şekli de okuyup tek tip bir liste döndürür.
+function baskiNakisSecimItems(secim) {
+  if (!secim) return [];
+  if (Array.isArray(secim.items)) return secim.items.slice();
+  const items = [];
+  if (secim.baski) items.push({ type: 'baski', size: secim.baski });
+  if (secim.nakis) items.push({ type: 'nakis', size: secim.nakis });
+  return items;
+}
+function calcTemplateCostItems(templateName, qty, extraNames, baskiNakisItems) {
   const items = [];
   const tpl = getTemplate(templateName);
   if (tpl) {
@@ -1663,12 +1680,13 @@ function calcTemplateCostItems(templateName, qty, extraNames, baskiSize, nakisSi
       if ((extraNames||[]).includes(ex.name) && ex.amount) items.push({ category: ex.name, amount: round2(ex.amount * qty) });
     });
   }
-  if (baskiSize && DATA.costTemplates.baski[baskiSize]) {
-    items.push({ category: 'Baskı (' + baskiSize + ')', amount: round2(DATA.costTemplates.baski[baskiSize] * qty) });
-  }
-  if (nakisSize && DATA.costTemplates.nakis[nakisSize]) {
-    items.push({ category: 'Nakış (' + nakisSize + ')', amount: round2(DATA.costTemplates.nakis[nakisSize] * qty) });
-  }
+  (baskiNakisItems||[]).forEach(it => {
+    const dict = it.type === 'baski' ? DATA.costTemplates.baski : DATA.costTemplates.nakis;
+    const label = it.type === 'baski' ? 'Baskı' : 'Nakış';
+    if (dict && dict[it.size]) {
+      items.push({ category: label + ' (' + it.size + ')', amount: round2(dict[it.size] * qty) });
+    }
+  });
   return items;
 }
 function suggestedPrice(templateName, qty) {
@@ -2048,7 +2066,7 @@ function renderIsler() {
   renderIslerAylik();
 
   renderTable('islerTable', 'islerSearch', 'islerCount', DATA.jobs, [
-    {key:'job_no', label:'İş No', render:j=>'<a href="#" data-action="detay" data-id="'+j.id+'">'+esc(j.job_no)+'</a>'},
+    {key:'job_no', label:'İş No', render:j=>'<a href="#" data-action="detay" data-id="'+j.id+'">'+esc(j.job_no)+'</a>', sortVal:j=>{ const m=String(j.job_no||'').match(/(\d+)\s*$/); return m?parseInt(m[1],10):0; }},
     {key:'order_date', label:'Tarih', render:j=>fmtDate(j.order_date)},
     {key:'title', label:'İş Adı'},
     {key:'customer', label:'Müşteri', render:j=>esc(jobCustomerDisplay(j)), filterVal:j=>jobCustomerDisplay(j), sortVal:j=>jobCustomerDisplay(j)},
@@ -2061,7 +2079,7 @@ function renderIsler() {
     {key:'status', label:'Durum', render:j=>'<span class="badge '+jobStatusBadgeClass(j.status)+'">'+esc(j.status)+'</span>', sortVal:j=>jobStatusSortKey(j)},
     {key:'collection', label:'Tahsilat', render:j=>'<span class="badge '+(jobCollectionStatus(j)==='Tamamı Alındı'?'green':'gray')+'">'+jobCollectionStatus(j)+'</span>'},
     {key:'actions', label:'', render:j=>'<button class="btn small secondary" data-action="detay" data-id="'+j.id+'">Detay</button>'},
-  ], { defaultSort:'status', defaultDir:1, actions: { detay: showJobDetail } });
+  ], { defaultSort:'job_no', defaultDir:-1, actions: { detay: showJobDetail } });
 }
 
 // İş No'daki sipariş tarihine göre ay ay iş sayısı ve toplam bedel/maliyet/kâr özeti
@@ -2123,6 +2141,26 @@ function renderTemplateExtras(templateName, checkedExtras) {
 }
 
 let CURRENT_JOB_COST_ITEMS = [];
+let CURRENT_JOB_BASKI_NAKIS = [];
+function renderBaskiNakisList() {
+  const wrap = document.getElementById('jobBaskiNakisList');
+  if (!wrap) return;
+  if (!CURRENT_JOB_BASKI_NAKIS.length) {
+    wrap.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:2px 0;">Henüz eklenmiş baskı/nakış yok.</div>';
+    return;
+  }
+  wrap.innerHTML = CURRENT_JOB_BASKI_NAKIS.map((it, idx) => {
+    const label = (it.type === 'baski' ? 'Baskı' : 'Nakış') + ' — ' + esc(it.size);
+    return '<span class="badge ' + (it.type==='baski'?'orange':'green') + '" style="margin:3px 6px 3px 0;display:inline-flex;align-items:center;gap:6px;">' + label +
+      ' <button type="button" class="baskiNakisRemoveBtn" data-idx="' + idx + '" style="border:none;background:none;cursor:pointer;color:inherit;font-weight:700;padding:0;font-size:12px;">✕</button></span>';
+  }).join('');
+  wrap.querySelectorAll('.baskiNakisRemoveBtn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      CURRENT_JOB_BASKI_NAKIS.splice(parseInt(btn.dataset.idx, 10), 1);
+      renderBaskiNakisList();
+    });
+  });
+}
 let CONVERTING_PIPELINE_ID = null;
 function renderCostItemsTable() {
   const table = document.getElementById('costItemsTable');
@@ -2151,9 +2189,11 @@ function openJobModal(job) {
   const savedSecim = job && job.baski_nakis_secim ? job.baski_nakis_secim : null;
   populateCustomerSelect(job ? job.customer_id : null);
   populateProductTemplateSelect(savedSecim ? savedSecim.template : null);
-  populateSizeSelect('jobBaskiSize', DATA.costTemplates.baski, savedSecim ? savedSecim.baski : null);
-  populateSizeSelect('jobNakisSize', DATA.costTemplates.nakis, savedSecim ? savedSecim.nakis : null);
+  populateSizeSelect('jobBaskiSize', DATA.costTemplates.baski, null);
+  populateSizeSelect('jobNakisSize', DATA.costTemplates.nakis, null);
   renderTemplateExtras(savedSecim ? savedSecim.template : null, savedSecim ? savedSecim.extras : []);
+  CURRENT_JOB_BASKI_NAKIS = baskiNakisSecimItems(savedSecim);
+  renderBaskiNakisList();
 
   document.getElementById('jobModalTitle').textContent = job ? ('İş Düzenle: ' + job.job_no) : '+ Yeni İş';
   form.elements['id'].value = job ? job.id : '';
@@ -2166,8 +2206,6 @@ function openJobModal(job) {
   form.elements['unit_price'].value = job ? job.unit_price : 0;
   form.elements['delivery_date'].value = job ? (job.delivery_date||'') : '';
   form.elements['note'].value = job ? (job.note||'') : '';
-  form.elements['product_description'].value = job ? (job.product_description||'') : '';
-  form.elements['product_color'].value = job ? (job.product_color||'') : '';
   document.getElementById('depositRow').style.display = job ? 'none' : 'grid';
   document.getElementById('suggestedPriceHint').textContent = '';
 
@@ -2175,10 +2213,6 @@ function openJobModal(job) {
   document.getElementById('simpleTotalCost').value = job ? jobTotalCost(job) : 0;
   renderCostItemsTable();
   document.getElementById('advancedCostDetails').open = false;
-
-  CURRENT_JOB_SIZE_BREAKDOWN = job && job.size_breakdown ? Object.assign({}, job.size_breakdown) : {};
-  renderSizeBreakdownTable();
-  document.getElementById('formsDetails').open = false;
 
   document.getElementById('jobModalOverlay').classList.add('active');
 }
@@ -2201,26 +2235,6 @@ function startPipelineConversion(pipelineItem) {
   openJobModalPrefilled(pipelineItem);
 }
 
-let CURRENT_JOB_SIZE_BREAKDOWN = {};
-function renderSizeBreakdownTable() {
-  const table = document.getElementById('sizeBreakdownTable');
-  table.innerHTML = '<thead><tr>' + SIZE_LABELS.map(sz=>'<th>'+sz+'</th>').join('') + '<th>Toplam</th></tr></thead>' +
-    '<tbody><tr>' + SIZE_LABELS.map(sz=>'<td><input type="number" min="0" class="sizeBreakdownInput" data-size="'+sz+'" value="'+(CURRENT_JOB_SIZE_BREAKDOWN[sz]||0)+'" style="width:56px;padding:5px 6px;"></td>').join('') + '<td><b id="sizeBreakdownTotal">0</b></td></tr></tbody>';
-  table.querySelectorAll('.sizeBreakdownInput').forEach(inp => {
-    inp.addEventListener('input', () => {
-      CURRENT_JOB_SIZE_BREAKDOWN[inp.dataset.size] = parseInt(inp.value,10) || 0;
-      updateSizeBreakdownTotal();
-    });
-  });
-  updateSizeBreakdownTotal();
-}
-function updateSizeBreakdownTotal() {
-  const total = SIZE_LABELS.reduce((s,sz)=>s+(parseInt(CURRENT_JOB_SIZE_BREAKDOWN[sz],10)||0),0);
-  document.getElementById('sizeBreakdownTotal').textContent = fmtNum(total);
-  if (total > 0) {
-    document.getElementById('jobQuantity').value = total;
-  }
-}
 function closeJobModal() { document.getElementById('jobModalOverlay').classList.remove('active'); }
 
 document.getElementById('btnAddCostItem').addEventListener('click', () => {
@@ -2234,6 +2248,19 @@ document.getElementById('btnAddCostItem').addEventListener('click', () => {
   renderCostItemsTable();
 });
 
+document.getElementById('btnAddBaskiItem').addEventListener('click', () => {
+  const size = document.getElementById('jobBaskiSize').value;
+  if (!size) { flash('Bir baskı boyutu seçin.', 'error'); return; }
+  CURRENT_JOB_BASKI_NAKIS.push({ type: 'baski', size });
+  renderBaskiNakisList();
+});
+document.getElementById('btnAddNakisItem').addEventListener('click', () => {
+  const size = document.getElementById('jobNakisSize').value;
+  if (!size) { flash('Bir nakış boyutu seçin.', 'error'); return; }
+  CURRENT_JOB_BASKI_NAKIS.push({ type: 'nakis', size });
+  renderBaskiNakisList();
+});
+
 document.getElementById('btnAutoCalc').addEventListener('click', () => {
   const form = document.getElementById('formJob');
   const templateName = document.getElementById('jobProductTemplate').value;
@@ -2241,9 +2268,7 @@ document.getElementById('btnAutoCalc').addEventListener('click', () => {
   if (!templateName) { flash('Önce bir ürün şablonu seçin.', 'error'); return; }
   if (!qty) { flash('Önce adet girin.', 'error'); return; }
   const extraNames = [...document.querySelectorAll('.tplExtraCheckbox:checked')].map(cb=>cb.value);
-  const baskiSize = document.getElementById('jobBaskiSize').value;
-  const nakisSize = document.getElementById('jobNakisSize').value;
-  CURRENT_JOB_COST_ITEMS = calcTemplateCostItems(templateName, qty, extraNames, baskiSize, nakisSize);
+  CURRENT_JOB_COST_ITEMS = calcTemplateCostItems(templateName, qty, extraNames, CURRENT_JOB_BASKI_NAKIS);
   renderCostItemsTable();
   if (!document.getElementById('jobProductTypeFree').value) document.getElementById('jobProductTypeFree').value = templateName;
   const price = suggestedPrice(templateName, qty);
@@ -4398,11 +4423,26 @@ document.getElementById('formJob').addEventListener('submit', (e) => {
   const fd = new FormData(form);
   const idRaw = fd.get('id');
   const isEdit = !!idRaw;
-  const customerId = fd.get('customer_id') ? parseInt(fd.get('customer_id'), 10) : null;
+  let customerId = fd.get('customer_id') ? parseInt(fd.get('customer_id'), 10) : null;
   const customerNameFree = fd.get('customer_name_free') || '';
   if (!customerId && !customerNameFree.trim()) {
     flash('Lütfen bir müşteri seçin veya müşteri adı yazın.', 'error');
     return;
+  }
+  // Yeni müşteri adı yazılmış ama listeden seçilmemişse: kayıtlı müşterilerde ada göre ara,
+  // yoksa otomatik olarak yeni bir müşteri kaydı oluştur ve işi ona bağla.
+  let newCustomerCreated = false;
+  if (!customerId && customerNameFree.trim()) {
+    const nameLower = customerNameFree.trim().toLowerCase();
+    const existingCustomer = DATA.customers.find(c => (c.name||'').trim().toLowerCase() === nameLower);
+    if (existingCustomer) {
+      customerId = existingCustomer.id;
+    } else {
+      const newCustomer = { id: nextId(DATA.customers), name: customerNameFree.trim(), type: '', contact_person: '', phone: '', email: '', address: '', category: '', note: '', first_order_date_excel: null, created_date: todayISO() };
+      DATA.customers.push(newCustomer);
+      customerId = newCustomer.id;
+      newCustomerCreated = true;
+    }
   }
   const quantity = parseFloat(fd.get('quantity')) || 0;
   const unitPrice = parseFloat(fd.get('unit_price')) || 0;
@@ -4420,17 +4460,10 @@ document.getElementById('formJob').addEventListener('submit', (e) => {
     if (simpleCost > 0) costItems = [{ category: 'Toplam Maliyet', amount: simpleCost }];
   }
 
-  const sizeBreakdownTotal = SIZE_LABELS.reduce((s,sz)=>s+(parseInt(CURRENT_JOB_SIZE_BREAKDOWN[sz],10)||0),0);
-  const sizeBreakdown = sizeBreakdownTotal > 0 ? Object.assign({}, CURRENT_JOB_SIZE_BREAKDOWN) : null;
-  const productDescription = fd.get('product_description') || '';
-  const productColor = fd.get('product_color') || '';
-
   const tplTemplateSel = document.getElementById('jobProductTemplate').value || null;
   const tplExtrasSel = [...document.querySelectorAll('.tplExtraCheckbox:checked')].map(cb=>cb.value);
-  const tplBaskiSel = document.getElementById('jobBaskiSize').value || null;
-  const tplNakisSel = document.getElementById('jobNakisSize').value || null;
-  const baskiNakisSecim = (tplTemplateSel || tplBaskiSel || tplNakisSel || tplExtrasSel.length)
-    ? { template: tplTemplateSel, extras: tplExtrasSel, baski: tplBaskiSel, nakis: tplNakisSel }
+  const baskiNakisSecim = (tplTemplateSel || tplExtrasSel.length || CURRENT_JOB_BASKI_NAKIS.length)
+    ? { template: tplTemplateSel, extras: tplExtrasSel, items: CURRENT_JOB_BASKI_NAKIS.slice() }
     : null;
 
   if (isEdit) {
@@ -4449,20 +4482,17 @@ document.getElementById('formJob').addEventListener('submit', (e) => {
     job.note = fd.get('note') || '';
     job.cost_items = costItems;
     job.manual_total_cost = manualTotalCost;
-    job.product_description = productDescription;
-    job.product_color = productColor;
-    job.size_breakdown = sizeBreakdown;
     job.baski_nakis_secim = baskiNakisSecim;
     saveData();
-    flash('İş güncellendi.');
+    flash('İş güncellendi.' + (newCustomerCreated ? ' Yeni müşteri de kayıtlara eklendi.' : ''));
     closeJobModal();
     renderIsler();
     renderDashboard();
+    if (newCustomerCreated) renderMusteriler();
     showJobDetail(job.id);
   } else {
     const newId = nextId(DATA.jobs);
-    const jobCount = DATA.jobs.length + 1;
-    const jobNo = 'MRC-' + String(jobCount).padStart(3,'0');
+    const jobNo = nextJobNo();
     const deposit = parseFloat(fd.get('deposit')) || 0;
     const depositMethod = fd.get('deposit_method') || '';
     const newJob = {
@@ -4481,9 +4511,6 @@ document.getElementById('formJob').addEventListener('submit', (e) => {
       cost_items: costItems,
       manual_total_cost: manualTotalCost,
       deposit_received: deposit,
-      product_description: productDescription,
-      product_color: productColor,
-      size_breakdown: sizeBreakdown,
       baski_nakis_secim: baskiNakisSecim,
       from_pipeline_id: CONVERTING_PIPELINE_ID,
     };
@@ -4492,11 +4519,12 @@ document.getElementById('formJob').addEventListener('submit', (e) => {
       DATA.incomes.push({ id: nextId(DATA.incomes), date: fd.get('order_date'), amount: deposit, category: 'Kapora', source: jobCustomerDisplay(newJob), job_id: newId, payment_method: depositMethod, note: 'Sipariş kaporası' });
     }
     saveData();
-    flash('Yeni iş eklendi.');
+    flash('Yeni iş eklendi.' + (newCustomerCreated ? ' Yeni müşteri de kayıtlara eklendi.' : ''));
     closeJobModal();
     renderIsler();
     renderGelir();
     renderDashboard();
+    if (newCustomerCreated) renderMusteriler();
     if (CONVERTING_PIPELINE_ID) {
       const convertingId = CONVERTING_PIPELINE_ID;
       CONVERTING_PIPELINE_ID = null;
