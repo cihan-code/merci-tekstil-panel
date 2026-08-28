@@ -227,6 +227,22 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
 .back-link { font-size:13px; color:var(--muted); text-decoration:none; cursor:pointer; }
 .back-link:hover { color:var(--navy); }
 .hidden { display:none !important; }
+
+/* Yönetim Ajanı — markdown çıktısı */
+.md-body { font-size:13.5px; line-height:1.6; color:var(--text); overflow-wrap:anywhere; }
+.md-body h1 { font-size:19px; color:var(--navy); margin:0 0 10px; }
+.md-body h2 { font-size:16px; color:var(--navy); margin:20px 0 8px; border-bottom:1px solid var(--border); padding-bottom:4px; }
+.md-body h3 { font-size:14px; color:var(--navy); margin:16px 0 6px; }
+.md-body p { margin:8px 0; }
+.md-body ul, .md-body ol { margin:8px 0; padding-left:22px; }
+.md-body li { margin:3px 0; }
+.md-body strong { color:var(--navy); }
+.md-body hr { border:none; border-top:1px solid var(--border); margin:16px 0; }
+.md-body code { background:#f4f6fa; padding:1px 5px; border-radius:4px; font-size:12px; }
+.md-body .table-wrap { overflow-x:auto; margin:10px 0; }
+.md-body table { border-collapse:collapse; width:100%; font-size:12.5px; }
+.md-body th, .md-body td { border:1px solid var(--border); padding:6px 9px; text-align:left; white-space:nowrap; }
+.md-body th { background:#f8f9fc; color:var(--navy); font-weight:700; }
 </style>
 </head>
 <body>
@@ -292,6 +308,9 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
 <nav class="tabs" id="tabs">
   <button data-view="dashboard" class="active">📊 Genel Bakış</button>
 
+  <div class="nav-group-label">Yönetim Ajanı</div>
+  <button data-view="ajan">🤖 Yönetim Ajanı</button>
+
   <div class="nav-group-label">Satış &amp; Üretim</div>
   <button data-view="isler">💼 İşler</button>
   <button data-view="uretim">🏭 Üretim Takip</button>
@@ -354,6 +373,35 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
 
     <div class="section-title">Aylık Gelir / Gider / Net Kâr Trendi</div>
     <div class="panel-box"><div class="chart-wrap"><canvas id="chartMonthly"></canvas></div></div>
+  </section>
+
+  <!-- YÖNETİM AJANI -->
+  <section class="view" id="view-ajan">
+    <div class="page-header">
+      <h2>🤖 Yönetim Ajanı</h2>
+      <button class="btn" id="ajanRunBtn">🔄 Şimdi çalıştır</button>
+    </div>
+    <div class="panel-box" style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;">
+      <label style="font-size:12.5px;color:var(--muted);">Çıktı tipi</label>
+      <select id="ajanTypeSelect" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;">
+        <option value="gunluk-brifing">Günlük Brifing</option>
+        <option value="uretim-risk">Üretim Risk</option>
+        <option value="satis-takip">Satış Takip</option>
+        <option value="finans">Finans / Nakit</option>
+        <option value="haftalik-review">Haftalık Review</option>
+        <option value="aylik-rapor">Aylık Rapor</option>
+      </select>
+      <span id="ajanStatusMsg" style="font-size:12px;color:var(--muted);margin-left:auto;"></span>
+    </div>
+
+    <div class="md-body panel-box" id="ajanContent" style="margin-top:16px;">
+      <div style="color:var(--muted);">Yükleniyor…</div>
+    </div>
+
+    <div class="section-title">Geçmiş Çıktılar</div>
+    <div class="panel-box">
+      <div class="table-wrap"><table class="data-table" id="ajanHistoryTable"></table></div>
+    </div>
   </section>
 
   <!-- İŞLER LIST -->
@@ -4388,6 +4436,174 @@ function renderAll() {
   renderNotifications();
 }
 
+// ---------------- YÖNETİM AJANI ----------------
+// Ajan çıktıları backend'de ayrı bir kovada (/api/agent/*). Panel bunları salt-okunur gösterir;
+// "Şimdi çalıştır" backend'de Claude API çağrısını tetikler (ANTHROPIC_API_KEY yalnız sunucuda).
+const AJAN_TYPE_LABELS = {
+  'gunluk-brifing': 'Günlük Brifing', 'uretim-risk': 'Üretim Risk', 'satis-takip': 'Satış Takip',
+  'finans': 'Finans / Nakit', 'haftalik-review': 'Haftalık Review', 'aylik-rapor': 'Aylık Rapor',
+};
+let AJAN_POLL_TIMER = null;
+
+// Küçük markdown -> HTML çevirici (panelde marked.js yok). Başlık, tablo, liste, bold, kod, hr.
+function mdToHtml(md) {
+  const lines = String(md || '').replace(/\r\n/g, '\n').split('\n');
+  const inline = (s) => esc(s)
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>');
+  let html = '', i = 0, listType = null;
+  const closeList = () => { if (listType) { html += '</' + listType + '>'; listType = null; } };
+  while (i < lines.length) {
+    const line = lines[i];
+    const t = line.trim();
+    // Tablo (| ... | ... |) + ayraç satırı
+    if (/^\|.*\|$/.test(t) && i + 1 < lines.length && /^\|[\s:|-]+\|$/.test(lines[i + 1].trim())) {
+      closeList();
+      const cells = (r) => r.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+      const head = cells(t);
+      i += 2;
+      let body = '';
+      while (i < lines.length && /^\|.*\|$/.test(lines[i].trim())) {
+        body += '<tr>' + cells(lines[i]).map((c) => '<td>' + inline(c) + '</td>').join('') + '</tr>';
+        i++;
+      }
+      html += '<div class="table-wrap"><table><thead><tr>'
+        + head.map((c) => '<th>' + inline(c) + '</th>').join('') + '</tr></thead><tbody>'
+        + body + '</tbody></table></div>';
+      continue;
+    }
+    if (!t) { closeList(); i++; continue; }
+    if (/^#{1,6}\s/.test(t)) {
+      closeList();
+      const lvl = Math.min(3, t.match(/^#+/)[0].length);
+      html += '<h' + lvl + '>' + inline(t.replace(/^#+\s/, '')) + '</h' + lvl + '>';
+      i++; continue;
+    }
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(t)) { closeList(); html += '<hr>'; i++; continue; }
+    let m;
+    if ((m = t.match(/^[-*]\s+(.*)$/))) {
+      if (listType !== 'ul') { closeList(); html += '<ul>'; listType = 'ul'; }
+      html += '<li>' + inline(m[1]) + '</li>'; i++; continue;
+    }
+    if ((m = t.match(/^\d+[.)]\s+(.*)$/))) {
+      if (listType !== 'ol') { closeList(); html += '<ol>'; listType = 'ol'; }
+      html += '<li>' + inline(m[1]) + '</li>'; i++; continue;
+    }
+    closeList();
+    html += '<p>' + inline(t) + '</p>';
+    i++;
+  }
+  closeList();
+  return html;
+}
+
+function ajanFmtStamp(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return isNaN(d) ? iso : d.toLocaleString('tr-TR');
+}
+
+async function ajanShowOutput(rec) {
+  const box = document.getElementById('ajanContent');
+  if (!rec || !rec.markdown) { box.innerHTML = '<div style="color:var(--muted);">Çıktı bulunamadı.</div>'; return; }
+  const conf = rec.meta && rec.meta.panelUpdatedAt ? ' · panel verisi: ' + ajanFmtStamp(rec.meta.panelUpdatedAt) : '';
+  box.innerHTML = '<div style="font-size:11.5px;color:var(--muted);margin-bottom:10px;">'
+    + esc(AJAN_TYPE_LABELS[rec.type] || rec.type) + ' · üretildi: ' + esc(ajanFmtStamp(rec.createdAt)) + esc(conf)
+    + '</div>' + mdToHtml(rec.markdown);
+}
+
+async function renderYonetimAjani() {
+  const box = document.getElementById('ajanContent');
+  const histTable = document.getElementById('ajanHistoryTable');
+  const type = document.getElementById('ajanTypeSelect').value;
+  if (!matBackendReady()) {
+    box.innerHTML = '<div style="color:var(--muted);">Ajan sunucusu bağlı değil.</div>';
+    histTable.innerHTML = ''; return;
+  }
+  box.innerHTML = '<div style="color:var(--muted);">Yükleniyor…</div>';
+  // En yeni çıktı
+  try {
+    const latest = await (await matApi('/api/agent/latest?type=' + encodeURIComponent(type))).json();
+    ajanShowOutput(latest);
+  } catch (e) {
+    box.innerHTML = '<div style="color:var(--muted);">Bu tipte henüz çıktı yok. '
+      + '“🔄 Şimdi çalıştır” ile ilk çıktıyı üretebilirsin.</div>';
+  }
+  // Geçmiş liste
+  try {
+    const list = await (await matApi('/api/agent/outputs?limit=40')).json();
+    if (!list.length) { histTable.innerHTML = '<tbody><tr><td style="color:var(--muted);">Kayıt yok.</td></tr></tbody>'; }
+    else {
+      histTable.innerHTML = '<thead><tr><th>Tarih</th><th>Tip</th><th>Başlık</th><th>Üretildi</th></tr></thead><tbody>'
+        + list.map((r) => '<tr data-id="' + esc(r.id) + '" style="cursor:pointer;">'
+          + '<td>' + esc(r.date) + '</td><td>' + esc(AJAN_TYPE_LABELS[r.type] || r.type) + '</td>'
+          + '<td>' + esc(r.title) + '</td><td>' + esc(ajanFmtStamp(r.createdAt)) + '</td></tr>').join('')
+        + '</tbody>';
+      histTable.querySelectorAll('tr[data-id]').forEach((tr) => {
+        tr.addEventListener('click', async () => {
+          try {
+            const rec = await (await matApi('/api/agent/outputs/' + tr.dataset.id)).json();
+            ajanShowOutput(rec);
+            window.scrollTo({ top: document.getElementById('ajanContent').offsetTop - 20, behavior: 'smooth' });
+          } catch (e) { flash('Çıktı açılamadı: ' + e.message, 'error'); }
+        });
+      });
+    }
+  } catch (e) {
+    histTable.innerHTML = '<tbody><tr><td style="color:var(--muted);">Geçmiş okunamadı.</td></tr></tbody>';
+  }
+  ajanRefreshStatus();
+}
+
+async function ajanRefreshStatus() {
+  const el = document.getElementById('ajanStatusMsg');
+  const btn = document.getElementById('ajanRunBtn');
+  try {
+    const st = await (await matApi('/api/agent/status')).json();
+    if (st.running) {
+      el.textContent = '⏳ Ajan çalışıyor…';
+      btn.disabled = true;
+      if (!AJAN_POLL_TIMER) AJAN_POLL_TIMER = setInterval(ajanPollTick, 5000);
+    } else {
+      btn.disabled = false;
+      if (AJAN_POLL_TIMER) { clearInterval(AJAN_POLL_TIMER); AJAN_POLL_TIMER = null; }
+      el.textContent = st.lastError ? ('⚠️ Son hata: ' + st.lastError)
+        : (st.finishedAt ? 'Son çalışma: ' + ajanFmtStamp(st.finishedAt) : '');
+    }
+  } catch (e) { el.textContent = ''; }
+}
+
+async function ajanPollTick() {
+  try {
+    const st = await (await matApi('/api/agent/status')).json();
+    if (!st.running) {
+      clearInterval(AJAN_POLL_TIMER); AJAN_POLL_TIMER = null;
+      renderYonetimAjani();
+      flash(st.lastError ? ('Ajan çalışması hata verdi: ' + st.lastError) : 'Ajan yeni çıktıyı hazırladı.',
+        st.lastError ? 'error' : 'success');
+    }
+  } catch (e) { /* Render uykuda olabilir, bir sonraki tick'te dene */ }
+}
+
+document.getElementById('ajanTypeSelect').addEventListener('change', renderYonetimAjani);
+document.getElementById('ajanRunBtn').addEventListener('click', async () => {
+  const type = document.getElementById('ajanTypeSelect').value;
+  const btn = document.getElementById('ajanRunBtn');
+  btn.disabled = true;
+  document.getElementById('ajanStatusMsg').textContent = '⏳ Başlatılıyor… (sunucu uykudaysa 1 dk sürebilir)';
+  try {
+    const r = await (await matApi('/api/agent/run?type=' + encodeURIComponent(type), { method: 'POST' })).json();
+    if (r.started) {
+      document.getElementById('ajanStatusMsg').textContent = '⏳ Ajan çalışıyor…';
+      if (!AJAN_POLL_TIMER) AJAN_POLL_TIMER = setInterval(ajanPollTick, 5000);
+    }
+  } catch (e) {
+    btn.disabled = false;
+    flash('Ajan başlatılamadı: ' + e.message, 'error');
+    document.getElementById('ajanStatusMsg').textContent = '';
+  }
+});
+
 const VIEW_RENDER_MAP = {
   dashboard: renderDashboard, isler: renderIsler, gelir: renderGelir,
   gider: () => { renderGider(); renderSabit(); },
@@ -4396,7 +4612,7 @@ const VIEW_RENDER_MAP = {
   okul: () => { renderOkulMail(); renderOkulTakip(); },
   hedefler: renderHedefler, maliyet: renderMaliyetSablonlari, gorevler: renderGorevler,
   belgeler: renderBelgeOlusturucu, yoneticiler: renderYoneticiler,
-  materyaller: renderMateryaller,
+  materyaller: renderMateryaller, ajan: renderYonetimAjani,
 };
 
 document.querySelectorAll('nav.tabs button').forEach(btn => {
