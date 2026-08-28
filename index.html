@@ -4792,12 +4792,16 @@ async function renderBelgeIsleme() {
   try {
     const list = await (await matApi('/api/agent/documents?limit=40')).json();
     if (!list.length) { box.innerHTML = '<div style="color:var(--muted);font-size:12.5px;">Henüz belge yok.</div>'; return; }
-    box.innerHTML = '<div class="table-wrap"><table class="data-table"><thead><tr><th>Dosya</th><th>Tür</th><th>Tutar</th><th>Durum</th><th></th></tr></thead><tbody>'
+    box.innerHTML = '<div class="table-wrap"><table class="data-table"><thead><tr><th>Dosya</th><th>Tür</th><th>Tutar / Sipariş</th><th>Durum</th><th></th></tr></thead><tbody>'
       + list.filter(d => d.status !== 'discarded').map(d => {
         const st = { pending: 'Yüklendi', extracted: 'Okundu — onay bekliyor', committed: 'İşlendi' }[d.status] || d.status;
+        const label = d.humanLabel || (d.direction && d.documentType ? belgeHumanLabel(d.documentType, d.direction) : '—');
+        const amt = d.documentType === 'production_form'
+          ? (d.orderNo ? esc(d.orderNo) : '—')
+          : (d.amount != null ? fmtCurrency(d.amount) : '—');
         return '<tr data-id="' + esc(d.id) + '"><td>' + esc(d.originalName) + '</td>'
-          + '<td>' + esc(d.direction && d.documentType ? belgeHumanLabel(d.documentType, d.direction) : '—') + '</td>'
-          + '<td>' + (d.amount != null ? fmtCurrency(d.amount) : '—') + '</td>'
+          + '<td>' + esc(label) + '</td>'
+          + '<td>' + amt + '</td>'
           + '<td>' + esc(st) + '</td>'
           + '<td><button class="btn small secondary" data-act="open">' + (d.status === 'committed' ? 'Gör' : 'İncele') + '</button></td></tr>';
       }).join('') + '</tbody></table></div>';
@@ -4854,6 +4858,8 @@ function belgeRenderPreview(rec) {
   const ex = rec.extraction || {};
   const cl = rec.classification || {};
   const committed = rec.status === 'committed';
+
+  if (cl.finalType === 'production_form') return belgeRenderProdForm(rec);
   const F = (rec.finalFields) || {};
   const val = (k, d) => (F[k] != null ? F[k] : (ex[k] != null ? ex[k] : (d != null ? d : '')));
 
@@ -4960,6 +4966,196 @@ async function belgeCommit(id, confirmDuplicate) {
       return;
     }
     document.getElementById('belgePreview').innerHTML = '<div class="panel-box"><div class="flash flash-success" style="margin:0;">✅ İşlendi: ' + esc((r.created || []).map(c => c.kind).join(', ')) + '</div>'
+      + '<div style="margin-top:10px;font-size:12.5px;">Panel verisi güncellendi. <button class="btn small" onclick="location.reload()">Sayfayı yenile</button></div></div>';
+    renderBelgeIsleme();
+  } catch (e) { if (msg) msg.innerHTML = '<span style="color:var(--red);">' + esc(e.message) + '</span>'; }
+}
+
+// ============ ÜRETİM FORMU ÖNİZLEME ============
+const PRODFORM_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
+const PRODFORM_JOB_STATUSES = ['Teklif', 'Onaylandı', 'Üretimde', 'Teslim Edildi', 'İptal'];
+
+function belgeRenderProdForm(rec) {
+  const pv = document.getElementById('belgePreview');
+  const ex = rec.extraction || {};
+  const cl = rec.classification || {};
+  const pc = rec.prodComputation || {};
+  const comp = pc.quantities || {};
+  const cm = pc.costMatch || {};
+  const committed = rec.status === 'committed';
+  const E = rec.prodEdits || {};
+  const F = rec.finalFields || {};
+  const v = (k, d) => (F[k] != null ? F[k] : (E[k] != null ? E[k] : (ex[k] != null ? ex[k] : (d != null ? d : ''))));
+  const sb = (F.size_breakdown || E.size_breakdown || ex.size_breakdown || {}) || {};
+  const fileUrl = MATERIALS_API_BASE + '/api/agent/documents/' + rec.id + '/file';
+  const sug = rec.suggestions || {};
+  const dis = committed ? ' disabled' : '';
+
+  window._pfLastCost = cm;
+  const ct = (DATA.costTemplates || {});
+
+  const inp = (id, label, value, type) => '<div class="field"><label>' + label + '</label><input id="' + id + '" type="' + (type || 'text') + '" value="' + esc(value == null ? '' : value) + '"' + dis + '></div>';
+
+  const sizeInputs = PRODFORM_SIZES.map(s =>
+    '<div class="field" style="min-width:64px;"><label>' + s + '</label><input id="pf_sz_' + s + '" type="number" min="0" value="' + esc(sb[s] != null ? sb[s] : '') + '"' + dis + '></div>').join('');
+
+  // baski/nakis bolge boyut seçicileri
+  const chosen = (E.chosenSizes || {});
+  const areaRow = (area, qty, technique) => {
+    const sizes = Object.keys((technique === 'baski' ? ct.baski : ct.nakis) || {});
+    const cur = (chosen[technique] && chosen[technique][area]) || '';
+    const opts = ['<option value="">— boyut seç —</option>'].concat(
+      sizes.map(s => '<option' + (s === cur ? ' selected' : '') + '>' + esc(s) + '</option>')).join('');
+    return '<div class="form-row" style="align-items:end;"><div class="field"><label>' + esc(area) + ' (' + (technique === 'baski' ? 'baskı' : 'nakış') + ') — <b>' + qty + ' adet</b></label>'
+      + '<select data-bnsize="' + esc(technique) + '|' + esc(area) + '"' + dis + '>' + opts + '</select></div></div>';
+  };
+  const printRows = Object.entries(comp.printCounts || {}).map(([a, q]) => areaRow(a, q, 'baski')).join('');
+  const embRows = Object.entries(comp.embroideryCounts || {}).map(([a, q]) => areaRow(a, q, 'nakis')).join('');
+
+  // ozel talimatlar yorumu
+  const insList = (comp.instructions || []).map(i =>
+    '<li style="' + (i.resolved ? '' : 'color:var(--warn,#9a6512);') + '">' + esc(i.text)
+    + (i.resolved ? ' <span style="color:var(--muted);">→ ' + esc(i.technique) + ' / ' + esc(i.area || '?') + ' / ' + i.delta + ' adet</span>' : ' <b>(otomatik yorumlanamadı — elle kontrol)</b>') + '</li>').join('');
+
+  // maliyet kalemleri
+  const costRows = (cm.costItems || []).map(it => '<tr><td>' + esc(it.category) + '</td><td style="text-align:right;">' + fmtCurrency(it.amount) + '</td></tr>').join('');
+  const warnHtml = [].concat(comp.warnings || [], cm.notes || []).map(w => '<li>' + esc(w) + '</li>').join('');
+
+  const custOpts = ['<option value="">— müşteri seç —</option>'].concat(
+    (DATA.customers || []).slice().sort((a, b) => a.name.localeCompare(b.name, 'tr')).map(c => {
+      const pre = (sug.customers || []).find(s => s.id === c.id);
+      return '<option value="' + c.id + '">' + esc(c.name) + (pre ? ' ✓ öneri' : '') + '</option>';
+    })).join('');
+
+  const statusOpts = PRODFORM_JOB_STATUSES.map(s => '<option' + ((v('status', 'Onaylandı')) === s ? ' selected' : '') + '>' + s + '</option>').join('');
+
+  const existingJob = (sug.existingJob) || ((sug.jobs || [])[0] && (sug.jobs[0].score === 1 ? { id: sug.jobs[0].id, jobNo: ex.order_no } : null));
+  const dupWarn = existingJob && !committed
+    ? '<div class="flash flash-error" style="margin:0 0 12px;">⚠️ "' + esc(existingJob.jobNo || ex.order_no) + '" numaralı iş zaten mevcut. "İş Takibe Aktar" dediğinizde mevcut işi güncellemek mi, yeni kayıt açmak mı istediğiniz sorulacak.</div>'
+    : '';
+  const needWarn = (cl.needsUserDecision && !committed)
+    ? '<div class="flash flash-error" style="margin:0 0 12px;">⚠️ ' + esc(cl.reason || '') + '</div>' : '';
+  const manualWarn = cm.needsManual && !committed
+    ? '<div class="flash flash-error" style="margin:0 0 12px;">⚠️ Maliyet/fiyat otomatik tamamlanamadı — manuel kontrol gerekli (aşağıdaki uyarılara bakın).</div>' : '';
+
+  pv.innerHTML = '<div class="panel-box">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">'
+    + '<b>📋 Üretim Formu — ' + esc(rec.originalName) + '</b>'
+    + '<a href="' + fileUrl + '" target="_blank" rel="noopener" class="btn small secondary">Belgeyi Aç</a></div>'
+    + needWarn + dupWarn + manualWarn
+    + '<div class="form-row">' + inp('pf_order_no', 'Sipariş No', v('order_no')) + inp('pf_order_title', 'Sipariş Adı', v('order_title', v('product_description'))) + '</div>'
+    + '<div class="form-row">' + inp('pf_product_type', 'Ürün Tipi', v('product_type')) + inp('pf_color', 'Renk', v('color')) + '</div>'
+    + '<div class="form-row">' + inp('pf_total_quantity', 'Toplam Adet', v('total_quantity', comp.totalQty), 'number') + inp('pf_delivery_date', 'Teslim Tarihi', v('delivery_date'), 'date') + '</div>'
+    + '<div class="field"><label>Beden Dağılımı</label><div class="form-row" style="flex-wrap:wrap;">' + sizeInputs + '</div></div>'
+    + '<div class="form-row">' + inp('pf_print_areas', 'Baskı Bölgeleri (virgülle)', (v('print_areas', []) || []).join(', ')) + inp('pf_embroidery_areas', 'Nakış Bölgeleri (virgülle)', (v('embroidery_areas', []) || []).join(', ')) + '</div>'
+    + '<div class="field"><label>Özel Üretim Talimatları (her satır ayrı)</label><textarea id="pf_special"' + dis + ' rows="3">' + esc(((v('special_instructions', []) || []).map(x => typeof x === 'string' ? x : x.text)).join('\n')) + '</textarea></div>'
+    + (insList ? '<div class="field"><label>Talimat Yorumu (backend)</label><ul style="margin:4px 0;font-size:12.5px;">' + insList + '</ul></div>' : '')
+    + '<hr style="border:none;border-top:1px solid var(--border);margin:14px 0;">'
+    + '<div class="section-title" style="font-size:13px;margin:0 0 8px;">Baskı / Nakış Boyutları <span style="font-weight:400;color:var(--muted);">(adetleri backend istisnalara göre hesapladı; boyut seçince maliyet güncellenir)</span></div>'
+    + (printRows || embRows || '<div style="color:var(--muted);font-size:12.5px;">Baskı/nakış bölgesi yok.</div>')
+    + '<div class="inline-form" style="margin-top:8px;"><button class="btn small secondary" id="pfRecalc"' + dis + '>🔄 Adet + Maliyeti Yeniden Hesapla</button></div>'
+    + '<hr style="border:none;border-top:1px solid var(--border);margin:14px 0;">'
+    + '<div class="section-title" style="font-size:13px;margin:0 0 8px;">Maliyet / Fiyat (panelin mevcut motoru)</div>'
+    + '<div style="font-size:12.5px;margin-bottom:6px;">Eşleşen şablon: <b>' + esc(cm.templateMatch ? cm.templateMatch.name : '—') + '</b>'
+    + (cm.templateMatch ? ' <span style="color:var(--muted);">(%' + Math.round((cm.templateMatch.score || 0) * 100) + ' eşleşme)</span>' : '') + '</div>'
+    + (costRows ? '<div class="table-wrap"><table class="data-table"><tbody>' + costRows + '<tr><td><b>Toplam Maliyet</b></td><td style="text-align:right;"><b>' + fmtCurrency(cm.costTotal || 0) + '</b></td></tr></tbody></table></div>' : '')
+    + '<div class="form-row" style="margin-top:8px;">' + inp('pf_unit_price', 'Birim Satış Fiyatı (₺)' + (cm.suggestedUnitPrice != null ? ' — öneri: ' + fmtCurrency(cm.suggestedUnitPrice) : ' — manuel'), v('unit_price', cm.suggestedUnitPrice != null ? cm.suggestedUnitPrice : ''), 'number')
+    + '<div class="field"><label>İş Durumu</label><select id="pf_status"' + dis + '>' + statusOpts + '</select></div></div>'
+    + (warnHtml ? '<div class="field"><label style="color:var(--warn,#9a6512);">Uyarılar</label><ul style="margin:4px 0;font-size:12.5px;color:var(--warn,#9a6512);">' + warnHtml + '</ul></div>' : '')
+    + '<hr style="border:none;border-top:1px solid var(--border);margin:14px 0;">'
+    + '<div class="section-title" style="font-size:13px;margin:0 0 8px;">İş Takip Eşlemesi</div>'
+    + '<div class="form-row"><div class="field"><label>Müşteri <span style="color:var(--warn,#9a6512);font-weight:400;">(üretim formunda yoksa siz seçin)</span></label><select id="pf_customer_id"' + dis + '>' + custOpts + '</select></div>'
+    + inp('pf_customer_free', 'veya Yeni Müşteri Adı', v('customer_name')) + '</div>'
+    + '<div class="field"><label>Not</label><textarea id="pf_notes"' + dis + ' rows="2">' + esc(v('notes')) + '</textarea></div>'
+    + '<label style="display:flex;gap:6px;align-items:center;font-size:12.5px;margin:6px 0;"><input type="checkbox" id="pf_uretimtakip"' + dis + '> Üretim Takip kaydı da oluştur</label>'
+    + (committed
+      ? '<div class="flash flash-success" style="margin-top:12px;">✅ İş Takibe aktarıldı' + (rec.committedRecord && rec.committedRecord.created && rec.committedRecord.created[0] ? ' (iş #' + esc(rec.committedRecord.created[0].id) + ')' : '') + '.</div>'
+      : '<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">'
+        + '<button class="btn" id="pfCommit">İş Takibe Aktar</button>'
+        + '<button class="btn secondary" id="pfDiscard">Belgeyi At</button>'
+        + '<span id="pfMsg" style="font-size:12px;color:var(--muted);align-self:center;"></span></div>')
+    + '</div>';
+
+  if (committed) return;
+
+  const rc = document.getElementById('pfRecalc');
+  if (rc) rc.addEventListener('click', () => belgeProdRecompute(rec.id));
+  pv.querySelectorAll('select[data-bnsize]').forEach(s => s.addEventListener('change', () => belgeProdRecompute(rec.id)));
+  document.getElementById('pfDiscard').addEventListener('click', async () => {
+    if (!confirm('Belge atılsın mı? İş kaydı oluşmaz.')) return;
+    try { await matApi('/api/agent/documents/' + rec.id, { method: 'DELETE' }); pv.innerHTML = ''; renderBelgeIsleme(); }
+    catch (e) { flash('Silinemedi: ' + e.message, 'error'); }
+  });
+  document.getElementById('pfCommit').addEventListener('click', () => belgeCommitProdForm(rec.id, null));
+}
+
+function belgeProdFormGather() {
+  const g = i => { const e = document.getElementById(i); return e ? e.value.trim() : ''; };
+  const gn = i => { const x = parseFloat(g(i)); return Number.isFinite(x) ? x : null; };
+  const sb = {};
+  PRODFORM_SIZES.forEach(s => { const x = parseInt(g('pf_sz_' + s), 10); if (Number.isFinite(x)) sb[s] = x; });
+  const chosenSizes = { baski: {}, nakis: {} };
+  document.querySelectorAll('select[data-bnsize]').forEach(sel => {
+    const [tech, area] = sel.dataset.bnsize.split('|');
+    if (sel.value) chosenSizes[tech][area] = sel.value;
+  });
+  const splitList = s => s.split(',').map(x => x.trim()).filter(Boolean);
+  return {
+    order_no: g('pf_order_no'), order_title: g('pf_order_title'),
+    product_type: g('pf_product_type'), color: g('pf_color'),
+    total_quantity: gn('pf_total_quantity'), delivery_date: g('pf_delivery_date'),
+    size_breakdown: sb,
+    print_areas: splitList(g('pf_print_areas')), embroidery_areas: splitList(g('pf_embroidery_areas')),
+    special_instructions: g('pf_special').split('\n').map(x => x.trim()).filter(Boolean).map(t => ({ text: t })),
+    unit_price: gn('pf_unit_price'), status: g('pf_status'),
+    notes: g('pf_notes'),
+    customer_id: g('pf_customer_id') ? parseInt(g('pf_customer_id'), 10) : null,
+    customer_name: g('pf_customer_free') || null,
+    createUretimTakip: !!(document.getElementById('pf_uretimtakip') && document.getElementById('pf_uretimtakip').checked),
+    chosenSizes,
+  };
+}
+
+async function belgeProdRecompute(id) {
+  const p = belgeProdFormGather();
+  const msg = document.getElementById('pfMsg');
+  if (msg) msg.textContent = 'Yeniden hesaplanıyor…';
+  try {
+    const rec = await (await matApi('/api/agent/documents/' + id + '/recompute', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p),
+    })).json();
+    if (rec.error) throw new Error(rec.error);
+    belgeRenderProdForm(rec);
+  } catch (e) { if (msg) msg.innerHTML = '<span style="color:var(--red);">' + esc(e.message) + '</span>'; }
+}
+
+async function belgeCommitProdForm(id, existingJobAction) {
+  const p = belgeProdFormGather();
+  const cm = (window._pfLastCost || {});
+  const msg = document.getElementById('pfMsg');
+  const body = {
+    confirm: true,
+    existingJobAction: existingJobAction || undefined,
+    fields: Object.assign({ finalType: 'production_form' }, p, {
+      cost_items: cm.costItems || undefined,
+      baski_nakis_secim: cm.templateMatch ? { template: cm.templateMatch.name, items: (cm.baskiNakisItems || []) } : null,
+    }),
+    links: { customer_id: p.customer_id || null },
+    createUretimTakip: p.createUretimTakip,
+  };
+  if (msg) msg.textContent = 'Aktarılıyor…';
+  try {
+    const r = await (await matApi('/api/agent/documents/' + id + '/commit', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    })).json();
+    if (r.error) throw new Error(r.error);
+    if (r.needsExistingJobDecision) {
+      const d = r.needsExistingJobDecision;
+      const upd = confirm('⚠️ "' + (d.jobNo || p.order_no) + '" numaralı iş zaten mevcut (' + (d.title || '') + ', durum: ' + (d.status || '-') + ').\n\nTAMAM = mevcut işi güncelle\nİPTAL = yeni kayıt oluştur');
+      return belgeCommitProdForm(id, upd ? 'update' : 'new');
+    }
+    document.getElementById('belgePreview').innerHTML = '<div class="panel-box"><div class="flash flash-success" style="margin:0;">✅ İş Takibe aktarıldı'
+      + (r.jobId ? ' (iş #' + esc(r.jobId) + ')' : '') + '</div>'
       + '<div style="margin-top:10px;font-size:12.5px;">Panel verisi güncellendi. <button class="btn small" onclick="location.reload()">Sayfayı yenile</button></div></div>';
     renderBelgeIsleme();
   } catch (e) { if (msg) msg.innerHTML = '<span style="color:var(--red);">' + esc(e.message) + '</span>'; }
