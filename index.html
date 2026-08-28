@@ -398,10 +398,22 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
       <div style="color:var(--muted);">Yükleniyor…</div>
     </div>
 
+    <div class="section-title">💬 Ajana Söyle <span style="font-weight:400;color:var(--muted);font-size:12px;">— panelde işlem yaptır (görev, üretim durumu, takip tarihi…)</span></div>
+    <div class="panel-box">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <input type="text" id="ajanActInput" placeholder="Örn: İTÜ Store'a yarın takip görevi ekle, Mert'e ata" style="flex:1;min-width:240px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;">
+        <button class="btn" id="ajanActBtn">Gönder</button>
+      </div>
+      <div id="ajanActResult" style="margin-top:12px;"></div>
+    </div>
+
     <div class="section-title">Geçmiş Çıktılar</div>
     <div class="panel-box">
       <div class="table-wrap"><table class="data-table" id="ajanHistoryTable"></table></div>
     </div>
+
+    <div class="section-title">💵 API Maliyeti</div>
+    <div class="panel-box"><ul class="stat-list" id="ajanUsageList"><li style="color:var(--muted);">—</li></ul></div>
   </section>
 
   <!-- İŞLER LIST -->
@@ -4553,6 +4565,7 @@ async function renderYonetimAjani() {
     histTable.innerHTML = '<tbody><tr><td style="color:var(--muted);">Geçmiş okunamadı.</td></tr></tbody>';
   }
   ajanRefreshStatus();
+  ajanRenderUsage();
 }
 
 async function ajanRefreshStatus() {
@@ -4603,6 +4616,103 @@ document.getElementById('ajanRunBtn').addEventListener('click', async () => {
     document.getElementById('ajanStatusMsg').textContent = '';
   }
 });
+
+// ---- API maliyet özeti ----
+async function ajanRenderUsage() {
+  const el = document.getElementById('ajanUsageList');
+  if (!el) return;
+  try {
+    const u = await (await matApi('/api/agent/usage?limit=1')).json();
+    const s = u.summary || {};
+    const fmt = (w) => w ? ('$' + (w.costUsd || 0).toFixed(3) + ' · ' + (w.calls || 0) + ' çağrı') : '—';
+    el.innerHTML =
+      '<li><span>Bugün</span><strong>' + fmt(s.today) + '</strong></li>'
+      + '<li><span>Son 7 gün</span><strong>' + fmt(s.d7) + '</strong></li>'
+      + '<li><span>Son 30 gün</span><strong>' + fmt(s.d30) + '</strong></li>'
+      + '<li style="color:var(--muted);font-size:11.5px;"><span>Toplam kayıtlı çağrı</span><span>' + (u.totalCalls || 0) + '</span></li>';
+  } catch (e) { el.innerHTML = '<li style="color:var(--muted);">Okunamadı.</li>'; }
+}
+
+// ---- "Ajana Söyle" ----
+function ajanReloadNote(target) {
+  target.insertAdjacentHTML('beforeend',
+    '<div style="margin-top:10px;padding:8px 10px;background:#e5f6ed;border-radius:8px;font-size:12.5px;">'
+    + 'Panel verisi güncellendi. <button class="btn small" onclick="location.reload()" style="margin-left:6px;">Sayfayı yenile</button></div>');
+}
+
+function ajanRenderActResult(out) {
+  const box2 = document.getElementById('ajanActResult');
+  let html = '';
+  if (out.reply) html += '<div style="margin-bottom:10px;">' + esc(out.reply) + '</div>';
+  if (out.applied && out.applied.length) {
+    html += '<div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Uygulandı:</div><ul style="margin:0 0 10px;padding-left:18px;">'
+      + out.applied.map((a) => '<li style="color:var(--green);">✅ ' + esc(a.summary || a.describe || a.type) + '</li>').join('') + '</ul>';
+  }
+  if (out.errors && out.errors.length) {
+    html += '<ul style="margin:0 0 10px;padding-left:18px;">'
+      + out.errors.map((e) => '<li style="color:var(--red);">⚠️ ' + esc(e.describe || e.type) + ' — ' + esc(e.error) + '</li>').join('') + '</ul>';
+  }
+  box2.innerHTML = html || '<div style="color:var(--muted);">İşlem çıkarılmadı.</div>';
+
+  if (out.pending && out.pending.length) {
+    const pend = document.createElement('div');
+    pend.innerHTML = '<div style="font-size:12px;color:var(--muted);margin:6px 0 4px;">Onay bekliyor (finansal / kritik):</div>';
+    out.pending.forEach((a) => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;';
+      row.innerHTML = '<span style="flex:1;min-width:200px;">⏳ ' + esc(a.describe || a.type)
+        + (a.reason ? ' <span style="color:var(--muted);">(' + esc(a.reason) + ')</span>' : '') + '</span>';
+      const yes = document.createElement('button');
+      yes.className = 'btn small'; yes.textContent = 'Onayla';
+      const no = document.createElement('button');
+      no.className = 'btn small secondary'; no.textContent = 'İptal';
+      yes.addEventListener('click', async () => {
+        yes.disabled = true; no.disabled = true;
+        try {
+          const r = await (await matApi('/api/agent/act/confirm', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: { type: a.type, params: a.params } }),
+          })).json();
+          row.innerHTML = '<span style="color:var(--green);">✅ ' + esc(r.summary || a.type) + '</span>';
+          ajanReloadNote(document.getElementById('ajanActResult'));
+        } catch (e) {
+          yes.disabled = false; no.disabled = false;
+          flash('Onaylanamadı: ' + e.message, 'error');
+        }
+      });
+      no.addEventListener('click', () => { row.remove(); });
+      row.appendChild(yes); row.appendChild(no);
+      pend.appendChild(row);
+    });
+    box2.appendChild(pend);
+  }
+
+  if (out.applied && out.applied.length) ajanReloadNote(box2);
+  ajanRenderUsage();
+}
+
+async function ajanRunAct() {
+  const input = document.getElementById('ajanActInput');
+  const btn = document.getElementById('ajanActBtn');
+  const instruction = input.value.trim();
+  if (!instruction) return;
+  btn.disabled = true;
+  document.getElementById('ajanActResult').innerHTML = '<div style="color:var(--muted);">⏳ Ajan işliyor…</div>';
+  try {
+    const out = await (await matApi('/api/agent/act', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ instruction }),
+    })).json();
+    ajanRenderActResult(out);
+    input.value = '';
+  } catch (e) {
+    document.getElementById('ajanActResult').innerHTML = '<div style="color:var(--red);">Hata: ' + esc(e.message) + '</div>';
+  } finally {
+    btn.disabled = false;
+  }
+}
+document.getElementById('ajanActBtn').addEventListener('click', ajanRunAct);
+document.getElementById('ajanActInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') ajanRunAct(); });
 
 const VIEW_RENDER_MAP = {
   dashboard: renderDashboard, isler: renderIsler, gelir: renderGelir,
