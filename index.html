@@ -4874,8 +4874,13 @@ function belgeRenderPreview(rec) {
 
   const inp = (id, label, value, type) => '<div class="field"><label>' + label + '</label><input id="' + id + '" type="' + (type || 'text') + '" value="' + esc(value == null ? '' : value) + '"' + (committed ? ' disabled' : '') + '></div>';
 
-  const catOptions = ['Kapora', 'Kalan Tahsilat', 'Peşin Ödeme', 'Tahsilat', 'İş Geliri', 'Diğer Gelir']
-    .map(c => '<option' + (val('financeCategory') === c ? ' selected' : '') + '>' + c + '</option>').join('');
+  const hint = cl.categoryHint || null;
+  const curCat = F.financeCategory != null ? F.financeCategory : (hint || '');
+  const optList = (arr) => '<option value="">— otomatik —</option>' + arr.map(c => '<option' + (curCat === c ? ' selected' : '') + '>' + c + '</option>').join('');
+  const incomeCatOptions = optList(['Kapora', 'Kalan Tahsilat', 'Peşin Ödeme', 'Tahsilat', 'İş Geliri', 'Diğer Gelir']);
+  const expenseCatOptions = optList(['Kumaş', 'Kesim', 'Baskı/Nakış', 'Dikim', 'Ütü-Paket', 'Nakliye', 'Kargo/Kurye', 'İşçilik', 'Vergi', 'Kira', 'Maaş', 'Borç Ödemesi', 'Diğer']);
+  const hintNote = hint && !committed ? ' <span style="color:var(--accent2);font-weight:400;">(öneri: ' + esc(hint) + ')</span>' : '';
+  const cpNow = cl.counterparty || {};
 
   // link secicileri (suggestions)
   const sug = rec.suggestions || {};
@@ -4898,14 +4903,15 @@ function belgeRenderPreview(rec) {
     + '<div class="field"><label>Yön</label><select id="bpDir"' + (committed ? ' disabled' : '') + '>'
     + ['incoming', 'outgoing'].map(d => '<option value="' + d + '"' + (dirNow === d ? ' selected' : '') + '>' + (d === 'incoming' ? 'Gelen (Merci\'ye para/fatura)' : 'Giden (Merci\'den)') + '</option>').join('') + '</select></div>'
     + '</div>'
-    + '<div class="form-row">' + inp('bpDate', 'Tarih', val('date'), 'date') + inp('bpParty', 'Firma / Kişi', val('counterparty_name', ex.sender_name || ex.receiver_name)) + '</div>'
+    + '<div class="form-row">' + inp('bpDate', 'Tarih', val('date'), 'date') + inp('bpParty', 'Firma / Kişi (karşı taraf)', val('counterparty_name', cpNow.name || ex.sender_name || ex.receiver_name)) + '</div>'
     + '<div class="form-row">' + inp('bpTotal', 'Genel Toplam (₺)', val('total', ex.amount), 'number') + inp('bpCurrency', 'Para Birimi', val('currency', 'TRY')) + '</div>'
     + '<div class="form-row">' + inp('bpSubtotal', 'Ara Toplam (₺)', val('subtotal'), 'number') + inp('bpVat', 'KDV (₺)', val('vat_amount'), 'number') + '</div>'
     + '<div class="form-row">' + inp('bpInvNo', 'Fatura No', val('invoice_number')) + inp('bpRef', 'Referans / Dekont No', val('reference_number')) + '</div>'
-    + '<div class="form-row">' + inp('bpVkn', 'VKN / TCKN', val('tax_number', ex.sender_tax_number || ex.receiver_tax_number)) + inp('bpDue', 'Vade', val('due_date'), 'date') + '</div>'
+    + '<div class="form-row">' + inp('bpVkn', 'VKN / TCKN (karşı taraf)', val('tax_number', cpNow.taxNumber || ex.sender_tax_number || ex.receiver_tax_number)) + inp('bpDue', 'Vade', val('due_date'), 'date') + '</div>'
     + '<div class="form-row">' + inp('bpSIban', 'Gönderen IBAN', val('sender_iban')) + inp('bpRIban', 'Alıcı IBAN', val('receiver_iban')) + '</div>'
     + inp('bpDesc', 'Açıklama', val('description'))
-    + '<div class="field" id="bpCatWrap" style="display:none;"><label>Gelir Kategorisi (dekont için)</label><select id="bpCat"' + (committed ? ' disabled' : '') + '>' + catOptions + '</select></div>'
+    + '<div class="field" id="bpCatWrap" style="display:none;"><label>Kategori (dekont için)' + hintNote + '</label>'
+    + '<select id="bpCat"' + (committed ? ' disabled' : '') + '></select></div>'
     + linkSel('bpCustomer', 'Müşteri', sug.customers)
     + linkSel('bpSupplier', 'Tedarikçi', sug.suppliers)
     + linkSel('bpJob', 'İlgili İş', sug.jobs)
@@ -4921,7 +4927,17 @@ function belgeRenderPreview(rec) {
 
   if (committed) return;
 
-  const syncCat = () => { document.getElementById('bpCatWrap').style.display = document.getElementById('bpType').value === 'payment_receipt' && document.getElementById('bpDir').value === 'incoming' ? 'block' : 'none'; };
+  const syncCat = () => {
+    const isReceipt = document.getElementById('bpType').value === 'payment_receipt';
+    const dir = document.getElementById('bpDir').value;
+    const wrap = document.getElementById('bpCatWrap');
+    const sel = document.getElementById('bpCat');
+    wrap.style.display = isReceipt ? 'block' : 'none';
+    if (!isReceipt) return;
+    const prev = sel.value;
+    sel.innerHTML = dir === 'incoming' ? incomeCatOptions : expenseCatOptions;
+    if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+  };
   document.getElementById('bpType').addEventListener('change', syncCat);
   document.getElementById('bpDir').addEventListener('change', syncCat);
   syncCat();
@@ -4974,6 +4990,31 @@ async function belgeCommit(id, confirmDuplicate) {
 // ============ ÜRETİM FORMU ÖNİZLEME ============
 const PRODFORM_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
 const PRODFORM_JOB_STATUSES = ['Teklif', 'Onaylandı', 'Üretimde', 'Teslim Edildi', 'İptal'];
+let CURRENT_PF_BN = [];
+
+function pfBnRowHtml(it, ct, areaOpts, committed) {
+  const dis = committed ? ' disabled' : '';
+  const type = it.type === 'nakis' ? 'nakis' : 'baski';
+  const sizes = Object.keys((type === 'baski' ? ct.baski : ct.nakis) || {});
+  const areaSel = '<select class="pfBnArea"' + dis + '><option value="">— bölge —</option>'
+    + areaOpts.map(a => '<option' + (a === it.area ? ' selected' : '') + '>' + esc(a) + '</option>').join('')
+    + (it.area && !areaOpts.includes(it.area) ? '<option selected>' + esc(it.area) + '</option>' : '') + '</select>';
+  const sizeSel = '<select class="pfBnSize"' + dis + '><option value="">— boyut seç —</option>'
+    + sizes.map(s => '<option' + (s === it.size ? ' selected' : '') + '>' + esc(s) + '</option>').join('') + '</select>';
+  return '<div class="pf-bn-row form-row" data-type="' + type + '" style="align-items:end;gap:8px;margin-bottom:6px;">'
+    + '<div class="field" style="max-width:74px;"><label>' + (type === 'baski' ? 'Baskı' : 'Nakış') + '</label>'
+    + '<input class="pfBnLabel" placeholder="etiket" value="' + esc(it.label || '') + '"' + dis + '></div>'
+    + '<div class="field"><label>Bölge</label>' + areaSel + '</div>'
+    + '<div class="field"><label>Boyut</label>' + sizeSel + '</div>'
+    + '<div class="field" style="max-width:88px;"><label>Adet</label>'
+    + '<input class="pfBnQty" type="number" min="0" value="' + esc(it.qty === '' || it.qty == null ? '' : it.qty) + '"' + dis + '></div>'
+    + (committed ? '' : '<button type="button" class="btn danger small pfBnRemove">✕</button>')
+    + '</div>';
+}
+function pfBnRowsHtml(ct, areaOpts, committed) {
+  if (!CURRENT_PF_BN.length) return '<div style="font-size:12px;color:var(--muted);padding:2px 0;">Baskı/nakış kalemi yok. Gerekiyorsa aşağıdan ekleyin.</div>';
+  return CURRENT_PF_BN.map(it => pfBnRowHtml(it, ct, areaOpts, committed)).join('');
+}
 
 function belgeRenderProdForm(rec) {
   const pv = document.getElementById('belgePreview');
@@ -4999,18 +5040,17 @@ function belgeRenderProdForm(rec) {
   const sizeInputs = PRODFORM_SIZES.map(s =>
     '<div class="field" style="min-width:64px;"><label>' + s + '</label><input id="pf_sz_' + s + '" type="number" min="0" value="' + esc(sb[s] != null ? sb[s] : '') + '"' + dis + '></div>').join('');
 
-  // baski/nakis bolge boyut seçicileri
-  const chosen = (E.chosenSizes || {});
-  const areaRow = (area, qty, technique) => {
-    const sizes = Object.keys((technique === 'baski' ? ct.baski : ct.nakis) || {});
-    const cur = (chosen[technique] && chosen[technique][area]) || '';
-    const opts = ['<option value="">— boyut seç —</option>'].concat(
-      sizes.map(s => '<option' + (s === cur ? ' selected' : '') + '>' + esc(s) + '</option>')).join('');
-    return '<div class="form-row" style="align-items:end;"><div class="field"><label>' + esc(area) + ' (' + (technique === 'baski' ? 'baskı' : 'nakış') + ') — <b>' + qty + ' adet</b></label>'
-      + '<select data-bnsize="' + esc(technique) + '|' + esc(area) + '"' + dis + '>' + opts + '</select></div></div>';
-  };
-  const printRows = Object.entries(comp.printCounts || {}).map(([a, q]) => areaRow(a, q, 'baski')).join('');
-  const embRows = Object.entries(comp.embroideryCounts || {}).map(([a, q]) => areaRow(a, q, 'nakis')).join('');
+  // baski/nakis kalemleri — bir bolgede BIRDEN FAZLA baski/nakis olabilir
+  const pfAreaOpts = Array.from(new Set([].concat(
+    (v('print_areas', []) || []), (v('embroidery_areas', []) || []),
+    Object.keys(comp.printCounts || {}), Object.keys(comp.embroideryCounts || {}),
+    ['göğüs', 'sol göğüs', 'sağ göğüs', 'sırt', 'kol', 'sol kol', 'sağ kol', 'ense', 'kapüşon', 'yaka', 'ön', 'etek'],
+  ).filter(Boolean)));
+  CURRENT_PF_BN = (cm.baskiNakisItems || []).map(it => ({
+    type: it.type === 'nakis' ? 'nakis' : 'baski',
+    area: it.area || '', size: it.size || '', qty: (it.qty != null ? it.qty : ''), label: it.label || '',
+  }));
+  const bnListHtml = pfBnRowsHtml(ct, pfAreaOpts, committed);
 
   // ozel talimatlar yorumu
   const insList = (comp.instructions || []).map(i =>
@@ -5051,9 +5091,12 @@ function belgeRenderProdForm(rec) {
     + '<div class="field"><label>Özel Üretim Talimatları (her satır ayrı)</label><textarea id="pf_special"' + dis + ' rows="3">' + esc(((v('special_instructions', []) || []).map(x => typeof x === 'string' ? x : x.text)).join('\n')) + '</textarea></div>'
     + (insList ? '<div class="field"><label>Talimat Yorumu (backend)</label><ul style="margin:4px 0;font-size:12.5px;">' + insList + '</ul></div>' : '')
     + '<hr style="border:none;border-top:1px solid var(--border);margin:14px 0;">'
-    + '<div class="section-title" style="font-size:13px;margin:0 0 8px;">Baskı / Nakış Boyutları <span style="font-weight:400;color:var(--muted);">(adetleri backend istisnalara göre hesapladı; boyut seçince maliyet güncellenir)</span></div>'
-    + (printRows || embRows || '<div style="color:var(--muted);font-size:12.5px;">Baskı/nakış bölgesi yok.</div>')
-    + '<div class="inline-form" style="margin-top:8px;"><button class="btn small secondary" id="pfRecalc"' + dis + '>🔄 Adet + Maliyeti Yeniden Hesapla</button></div>'
+    + '<div class="section-title" style="font-size:13px;margin:0 0 8px;">Baskı / Nakış Kalemleri <span style="font-weight:400;color:var(--muted);">(bir bölgede birden fazla baskı/nakış olabilir — her biri ayrı satır; adet backend\'in istisnalı hesabından gelir, değiştirebilirsiniz)</span></div>'
+    + '<div id="pf_bn_list">' + bnListHtml + '</div>'
+    + '<div class="inline-form" style="margin-top:8px;">'
+    + '<button class="btn small secondary" id="pfAddBaski"' + dis + '>+ Baskı Ekle</button>'
+    + '<button class="btn small secondary" id="pfAddNakis"' + dis + '>+ Nakış Ekle</button>'
+    + '<button class="btn small" id="pfRecalc"' + dis + '>🔄 Adet + Maliyeti Yeniden Hesapla</button></div>'
     + '<hr style="border:none;border-top:1px solid var(--border);margin:14px 0;">'
     + '<div class="section-title" style="font-size:13px;margin:0 0 8px;">Maliyet / Fiyat (panelin mevcut motoru)</div>'
     + '<div style="font-size:12.5px;margin-bottom:6px;">Eşleşen şablon: <b>' + esc(cm.templateMatch ? cm.templateMatch.name : '—') + '</b>'
@@ -5080,7 +5123,20 @@ function belgeRenderProdForm(rec) {
 
   const rc = document.getElementById('pfRecalc');
   if (rc) rc.addEventListener('click', () => belgeProdRecompute(rec.id));
-  pv.querySelectorAll('select[data-bnsize]').forEach(s => s.addEventListener('change', () => belgeProdRecompute(rec.id)));
+  const bnList = document.getElementById('pf_bn_list');
+  const wireBnRow = (row) => {
+    const rm = row.querySelector('.pfBnRemove');
+    if (rm) rm.addEventListener('click', () => { row.remove(); });
+  };
+  bnList.querySelectorAll('.pf-bn-row').forEach(wireBnRow);
+  const addBn = (type) => {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = pfBnRowHtml({ type, area: '', size: '', qty: '', label: '' }, ct, pfAreaOpts, false);
+    const row = tmp.firstElementChild;
+    bnList.appendChild(row); wireBnRow(row);
+  };
+  const ab = document.getElementById('pfAddBaski'); if (ab) ab.addEventListener('click', () => addBn('baski'));
+  const an = document.getElementById('pfAddNakis'); if (an) an.addEventListener('click', () => addBn('nakis'));
   document.getElementById('pfDiscard').addEventListener('click', async () => {
     if (!confirm('Belge atılsın mı? İş kaydı oluşmaz.')) return;
     try { await matApi('/api/agent/documents/' + rec.id, { method: 'DELETE' }); pv.innerHTML = ''; renderBelgeIsleme(); }
@@ -5094,10 +5150,16 @@ function belgeProdFormGather() {
   const gn = i => { const x = parseFloat(g(i)); return Number.isFinite(x) ? x : null; };
   const sb = {};
   PRODFORM_SIZES.forEach(s => { const x = parseInt(g('pf_sz_' + s), 10); if (Number.isFinite(x)) sb[s] = x; });
-  const chosenSizes = { baski: {}, nakis: {} };
-  document.querySelectorAll('select[data-bnsize]').forEach(sel => {
-    const [tech, area] = sel.dataset.bnsize.split('|');
-    if (sel.value) chosenSizes[tech][area] = sel.value;
+  const bnItems = [];
+  document.querySelectorAll('#pf_bn_list .pf-bn-row').forEach(row => {
+    const type = row.dataset.type === 'nakis' ? 'nakis' : 'baski';
+    const area = (row.querySelector('.pfBnArea') || {}).value || '';
+    const size = (row.querySelector('.pfBnSize') || {}).value || '';
+    const qtyRaw = (row.querySelector('.pfBnQty') || {}).value || '';
+    const label = ((row.querySelector('.pfBnLabel') || {}).value || '').trim();
+    const qty = parseInt(qtyRaw, 10);
+    if (!area && !size && !label) return; // bos satiri atla
+    bnItems.push({ type, area: area || null, size: size || null, qty: Number.isFinite(qty) ? qty : null, label: label || null });
   });
   const splitList = s => s.split(',').map(x => x.trim()).filter(Boolean);
   return {
@@ -5112,7 +5174,7 @@ function belgeProdFormGather() {
     customer_id: g('pf_customer_id') ? parseInt(g('pf_customer_id'), 10) : null,
     customer_name: g('pf_customer_free') || null,
     createUretimTakip: !!(document.getElementById('pf_uretimtakip') && document.getElementById('pf_uretimtakip').checked),
-    chosenSizes,
+    bnItems,
   };
 }
 
@@ -5131,8 +5193,18 @@ async function belgeProdRecompute(id) {
 
 async function belgeCommitProdForm(id, existingJobAction) {
   const p = belgeProdFormGather();
-  const cm = (window._pfLastCost || {});
   const msg = document.getElementById('pfMsg');
+  // once guncel adet + maliyeti backend'den al (kullanici son eklediklerini de kapsasin)
+  let cm = (window._pfLastCost || {});
+  if (!existingJobAction) {
+    if (msg) msg.textContent = 'Maliyet güncelleniyor…';
+    try {
+      const fresh = await (await matApi('/api/agent/documents/' + id + '/recompute', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p),
+      })).json();
+      if (fresh && fresh.prodComputation && fresh.prodComputation.costMatch) cm = fresh.prodComputation.costMatch;
+    } catch (e) { /* stale cm ile devam */ }
+  }
   const body = {
     confirm: true,
     existingJobAction: existingJobAction || undefined,
