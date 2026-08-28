@@ -321,6 +321,7 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
   <button data-view="gelir">💵 Gelir</button>
   <button data-view="gider">💸 Giderler</button>
   <button data-view="borc">🔄 Borç-Alacak</button>
+  <button data-view="faturalar">🧾 Faturalar</button>
 
   <div class="nav-group-label">Belgeler</div>
   <button data-view="belgeler">📄 Belge Oluşturucu</button>
@@ -407,6 +408,17 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
       <div id="ajanActResult" style="margin-top:12px;"></div>
     </div>
 
+    <div class="section-title">📄 Belge İşleme <span style="font-weight:400;color:var(--muted);font-size:12px;">— dekont / fatura yükle, ajan okusun, sen onayla</span></div>
+    <div class="panel-box">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <input type="file" id="belgeFile" accept=".jpg,.jpeg,.png,.webp,.pdf,image/*,application/pdf">
+        <button class="btn" id="belgeUploadBtn">Yükle</button>
+        <span id="belgeUploadMsg" style="font-size:12px;color:var(--muted);"></span>
+      </div>
+      <div id="belgeListe" style="margin-top:12px;"></div>
+      <div id="belgePreview" style="margin-top:12px;"></div>
+    </div>
+
     <div class="section-title">Geçmiş Çıktılar</div>
     <div class="panel-box">
       <div class="table-wrap"><table class="data-table" id="ajanHistoryTable"></table></div>
@@ -414,6 +426,24 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
 
     <div class="section-title">💵 API Maliyeti</div>
     <div class="panel-box"><ul class="stat-list" id="ajanUsageList"><li style="color:var(--muted);">—</li></ul></div>
+  </section>
+
+  <!-- FATURALAR -->
+  <section class="view" id="view-faturalar">
+    <div class="page-header"><h2>🧾 Faturalar</h2></div>
+    <div class="grid-2">
+      <div class="panel-box">
+        <h3>Gelen / Alış Faturaları <span style="font-weight:400;color:var(--muted);font-size:12px;">— ödememiz gereken</span></h3>
+        <ul class="stat-list" id="faturaAlisOzet"></ul>
+        <div class="table-wrap"><table class="data-table" id="faturaAlisTable"></table></div>
+      </div>
+      <div class="panel-box">
+        <h3>Kesilen / Satış Faturaları <span style="font-weight:400;color:var(--muted);font-size:12px;">— tahsil etmemiz gereken</span></h3>
+        <ul class="stat-list" id="faturaSatisOzet"></ul>
+        <div class="table-wrap"><table class="data-table" id="faturaSatisTable"></table></div>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-top:10px;">Faturalar "🤖 Yönetim Ajanı → Belge İşleme" altından belge yükleyip onaylayarak oluşturulur. Kalan tutar ve durum otomatik hesaplanır.</div>
   </section>
 
   <!-- İŞLER LIST -->
@@ -4566,6 +4596,7 @@ async function renderYonetimAjani() {
   }
   ajanRefreshStatus();
   ajanRenderUsage();
+  renderBelgeIsleme();
 }
 
 async function ajanRefreshStatus() {
@@ -4714,6 +4745,228 @@ async function ajanRunAct() {
 document.getElementById('ajanActBtn').addEventListener('click', ajanRunAct);
 document.getElementById('ajanActInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') ajanRunAct(); });
 
+// ================= FATURALAR =================
+function invoiceStatus(iv) {
+  const total = Math.round((iv.total_amount || 0) * 100) / 100;
+  const paid = Math.round((iv.paid_amount || 0) * 100) / 100;
+  const remaining = Math.round((total - paid) * 100) / 100;
+  let status = iv.status;
+  if (status !== 'İptal') {
+    if (iv.direction === 'outgoing') status = remaining <= 0.01 ? 'Tahsil Edildi' : (paid > 0.01 ? 'Kısmi Tahsil Edildi' : 'Tahsil Edilmedi');
+    else status = remaining <= 0.01 ? 'Ödendi' : (paid > 0.01 ? 'Kısmi Ödendi' : 'Ödenmedi');
+  }
+  return { total, paid, remaining, status };
+}
+function renderFaturalar() {
+  const all = (DATA.invoices || []).map(iv => Object.assign({}, iv, invoiceStatus(iv)));
+  const alis = all.filter(x => x.direction === 'incoming');
+  const satis = all.filter(x => x.direction === 'outgoing');
+  const openSum = a => a.filter(x => x.status !== 'İptal').reduce((s, x) => s + x.remaining, 0);
+  const tbl = (rows, dirLabel) => {
+    if (!rows.length) return '<tbody><tr><td style="color:var(--muted);">Kayıt yok.</td></tr></tbody>';
+    return '<thead><tr><th>No</th><th>Tarih</th><th>Taraf</th><th>Toplam</th><th>Kalan</th><th>Durum</th><th>Vade</th></tr></thead><tbody>'
+      + rows.sort((a, b) => (b.invoice_date || '').localeCompare(a.invoice_date || '')).map(x =>
+        '<tr' + (x.document_id ? ' data-doc="' + esc(x.document_id) + '" style="cursor:pointer;"' : '') + '>'
+        + '<td>' + esc(x.invoice_number || '#' + x.id) + '</td><td>' + fmtDate(x.invoice_date) + '</td>'
+        + '<td>' + esc(x.counterparty_name || '-') + '</td><td>' + fmtCurrency(x.total) + '</td>'
+        + '<td>' + fmtCurrency(x.remaining) + '</td><td><span class="badge">' + esc(x.status) + '</span></td>'
+        + '<td>' + (x.due_date ? fmtDate(x.due_date) : '-') + '</td></tr>').join('') + '</tbody>';
+  };
+  document.getElementById('faturaAlisOzet').innerHTML = '<li><span>Açık toplam</span><b>' + fmtCurrency(openSum(alis)) + '</b></li><li><span>Fatura sayısı</span><b>' + alis.length + '</b></li>';
+  document.getElementById('faturaSatisOzet').innerHTML = '<li><span>Açık toplam</span><b>' + fmtCurrency(openSum(satis)) + '</b></li><li><span>Fatura sayısı</span><b>' + satis.length + '</b></li>';
+  document.getElementById('faturaAlisTable').innerHTML = tbl(alis, 'incoming');
+  document.getElementById('faturaSatisTable').innerHTML = tbl(satis, 'outgoing');
+  document.querySelectorAll('#view-faturalar tr[data-doc]').forEach(tr => {
+    tr.addEventListener('click', () => { switchView('ajan'); renderYonetimAjani(); setTimeout(() => belgeOpenPreview(tr.dataset.doc), 400); });
+  });
+}
+
+// ================= BELGE İŞLEME =================
+const BELGE_LABELS = {
+  'Gelen Ödeme Dekontu': 'incoming/payment_receipt', 'Yapılan Ödeme Dekontu': 'outgoing/payment_receipt',
+  'Gelen / Alış Faturası': 'incoming/invoice', 'Kesilen / Satış Faturası': 'outgoing/invoice',
+};
+async function renderBelgeIsleme() {
+  const box = document.getElementById('belgeListe');
+  if (!box || !matBackendReady()) { if (box) box.innerHTML = ''; return; }
+  try {
+    const list = await (await matApi('/api/agent/documents?limit=40')).json();
+    if (!list.length) { box.innerHTML = '<div style="color:var(--muted);font-size:12.5px;">Henüz belge yok.</div>'; return; }
+    box.innerHTML = '<div class="table-wrap"><table class="data-table"><thead><tr><th>Dosya</th><th>Tür</th><th>Tutar</th><th>Durum</th><th></th></tr></thead><tbody>'
+      + list.filter(d => d.status !== 'discarded').map(d => {
+        const st = { pending: 'Yüklendi', extracted: 'Okundu — onay bekliyor', committed: 'İşlendi' }[d.status] || d.status;
+        return '<tr data-id="' + esc(d.id) + '"><td>' + esc(d.originalName) + '</td>'
+          + '<td>' + esc(d.direction && d.documentType ? belgeHumanLabel(d.documentType, d.direction) : '—') + '</td>'
+          + '<td>' + (d.amount != null ? fmtCurrency(d.amount) : '—') + '</td>'
+          + '<td>' + esc(st) + '</td>'
+          + '<td><button class="btn small secondary" data-act="open">' + (d.status === 'committed' ? 'Gör' : 'İncele') + '</button></td></tr>';
+      }).join('') + '</tbody></table></div>';
+    box.querySelectorAll('tr[data-id]').forEach(tr => {
+      tr.querySelector('[data-act="open"]').addEventListener('click', () => belgeOpenPreview(tr.dataset.id));
+    });
+  } catch (e) { box.innerHTML = '<div style="color:var(--muted);">Belge listesi okunamadı.</div>'; }
+}
+function belgeHumanLabel(type, dir) {
+  if (type === 'payment_receipt') return dir === 'incoming' ? 'Gelen Ödeme' : 'Yapılan Ödeme';
+  if (type === 'invoice') return dir === 'incoming' ? 'Alış Faturası' : 'Satış Faturası';
+  return 'Belirsiz';
+}
+
+async function belgeUpload() {
+  const inp = document.getElementById('belgeFile');
+  const btn = document.getElementById('belgeUploadBtn');
+  const msg = document.getElementById('belgeUploadMsg');
+  if (!inp.files || !inp.files[0]) { msg.textContent = 'Önce dosya seç.'; return; }
+  btn.disabled = true; msg.textContent = 'Yükleniyor…';
+  try {
+    const fd = new FormData(); fd.append('file', inp.files[0]);
+    const r = await (await matApi('/api/agent/documents', { method: 'POST', body: fd })).json();
+    inp.value = '';
+    if (r.duplicateOf) msg.innerHTML = '<span style="color:var(--warn,#9a6512);">⚠️ Bu dosya daha önce yüklenmiş (' + fmtDate(r.duplicateOf.uploadedAt) + '). Yine de eklendi.</span>';
+    else msg.textContent = 'Yüklendi. "İncele" ile ajana okut.';
+    await renderBelgeIsleme();
+    belgeExtract(r.id);
+  } catch (e) { msg.innerHTML = '<span style="color:var(--red);">Hata: ' + esc(e.message) + '</span>'; }
+  finally { btn.disabled = false; }
+}
+
+async function belgeExtract(id) {
+  const pv = document.getElementById('belgePreview');
+  pv.innerHTML = '<div class="panel-box" style="color:var(--muted);">⏳ Ajan belgeyi okuyor (Vision)…</div>';
+  try {
+    const rec = await (await matApi('/api/agent/documents/' + id + '/extract', { method: 'POST' })).json();
+    belgeRenderPreview(rec);
+    renderBelgeIsleme();
+  } catch (e) { pv.innerHTML = '<div class="panel-box" style="color:var(--red);">Okuma hatası: ' + esc(e.message) + '</div>'; }
+}
+async function belgeOpenPreview(id) {
+  const pv = document.getElementById('belgePreview');
+  pv.innerHTML = '<div class="panel-box" style="color:var(--muted);">Yükleniyor…</div>';
+  try {
+    const rec = await (await matApi('/api/agent/documents/' + id)).json();
+    if (rec.status === 'pending') return belgeExtract(id);
+    belgeRenderPreview(rec);
+  } catch (e) { pv.innerHTML = '<div class="panel-box" style="color:var(--red);">' + esc(e.message) + '</div>'; }
+}
+
+function belgeRenderPreview(rec) {
+  const pv = document.getElementById('belgePreview');
+  const ex = rec.extraction || {};
+  const cl = rec.classification || {};
+  const committed = rec.status === 'committed';
+  const F = (rec.finalFields) || {};
+  const val = (k, d) => (F[k] != null ? F[k] : (ex[k] != null ? ex[k] : (d != null ? d : '')));
+
+  const dirNow = F.finalDirection || cl.finalDirection || 'unknown';
+  const typeNow = F.finalType || cl.finalType || 'unknown';
+  const fileUrl = MATERIALS_API_BASE + '/api/agent/documents/' + rec.id + '/file';
+
+  let warn = '';
+  if (cl.needsUserDecision && !committed) {
+    warn = '<div class="flash flash-error" style="margin:0 0 12px;">⚠️ ' + esc(cl.reason || 'Belgenin yönü kesin belirlenemedi.') + ' Aşağıdan doğru türü/yönü seç.</div>';
+  }
+
+  const inp = (id, label, value, type) => '<div class="field"><label>' + label + '</label><input id="' + id + '" type="' + (type || 'text') + '" value="' + esc(value == null ? '' : value) + '"' + (committed ? ' disabled' : '') + '></div>';
+
+  const catOptions = ['Kapora', 'Kalan Tahsilat', 'Peşin Ödeme', 'Tahsilat', 'İş Geliri', 'Diğer Gelir']
+    .map(c => '<option' + (val('financeCategory') === c ? ' selected' : '') + '>' + c + '</option>').join('');
+
+  // link secicileri (suggestions)
+  const sug = rec.suggestions || {};
+  const linkSel = (id, label, items) => {
+    if (!items || !items.length) return '';
+    return '<div class="field"><label>' + label + ' <span style="color:var(--muted);font-weight:400;">(öneri — otomatik bağlanmaz)</span></label><select id="' + id + '"' + (committed ? ' disabled' : '') + '><option value="">— seçme —</option>'
+      + items.map(x => '<option value="' + x.id + '">' + esc(x.label) + ' · %' + Math.round(x.score * 100) + '</option>').join('') + '</select></div>';
+  };
+
+  pv.innerHTML = '<div class="panel-box">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">'
+    + '<b>' + esc(rec.originalName) + '</b>'
+    + '<a href="' + fileUrl + '" target="_blank" rel="noopener" class="btn small secondary">Belgeyi Aç</a></div>'
+    + warn
+    + '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Ajanın okuduğu: <b>' + esc(cl.humanLabel || '—') + '</b>'
+    + (rec.extractMeta && rec.extractMeta.mock ? ' <span style="color:var(--warn,#9a6512);">(MOCK)</span>' : '') + '</div>'
+    + '<div class="form-row">'
+    + '<div class="field"><label>Belge türü</label><select id="bpType"' + (committed ? ' disabled' : '') + '>'
+    + ['payment_receipt', 'invoice'].map(t => '<option value="' + t + '"' + (typeNow === t ? ' selected' : '') + '>' + (t === 'payment_receipt' ? 'Dekont' : 'Fatura') + '</option>').join('') + '</select></div>'
+    + '<div class="field"><label>Yön</label><select id="bpDir"' + (committed ? ' disabled' : '') + '>'
+    + ['incoming', 'outgoing'].map(d => '<option value="' + d + '"' + (dirNow === d ? ' selected' : '') + '>' + (d === 'incoming' ? 'Gelen (Merci\'ye para/fatura)' : 'Giden (Merci\'den)') + '</option>').join('') + '</select></div>'
+    + '</div>'
+    + '<div class="form-row">' + inp('bpDate', 'Tarih', val('date'), 'date') + inp('bpParty', 'Firma / Kişi', val('counterparty_name', ex.sender_name || ex.receiver_name)) + '</div>'
+    + '<div class="form-row">' + inp('bpTotal', 'Genel Toplam (₺)', val('total', ex.amount), 'number') + inp('bpCurrency', 'Para Birimi', val('currency', 'TRY')) + '</div>'
+    + '<div class="form-row">' + inp('bpSubtotal', 'Ara Toplam (₺)', val('subtotal'), 'number') + inp('bpVat', 'KDV (₺)', val('vat_amount'), 'number') + '</div>'
+    + '<div class="form-row">' + inp('bpInvNo', 'Fatura No', val('invoice_number')) + inp('bpRef', 'Referans / Dekont No', val('reference_number')) + '</div>'
+    + '<div class="form-row">' + inp('bpVkn', 'VKN / TCKN', val('tax_number', ex.sender_tax_number || ex.receiver_tax_number)) + inp('bpDue', 'Vade', val('due_date'), 'date') + '</div>'
+    + '<div class="form-row">' + inp('bpSIban', 'Gönderen IBAN', val('sender_iban')) + inp('bpRIban', 'Alıcı IBAN', val('receiver_iban')) + '</div>'
+    + inp('bpDesc', 'Açıklama', val('description'))
+    + '<div class="field" id="bpCatWrap" style="display:none;"><label>Gelir Kategorisi (dekont için)</label><select id="bpCat"' + (committed ? ' disabled' : '') + '>' + catOptions + '</select></div>'
+    + linkSel('bpCustomer', 'Müşteri', sug.customers)
+    + linkSel('bpSupplier', 'Tedarikçi', sug.suppliers)
+    + linkSel('bpJob', 'İlgili İş', sug.jobs)
+    + linkSel('bpInvoice', 'İlgili Fatura (bu ödeme şuna ait)', sug.invoices)
+    + linkSel('bpDebt', 'İlgili Borç', sug.debts)
+    + (committed
+      ? '<div class="flash flash-success" style="margin-top:12px;">✅ Bu belge işlendi. Oluşan kayıt: ' + esc((rec.committedRecord && rec.committedRecord.created || []).map(c => c.kind).join(', ')) + '</div>'
+      : '<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">'
+        + '<button class="btn" id="bpCommit">Onayla ve İşle</button>'
+        + '<button class="btn secondary" id="bpDiscard">Belgeyi At</button>'
+        + '<span id="bpMsg" style="font-size:12px;color:var(--muted);align-self:center;"></span></div>')
+    + '</div>';
+
+  if (committed) return;
+
+  const syncCat = () => { document.getElementById('bpCatWrap').style.display = document.getElementById('bpType').value === 'payment_receipt' && document.getElementById('bpDir').value === 'incoming' ? 'block' : 'none'; };
+  document.getElementById('bpType').addEventListener('change', syncCat);
+  document.getElementById('bpDir').addEventListener('change', syncCat);
+  syncCat();
+
+  document.getElementById('bpDiscard').addEventListener('click', async () => {
+    if (!confirm('Belge atılsın mı? Finans kaydı oluşmaz.')) return;
+    try { await matApi('/api/agent/documents/' + rec.id, { method: 'DELETE' }); pv.innerHTML = ''; renderBelgeIsleme(); }
+    catch (e) { flash('Silinemedi: ' + e.message, 'error'); }
+  });
+
+  document.getElementById('bpCommit').addEventListener('click', () => belgeCommit(rec.id, false));
+}
+
+async function belgeCommit(id, confirmDuplicate) {
+  const g = i => { const e = document.getElementById(i); return e ? e.value : ''; };
+  const gn = i => { const v = parseFloat(g(i)); return Number.isFinite(v) ? v : null; };
+  const gsel = i => { const e = document.getElementById(i); return e && e.value ? parseInt(e.value, 10) : null; };
+  const msg = document.getElementById('bpMsg');
+  const body = {
+    confirm: true, confirmDuplicate: !!confirmDuplicate,
+    fields: {
+      finalType: g('bpType'), finalDirection: g('bpDir'),
+      date: g('bpDate'), total: gn('bpTotal'), currency: g('bpCurrency') || 'TRY',
+      counterparty_name: g('bpParty'), invoice_number: g('bpInvNo'), reference_number: g('bpRef'),
+      subtotal: gn('bpSubtotal'), vat_amount: gn('bpVat'), due_date: g('bpDue'),
+      tax_number: g('bpVkn'), sender_iban: g('bpSIban'), receiver_iban: g('bpRIban'), description: g('bpDesc'),
+    },
+    financeCategory: g('bpCat') || null,
+    links: {
+      customer_id: gsel('bpCustomer'), supplier_id: gsel('bpSupplier'),
+      job_id: gsel('bpJob'), invoice_id: gsel('bpInvoice'), debt_id: gsel('bpDebt'),
+    },
+  };
+  if (msg) msg.textContent = 'İşleniyor…';
+  try {
+    const r = await (await matApi('/api/agent/documents/' + id + '/commit', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    })).json();
+    if (r.needsDuplicateConfirm) {
+      if (confirm('⚠️ ' + r.reason + '\n\nYine de kayıt oluşturulsun mu?')) return belgeCommit(id, true);
+      if (msg) msg.textContent = 'İptal edildi.';
+      return;
+    }
+    document.getElementById('belgePreview').innerHTML = '<div class="panel-box"><div class="flash flash-success" style="margin:0;">✅ İşlendi: ' + esc((r.created || []).map(c => c.kind).join(', ')) + '</div>'
+      + '<div style="margin-top:10px;font-size:12.5px;">Panel verisi güncellendi. <button class="btn small" onclick="location.reload()">Sayfayı yenile</button></div></div>';
+    renderBelgeIsleme();
+  } catch (e) { if (msg) msg.innerHTML = '<span style="color:var(--red);">' + esc(e.message) + '</span>'; }
+}
+
+document.getElementById('belgeUploadBtn').addEventListener('click', belgeUpload);
+
 const VIEW_RENDER_MAP = {
   dashboard: renderDashboard, isler: renderIsler, gelir: renderGelir,
   gider: () => { renderGider(); renderSabit(); },
@@ -4723,6 +4976,7 @@ const VIEW_RENDER_MAP = {
   hedefler: renderHedefler, maliyet: renderMaliyetSablonlari, gorevler: renderGorevler,
   belgeler: renderBelgeOlusturucu, yoneticiler: renderYoneticiler,
   materyaller: renderMateryaller, ajan: renderYonetimAjani,
+  faturalar: renderFaturalar,
 };
 
 document.querySelectorAll('nav.tabs button').forEach(btn => {
