@@ -1345,7 +1345,11 @@ function pushCloudPanelData() {
       headers: { 'Content-Type': 'application/json', 'x-api-key': MATERIALS_API_KEY },
       body: JSON.stringify({ data: DATA, auth: AUTH, expectedUpdatedAt: CLOUD_LAST_KNOWN_UPDATED_AT }),
     }).then(async (res) => {
-      if (res.status === 409) { showCloudConflictBanner(); return; }
+      if (res.status === 409) {
+        const j = await res.json().catch(() => null);
+        showCloudConflictBanner(j && j.error);
+        return;
+      }
       if (!res.ok) return;
       const j = await res.json().catch(() => null);
       if (j && j.updatedAt) CLOUD_LAST_KNOWN_UPDATED_AT = j.updatedAt;
@@ -1355,13 +1359,16 @@ function pushCloudPanelData() {
 // Başka bir cihaz araya girip veriyi güncellediği için bu cihazın kaydı reddedildiğinde
 // gösterilir. Sessizce üzerine yazmak yerine kullanıcıyı açıkça uyarıp sayfa yenilemeye
 // yönlendiriyoruz — 12 Ağustos 2026'daki veri kaybının tekrarlanmaması için eklendi.
-function showCloudConflictBanner() {
+function showCloudConflictBanner(serverMsg) {
   if (CLOUD_CONFLICT) return;
   CLOUD_CONFLICT = true;
   const bar = document.createElement('div');
   bar.id = 'cloudConflictBanner';
   bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#c0392b;color:#fff;text-align:center;padding:12px 16px;font-family:-apple-system,Arial,sans-serif;font-size:13.5px;font-weight:600;box-shadow:0 2px 10px rgba(0,0,0,0.3);';
-  bar.innerHTML = '⚠️ Başka bir cihaz bu arada veriyi güncelledi. Değişiklikleriniz kaydedilmedi — veri kaybını önlemek için sayfayı yenileyin. <button onclick="location.reload()" style="margin-left:10px;background:#fff;color:#c0392b;border:none;padding:6px 14px;border-radius:6px;font-weight:700;cursor:pointer;">Sayfayı Yenile</button>';
+  const msg = serverMsg && String(serverMsg).trim()
+    ? esc(serverMsg)
+    : 'Başka bir cihaz bu arada veriyi güncelledi. Değişiklikleriniz kaydedilmedi.';
+  bar.innerHTML = '⚠️ ' + msg + ' — veri kaybını önlemek için sayfayı yenileyin. <button onclick="location.reload()" style="margin-left:10px;background:#fff;color:#c0392b;border:none;padding:6px 14px;border-radius:6px;font-weight:700;cursor:pointer;">Sayfayı Yenile</button>';
   document.body.appendChild(bar);
 }
 async function matApi(path, opts) {
@@ -5562,31 +5569,48 @@ function initSession() {
 
 // Sayfa açılışında bulut verisini çek (İşler, Gelir, Gider, Görevler vb. ekip arasında ortak olsun).
 // Bulut ulaşılamazsa (offline) bu cihazdaki en son bilinen veriyle devam eder.
+function applyCloudSnapshot(cloud) {
+  if (!cloud || !cloud.data) return false;
+  DATA = cloud.data;
+  if (cloud.auth) AUTH = cloud.auth;
+  CLOUD_LAST_KNOWN_UPDATED_AT = cloud.updatedAt || null;
+  // Buluttan gelen veri henüz eski yapıda olabilir — göç fonksiyonlarını tekrar çalıştır.
+  migrateTasksSchema();
+  migratePriceTiersV2();
+  migrateHedeflerAylik();
+  migrateSupplierCategories();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA));
+  localStorage.setItem(AUTH_KEY, JSON.stringify(AUTH));
+  return true;
+}
 (async function bootCloudSync() {
-  const cloud = await pullCloudPanelData(7000);
-  if (cloud && cloud.data) {
-    DATA = cloud.data;
-    if (cloud.auth) AUTH = cloud.auth;
-    CLOUD_LAST_KNOWN_UPDATED_AT = cloud.updatedAt || null;
-    // Buluttan gelen veri henüz eski yapıda olabilir (örn. başka bir cihaz daha yeni sürümü
-    // hiç açmadıysa) — bu yüzden göç fonksiyonlarını buradan sonra tekrar çalıştırıyoruz.
-    migrateTasksSchema();
-    migratePriceTiersV2();
-    migrateHedeflerAylik();
-    migrateSupplierCategories();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA));
-    localStorage.setItem(AUTH_KEY, JSON.stringify(AUTH));
-  }
+  const cloud = await pullCloudPanelData(8000);
+  const ok = applyCloudSnapshot(cloud);
   CLOUD_SYNC_READY = true;
   populateLoginNames();
   const submitBtn = document.getElementById('loginSubmitBtn');
   const syncNote = document.getElementById('loginSyncNote');
   if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Giriş Yap'; }
   if (syncNote) {
-    syncNote.textContent = cloud ? 'Ekip verisiyle senkronize edildi.' : 'Bulut sunucusuna ulaşılamadı, bu cihazdaki son veriyle devam ediliyor.';
+    syncNote.textContent = ok ? 'Ekip verisiyle senkronize edildi.' : 'Bulut bağlantısı bekleniyor… (bu cihazdaki veriyle devam edebilirsiniz)';
     setTimeout(() => { syncNote.style.display = 'none'; }, 4000);
   }
   initSession();
+  // İlk çekiş başarısızsa (Render soğuk başlangıç) arka planda tekrar dene — böylece kullanıcı
+  // bir şey kaydetmeden önce bulut damgası oturur, "bayat veri" 409'u önlenir.
+  if (!ok) {
+    (async () => {
+      for (let i = 0; i < 4; i++) {
+        await new Promise((r) => setTimeout(r, 5000 + i * 5000));
+        if (CLOUD_CONFLICT) return;
+        const c = await pullCloudPanelData(8000);
+        if (applyCloudSnapshot(c)) {
+          try { renderAll(); populateLoginNames(); } catch (e) {}
+          return;
+        }
+      }
+    })();
+  }
 })();
 
 // Uygulama açıkken periyodik olarak buluttaki en güncel veriyi kontrol et (ekip arkadaşlarının
