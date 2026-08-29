@@ -228,6 +228,70 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
 .back-link:hover { color:var(--navy); }
 .hidden { display:none !important; }
 
+/* ===== Ajan konsol teması — #view-ajan & #view-sdr'yi düz panel sayfalarından ayırır ===== */
+.agent-hero {
+  background: linear-gradient(135deg, var(--navy), var(--navy2));
+  color:#fff; border-radius:14px; padding:18px 22px; margin-bottom:18px;
+  display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
+  box-shadow: 0 6px 22px rgba(18,33,59,0.16);
+}
+.agent-hero .ah-left { min-width:0; }
+.agent-hero h2 { margin:0; font-size:18px; color:#fff; display:flex; align-items:center; gap:9px; letter-spacing:0.2px; }
+.agent-hero .ah-sub { font-size:11.5px; opacity:0.72; margin-top:4px; }
+.agent-hero .ah-right { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.agent-hero .btn { background: var(--accent); }
+.agent-hero .btn:disabled { opacity:0.55; cursor:default; }
+.agent-status-pill {
+  display:inline-flex; align-items:center; gap:7px; white-space:nowrap;
+  font-size:11.5px; font-weight:600; padding:5px 12px; border-radius:20px;
+  background:rgba(255,255,255,0.13); color:#fff;
+}
+.agent-status-pill .dot { width:8px; height:8px; border-radius:50%; background: var(--green); flex-shrink:0; }
+.agent-status-pill.running .dot { background: var(--accent); animation: agentPulse 1.2s ease-in-out infinite; }
+.agent-status-pill.warn .dot { background: var(--red); }
+@keyframes agentPulse { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:.3;transform:scale(.65);} }
+
+/* yükseltilmiş ajan kartı — normal .panel-box'tan ince accent şeridiyle ayrılır */
+.agent-card { box-shadow: 0 2px 14px rgba(18,33,59,0.07); border-top:2px solid var(--accent); }
+.agent-card.teal { border-top-color: var(--accent2); }
+
+/* çıktı üstü: AI üretimi etiketi + tazelik bilgisi */
+.agent-output-meta {
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  font-size:11.5px; color:var(--muted); margin-bottom:12px; padding-bottom:10px;
+  border-bottom:1px dashed var(--border);
+}
+.agent-ai-tag {
+  display:inline-flex; align-items:center; gap:5px; flex-shrink:0;
+  font-weight:700; font-size:10px; letter-spacing:0.5px; text-transform:uppercase;
+  color:var(--accent2); background:#e7f3f0; padding:3px 8px; border-radius:6px;
+}
+
+/* skeleton yükleme (düz "Yükleniyor…" yerine) */
+.agent-skel { padding:6px 0; }
+.agent-skel .l {
+  height:12px; border-radius:6px; margin:10px 0;
+  background: linear-gradient(90deg,#eef1f6 25%,#e3e7ef 37%,#eef1f6 63%);
+  background-size:400% 100%; animation: agentSkel 1.4s ease infinite;
+}
+.agent-skel .l.title { height:18px; width:44%; margin-bottom:16px; }
+.agent-skel .l.w70 { width:70%; } .agent-skel .l.w45 { width:45%; }
+@keyframes agentSkel { 0%{background-position:100% 50%;} 100%{background-position:0 50%;} }
+
+/* boş durum (ilk çalıştırmadan önce) */
+.agent-empty { text-align:center; padding:34px 20px; color:var(--muted); }
+.agent-empty .ico { font-size:30px; display:block; margin-bottom:10px; opacity:0.45; }
+.agent-empty .msg { font-size:13.5px; margin-bottom:14px; line-height:1.5; }
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-status-pill.running .dot,
+  .agent-skel .l { animation: none; }
+}
+@media (max-width: 600px) {
+  .agent-hero { padding:14px 16px; }
+  .agent-hero h2 { font-size:16px; }
+}
+
 /* Yönetim Ajanı — markdown çıktısı */
 .md-body { font-size:13.5px; line-height:1.6; color:var(--text); overflow-wrap:anywhere; }
 .md-body h1 { font-size:19px; color:var(--navy); margin:0 0 10px; }
@@ -381,11 +445,17 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
 
   <!-- YÖNETİM AJANI -->
   <section class="view" id="view-ajan">
-    <div class="page-header">
-      <h2>🤖 Yönetim Ajanı</h2>
-      <button class="btn" id="ajanRunBtn">🔄 Şimdi çalıştır</button>
+    <div class="agent-hero">
+      <div class="ah-left">
+        <h2>🤖 Yönetim Ajanı</h2>
+        <div class="ah-sub" id="ajanStatusMsg">Şirket panelini her sabah okur, brifing ve aksiyon önerisi üretir.</div>
+      </div>
+      <div class="ah-right">
+        <span class="agent-status-pill idle" id="ajanStatusPill"><span class="dot"></span><span class="lbl">Hazır</span></span>
+        <button class="btn" id="ajanRunBtn">🔄 Şimdi çalıştır</button>
+      </div>
     </div>
-    <div class="panel-box" style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;">
+    <div class="panel-box agent-card" style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;">
       <label style="font-size:12.5px;color:var(--muted);">Çıktı tipi</label>
       <select id="ajanTypeSelect" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;">
         <option value="gunluk-brifing">Günlük Brifing</option>
@@ -395,11 +465,10 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
         <option value="haftalik-review">Haftalık Review</option>
         <option value="aylik-rapor">Aylık Rapor</option>
       </select>
-      <span id="ajanStatusMsg" style="font-size:12px;color:var(--muted);margin-left:auto;"></span>
     </div>
 
-    <div class="md-body panel-box" id="ajanContent" style="margin-top:16px;">
-      <div style="color:var(--muted);">Yükleniyor…</div>
+    <div class="md-body panel-box agent-card" id="ajanContent" style="margin-top:16px;">
+      <div class="agent-skel"><div class="l title"></div><div class="l"></div><div class="l w70"></div><div class="l"></div><div class="l w45"></div></div>
     </div>
 
     <div class="section-title">💬 Ajana Söyle <span style="font-weight:400;color:var(--muted);font-size:12px;">— panelde işlem yaptır (görev, üretim durumu, takip tarihi…)</span></div>
@@ -439,9 +508,20 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
 
   <!-- SATIŞ AJANI (SDR) -->
   <section class="view" id="view-sdr">
-    <div class="page-header"><h2>🎯 Satış Ajanı</h2></div>
+    <div class="agent-hero">
+      <div class="ah-left">
+        <h2>🎯 Satış Ajanı</h2>
+        <div class="ah-sub">İnternetten yüksek adetli müşteri adayı araştırır, puanlar, ilk temas maili taslağı hazırlar.</div>
+      </div>
+      <div class="ah-right">
+        <span class="agent-status-pill idle" id="sdrStatusPill"><span class="dot"></span><span class="lbl">Hazır</span></span>
+      </div>
+    </div>
 
-    <div class="panel-box" id="sdrDigest" style="display:none;"></div>
+    <div class="panel-box agent-card teal" id="sdrDigest" style="display:none;"></div>
+
+    <div class="section-title">📧 Gmail Bağlantısı <span style="font-weight:400;color:var(--muted);font-size:12px;">— mailler info@mercitex.com üzerinden, senin onayınla gönderilir</span></div>
+    <div class="panel-box" id="sdrGmailBox"><span style="color:var(--muted);font-size:13px;">Yükleniyor…</span></div>
 
     <div class="section-title">🔍 Yeni Araştırma <span style="font-weight:400;color:var(--muted);font-size:12px;">— internetten potansiyel yüksek adetli müşteri adayı bul</span></div>
     <div class="panel-box">
@@ -4620,10 +4700,11 @@ function ajanFmtStamp(iso) {
 
 async function ajanShowOutput(rec) {
   const box = document.getElementById('ajanContent');
-  if (!rec || !rec.markdown) { box.innerHTML = '<div style="color:var(--muted);">Çıktı bulunamadı.</div>'; return; }
+  if (!rec || !rec.markdown) { box.innerHTML = '<div class="agent-empty"><span class="ico">📄</span><div class="msg">Çıktı bulunamadı.</div></div>'; return; }
   const conf = rec.meta && rec.meta.panelUpdatedAt ? ' · panel verisi: ' + ajanFmtStamp(rec.meta.panelUpdatedAt) : '';
-  box.innerHTML = '<div style="font-size:11.5px;color:var(--muted);margin-bottom:10px;">'
-    + esc(AJAN_TYPE_LABELS[rec.type] || rec.type) + ' · üretildi: ' + esc(ajanFmtStamp(rec.createdAt)) + esc(conf)
+  box.innerHTML = '<div class="agent-output-meta">'
+    + '<span class="agent-ai-tag">✦ AI üretimi</span>'
+    + '<span>' + esc(AJAN_TYPE_LABELS[rec.type] || rec.type) + ' · üretildi: ' + esc(ajanFmtStamp(rec.createdAt)) + esc(conf) + '</span>'
     + '</div>' + mdToHtml(rec.markdown);
 }
 
@@ -4635,14 +4716,16 @@ async function renderYonetimAjani() {
     box.innerHTML = '<div style="color:var(--muted);">Ajan sunucusu bağlı değil.</div>';
     histTable.innerHTML = ''; return;
   }
-  box.innerHTML = '<div style="color:var(--muted);">Yükleniyor…</div>';
+  box.innerHTML = '<div class="agent-skel"><div class="l title"></div><div class="l"></div><div class="l w70"></div><div class="l"></div><div class="l w45"></div></div>';
   // En yeni çıktı
   try {
     const latest = await (await matApi('/api/agent/latest?type=' + encodeURIComponent(type))).json();
     ajanShowOutput(latest);
   } catch (e) {
-    box.innerHTML = '<div style="color:var(--muted);">Bu tipte henüz çıktı yok. '
-      + '“🔄 Şimdi çalıştır” ile ilk çıktıyı üretebilirsin.</div>';
+    box.innerHTML = '<div class="agent-empty"><span class="ico">📄</span>'
+      + '<div class="msg">“' + esc(AJAN_TYPE_LABELS[type] || type) + '” tipinde henüz çıktı yok.<br>'
+      + 'Ajanı çalıştırınca ilk brifing burada görünür.</div>'
+      + '<button class="btn" onclick="document.getElementById(\'ajanRunBtn\').click()">🔄 Şimdi çalıştır</button></div>';
   }
   // Geçmiş liste
   try {
@@ -4686,22 +4769,36 @@ async function renderYonetimAjani() {
   renderBelgeIsleme();
 }
 
+const AJAN_DEFAULT_SUB = 'Şirket panelini her sabah okur, brifing ve aksiyon önerisi üretir.';
+function agentSetPill(id, state, label) {
+  const p = document.getElementById(id);
+  if (!p) return;
+  p.className = 'agent-status-pill ' + state;
+  const l = p.querySelector('.lbl');
+  if (l) l.textContent = label;
+}
 async function ajanRefreshStatus() {
   const el = document.getElementById('ajanStatusMsg');
   const btn = document.getElementById('ajanRunBtn');
   try {
     const st = await (await matApi('/api/agent/status')).json();
     if (st.running) {
-      el.textContent = '⏳ Ajan çalışıyor…';
+      agentSetPill('ajanStatusPill', 'running', 'Çalışıyor');
+      el.textContent = '⏳ Ajan brifingi hazırlıyor…';
       btn.disabled = true;
       if (!AJAN_POLL_TIMER) AJAN_POLL_TIMER = setInterval(ajanPollTick, 5000);
     } else {
       btn.disabled = false;
       if (AJAN_POLL_TIMER) { clearInterval(AJAN_POLL_TIMER); AJAN_POLL_TIMER = null; }
-      el.textContent = st.lastError ? ('⚠️ Son hata: ' + st.lastError)
-        : (st.finishedAt ? 'Son çalışma: ' + ajanFmtStamp(st.finishedAt) : '');
+      if (st.lastError) {
+        agentSetPill('ajanStatusPill', 'warn', 'Son çalışma hatalı');
+        el.textContent = '⚠️ Son hata: ' + st.lastError;
+      } else {
+        agentSetPill('ajanStatusPill', 'idle', 'Hazır');
+        el.textContent = st.finishedAt ? ('Son çalışma: ' + ajanFmtStamp(st.finishedAt)) : AJAN_DEFAULT_SUB;
+      }
     }
-  } catch (e) { el.textContent = ''; }
+  } catch (e) { agentSetPill('ajanStatusPill', 'idle', 'Hazır'); el.textContent = AJAN_DEFAULT_SUB; }
 }
 
 async function ajanPollTick() {
@@ -4740,17 +4837,20 @@ document.getElementById('ajanRunBtn').addEventListener('click', async () => {
   const type = document.getElementById('ajanTypeSelect').value;
   const btn = document.getElementById('ajanRunBtn');
   btn.disabled = true;
+  agentSetPill('ajanStatusPill', 'running', 'Başlatılıyor');
   document.getElementById('ajanStatusMsg').textContent = '⏳ Başlatılıyor… (sunucu uykudaysa 1 dk sürebilir)';
   try {
     const r = await (await matApi('/api/agent/run?type=' + encodeURIComponent(type), { method: 'POST' })).json();
     if (r.started) {
-      document.getElementById('ajanStatusMsg').textContent = '⏳ Ajan çalışıyor…';
+      agentSetPill('ajanStatusPill', 'running', 'Çalışıyor');
+      document.getElementById('ajanStatusMsg').textContent = '⏳ Ajan brifingi hazırlıyor…';
       if (!AJAN_POLL_TIMER) AJAN_POLL_TIMER = setInterval(ajanPollTick, 5000);
     }
   } catch (e) {
     btn.disabled = false;
     flash('Ajan başlatılamadı: ' + e.message, 'error');
-    document.getElementById('ajanStatusMsg').textContent = '';
+    agentSetPill('ajanStatusPill', 'warn', 'Başlatılamadı');
+    document.getElementById('ajanStatusMsg').textContent = AJAN_DEFAULT_SUB;
   }
 });
 
@@ -5416,6 +5516,7 @@ const SDR_STATUS_FILTERS = [
 let SDR_ACTIVE_FILTER = '';
 let SDR_POLL_TIMER = null;
 let SDR_OPEN_RESEARCH = null;
+let SDR_GMAIL = { connected: false, email: null, sentToday: 0, dailyCap: 20, configured: false };
 
 function sdrLeads() { return Array.isArray(DATA.leads) ? DATA.leads : []; }
 
@@ -5425,10 +5526,55 @@ async function renderSatisAjani() {
     return;
   }
   sdrRenderDigest();
+  sdrRenderGmailBox();
   sdrRenderResearchList();
   sdrRefreshStatus();
   sdrRenderFilters();
   sdrRenderLeadTable();
+}
+
+// ---- Gmail bağlantısı ----
+async function sdrRenderGmailBox() {
+  const box = document.getElementById('sdrGmailBox');
+  if (!box) return;
+  try {
+    const st = await (await matApi('/api/sdr/gmail/status')).json();
+    SDR_GMAIL = st || SDR_GMAIL;
+    if (!st.configured) {
+      box.innerHTML = '<span style="color:var(--muted);font-size:13px;">Gmail entegrasyonu sunucuda yapılandırılmamış (GOOGLE_CLIENT_ID / SECRET / REDIRECT_URI).</span>';
+      return;
+    }
+    if (st.connected) {
+      box.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">'
+        + '<div style="font-size:13px;">✅ <b>' + esc(st.email || '') + '</b> bağlı'
+        + '<span style="color:var(--muted);"> · bugün ' + (st.sentToday || 0) + '/' + (st.dailyCap || 20) + ' gönderildi</span>'
+        + (st.mock ? ' <span style="color:var(--muted);">(MOCK)</span>' : '') + '</div>'
+        + '<button class="btn danger small" id="sdrGmailDisc">Bağlantıyı Kes</button></div>';
+      const b = document.getElementById('sdrGmailDisc');
+      if (b) b.addEventListener('click', async () => {
+        if (!confirm('Gmail bağlantısı kesilsin mi? Ajan bağlanana kadar mail gönderemez.')) return;
+        try { await matApi('/api/sdr/gmail/disconnect', { method: 'POST' }); flash('Bağlantı kesildi.', 'success'); sdrRenderGmailBox(); }
+        catch (e) { flash('Kesilemedi: ' + e.message, 'error'); }
+      });
+    } else {
+      box.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">'
+        + '<span style="font-size:13px;color:var(--muted);">Gmail hesabı bağlı değil. Mail göndermek için bağlayın.</span>'
+        + '<button class="btn small" id="sdrGmailConn">Gmail Bağla</button></div>';
+      const b = document.getElementById('sdrGmailConn');
+      if (b) b.addEventListener('click', sdrConnectGmail);
+    }
+  } catch (e) {
+    box.innerHTML = '<span style="color:var(--muted);font-size:13px;">Gmail durumu okunamadı.</span>';
+  }
+}
+async function sdrConnectGmail() {
+  try {
+    const r = await (await matApi('/api/sdr/gmail/auth')).json();
+    if (r.error || !r.url) throw new Error(r.error || 'Yetkilendirme adresi alınamadı.');
+    window.open(r.url, '_blank', 'noopener');
+    flash('Google sekmesinde izin verin, sonra bu sayfaya dönüp yenileyin.', 'success');
+    setTimeout(sdrRenderGmailBox, 8000);
+  } catch (e) { flash('Gmail bağlanamadı: ' + e.message, 'error'); }
 }
 
 async function sdrRenderDigest() {
@@ -5457,6 +5603,7 @@ async function sdrRunResearch() {
   const q = document.getElementById('sdrQuery').value.trim();
   if (!q) { flash('Araştırma hedefi girin.', 'error'); return; }
   btn.disabled = true;
+  agentSetPill('sdrStatusPill', 'running', 'Araştırıyor');
   document.getElementById('sdrResearchStatus').textContent = '⏳ Araştırma başlatılıyor… (sunucu uykudaysa 1 dk sürebilir)';
   try {
     await matApi('/api/sdr/research', {
@@ -5475,6 +5622,7 @@ async function sdrPollTick() {
     if (!st.running) {
       clearInterval(SDR_POLL_TIMER); SDR_POLL_TIMER = null;
       document.getElementById('sdrResearchBtn').disabled = false;
+      agentSetPill('sdrStatusPill', st.lastError ? 'warn' : 'idle', st.lastError ? 'Son araştırma hatalı' : 'Hazır');
       if (st.lastError) { document.getElementById('sdrResearchStatus').innerHTML = '<span style="color:var(--red);">Hata: ' + esc(st.lastError) + '</span>'; }
       else { document.getElementById('sdrResearchStatus').textContent = ''; SDR_OPEN_RESEARCH = st.lastResearchId || null; }
       sdrRenderResearchList();
@@ -5485,8 +5633,16 @@ async function sdrRefreshStatus() {
   try {
     const st = await (await matApi('/api/sdr/status')).json();
     const el = document.getElementById('sdrResearchStatus');
-    if (st.running) { el.textContent = '⏳ Araştırma çalışıyor…'; if (!SDR_POLL_TIMER) SDR_POLL_TIMER = setInterval(sdrPollTick, 4000); }
-    else if (!el.textContent) el.textContent = 'Bugün ' + (st.researchToday || 0) + '/' + (st.dailyCap || 6) + ' araştırma yapıldı.';
+    const src = st.sources || {};
+    const srcLine = 'Kaynaklar: OpenStreetMap ✓ · Google Places ' + (src.places ? '✓' : '— (API anahtarı yok)') + ' · web araması ✓';
+    if (st.running) {
+      agentSetPill('sdrStatusPill', 'running', 'Araştırıyor');
+      el.textContent = '⏳ Araştırma çalışıyor…';
+      if (!SDR_POLL_TIMER) SDR_POLL_TIMER = setInterval(sdrPollTick, 4000);
+    } else {
+      agentSetPill('sdrStatusPill', st.lastError ? 'warn' : 'idle', st.lastError ? 'Son araştırma hatalı' : 'Hazır');
+      if (!el.textContent) el.innerHTML = 'Bugün ' + (st.researchToday || 0) + '/' + (st.dailyCap || 6) + ' araştırma yapıldı.<br><span style="color:var(--muted);">' + srcLine + '</span>';
+    }
   } catch (e) {}
 }
 async function sdrRenderResearchList() {
@@ -5521,6 +5677,7 @@ async function sdrShowCandidates(id) {
     if (!cs.length) { box.innerHTML = '<div style="color:var(--muted);">Bu araştırmada aday bulunamadı.</div>'; return; }
     box.innerHTML = '<div class="panel-box" style="background:#fafbfd;">'
       + '<div style="font-weight:600;margin-bottom:6px;">"' + esc(rec.query) + '" — ' + cs.length + ' aday</div>'
+      + ((rec.sources || []).length ? '<div style="font-size:11.5px;color:var(--muted);margin-bottom:6px;">Kaynak: ' + rec.sources.map(s => esc(s.name) + (s.ran ? ' (' + (s.count || 0) + ')' : ' —')).join(' · ') + '</div>' : '')
       + (rec.arastirma_notu ? '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">' + esc(rec.arastirma_notu) + '</div>' : '')
       + '<div class="table-wrap"><table class="data-table"><thead><tr><th><input type="checkbox" id="sdrCandAll"></th><th>Kurum</th><th>Tip</th><th>Şehir</th><th>Puan</th><th>Öncelik</th><th>Tah. adet</th><th>İletişim</th><th>Neden</th></tr></thead><tbody>'
       + cs.map((c, i) => '<tr><td><input type="checkbox" class="sdrCand" value="' + i + '"></td>'
@@ -5635,11 +5792,18 @@ function sdrOpenLead(id) {
         + '<div class="field"><label>Gövde</label><textarea id="sdrMailGovde" rows="10">' + esc(l.mail_taslagi.govde || '') + '</textarea></div>'
         + '<div class="inline-form"><button class="btn small secondary" id="sdrRegenMail">Yeniden Oluştur</button>'
         + '<button class="btn small secondary" id="sdrSaveMail">Taslağı Kaydet</button>'
-        + '<button class="btn small" id="sdrMarkSent">Gönderildi İşaretle</button></div>'
-        + '<div style="font-size:11.5px;color:var(--muted);margin-top:4px;">Faz 1: maili info@mercitex.com üzerinden SEN gönderirsin, sonra "Gönderildi İşaretle" de.</div>'
+        + (SDR_GMAIL.connected
+          ? '<button class="btn small" id="sdrSendGmail">📧 Gmail ile Gönder</button>'
+          : '')
+        + '<button class="btn small secondary" id="sdrMarkSent">Elle Gönderildi İşaretle</button></div>'
+        + '<div style="font-size:11.5px;color:var(--muted);margin-top:4px;">'
+        + (SDR_GMAIL.connected
+          ? 'Önce "Taslağı Kaydet", sonra "Gmail ile Gönder" — mail ' + esc(SDR_GMAIL.email || 'info@mercitex.com') + ' üzerinden senin onayınla gider.'
+          : 'Gmail bağlı değil — maili info@mercitex.com üzerinden SEN gönderip "Elle Gönderildi İşaretle" de. (Yukarıdan Gmail bağlarsan ajan senin onayınla gönderir.)')
+        + '</div>'
       : '<button class="btn small" id="sdrGenMail">Mail Taslağı Oluştur</button>')
     + (l.gonderilen_mailler && l.gonderilen_mailler.length
-      ? '<div style="font-size:12px;color:var(--muted);margin-top:8px;">Gönderilen: ' + l.gonderilen_mailler.map(m => esc(m.tarih + ' · ' + m.konu)).join(' | ') + '</div>' : '')
+      ? '<div style="font-size:12px;color:var(--muted);margin-top:8px;">Gönderilen: ' + l.gonderilen_mailler.map(m => esc(m.tarih + ' · ' + m.konu + (m.alici ? ' → ' + m.alici : '') + (m.kanal ? ' · ' + m.kanal : ''))).join('<br>') + '</div>' : '')
     + '<hr style="border:none;border-top:1px solid var(--border);margin:12px 0;">'
     + (l.pipeline_id
       ? '<div class="flash flash-success" style="margin:0;">✅ Potansiyel İşler\'e aktarıldı (#' + l.pipeline_id + '). Buradan sonra "Potansiyel İşler" sekmesi devralır.</div>'
@@ -5665,7 +5829,8 @@ function sdrOpenLead(id) {
   bind('sdrGenMail', () => sdrGenEmail(id));
   bind('sdrRegenMail', () => sdrGenEmail(id));
   bind('sdrSaveMail', () => call('/api/sdr/leads/' + id, { mail_taslagi: { konu: g('sdrMailKonu'), govde: g('sdrMailGovde') } }, 'Taslak kaydedildi.'));
-  bind('sdrMarkSent', () => { if (confirm('Bu maili info@mercitex.com üzerinden gönderdiniz mi? "Gönderildi" olarak işaretlenecek.')) call('/api/sdr/leads/' + id, { mark_sent: true, konu: g('sdrMailKonu') }, 'Gönderildi olarak işaretlendi.'); });
+  bind('sdrMarkSent', () => { if (confirm('Bu maili info@mercitex.com üzerinden ELLE gönderdiniz mi? "Gönderildi" olarak işaretlenecek.')) call('/api/sdr/leads/' + id, { mark_sent: true, konu: g('sdrMailKonu') }, 'Gönderildi olarak işaretlendi.'); });
+  bind('sdrSendGmail', () => sdrSendGmail(id));
   bind('sdrConvert', () => { if (confirm('Bu lead "Potansiyel İşler"e aktarılsın mı?')) call('/api/sdr/leads/' + id + '/convert', {}, 'Potansiyel İşler\'e aktarıldı.'); });
 
   box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -5685,6 +5850,36 @@ async function sdrGenEmail(id) {
     renderSatisAjani();
     sdrOpenLead(id);
   } catch (e) { flash('Taslak oluşturulamadı: ' + e.message, 'error'); }
+}
+async function sdrSendGmail(id) {
+  const l = sdrLeads().find(x => x.id === id);
+  if (!l) return;
+  const konu = (document.getElementById('sdrMailKonu') || {}).value || '';
+  const govde = (document.getElementById('sdrMailGovde') || {}).value || '';
+  if (!konu.trim() || !govde.trim()) { flash('Konu ve gövde boş olamaz.', 'error'); return; }
+  let to = (l.emails || [])[0] || ((l.ilgili_kisiler || []).find(k => k && k.email) || {}).email || '';
+  to = (prompt('Alıcı e-posta adresi:', to) || '').trim();
+  if (!to) return;
+  if (!confirm('"' + l.kurum_adi + '" için ' + to + ' adresine mail GÖNDERİLSİN mi?\n\nGönderen: ' + (SDR_GMAIL.email || 'info@mercitex.com'))) return;
+  try {
+    const r = await (await matApi('/api/sdr/leads/' + id + '/send', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: to, konu: konu, govde: govde }),
+    })).json();
+    if (r.error) {
+      if (/24 saat/.test(r.error) && confirm(r.error + '\n\nYine de gönderilsin mi?')) {
+        const r2 = await (await matApi('/api/sdr/leads/' + id + '/send', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: to, konu: konu, govde: govde, force: true }),
+        })).json();
+        if (r2.error) throw new Error(r2.error);
+      } else { throw new Error(r.error); }
+    }
+    flash('Mail gönderildi ✓', 'success');
+    await sdrRefreshFromCloud();
+    renderSatisAjani();
+    sdrOpenLead(id);
+  } catch (e) { flash('Gönderilemedi: ' + e.message, 'error'); }
 }
 document.getElementById('sdrResearchBtn').addEventListener('click', sdrRunResearch);
 document.getElementById('sdrQuery').addEventListener('keydown', e => { if (e.key === 'Enter') sdrRunResearch(); });
