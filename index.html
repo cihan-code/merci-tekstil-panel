@@ -4897,6 +4897,7 @@ function belgeRenderPreview(rec) {
     + warn
     + '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Ajanın okuduğu: <b>' + esc(cl.humanLabel || '—') + '</b>'
     + (rec.extractMeta && rec.extractMeta.mock ? ' <span style="color:var(--warn,#9a6512);">(MOCK)</span>' : '') + '</div>'
+    + (rec.extractMeta && rec.extractMeta.repaired ? '<div class="flash flash-error" style="margin:0 0 12px;">⚠️ Model yanıtı eksik geldi, kısmen onarıldı — alanları dikkatle kontrol edin.</div>' : '')
     + '<div class="form-row">'
     + '<div class="field"><label>Belge türü</label><select id="bpType"' + (committed ? ' disabled' : '') + '>'
     + ['payment_receipt', 'invoice'].map(t => '<option value="' + t + '"' + (typeNow === t ? ' selected' : '') + '>' + (t === 'payment_receipt' ? 'Dekont' : 'Fatura') + '</option>').join('') + '</select></div>'
