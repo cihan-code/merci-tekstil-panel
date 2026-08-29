@@ -1350,6 +1350,12 @@ function pushCloudPanelData() {
         showCloudConflictBanner(j && j.error);
         return;
       }
+      if (res.status === 422) {
+        const j = await res.json().catch(() => null);
+        const det = (j && j.details && j.details[0]) ? (' (' + j.details[0].path + ': ' + j.details[0].problem + ')') : '';
+        showCloudConflictBanner((j && j.error ? j.error : 'Veri doğrulanamadı, buluta kaydedilmedi.') + det);
+        return;
+      }
       if (!res.ok) return;
       const j = await res.json().catch(() => null);
       if (j && j.updatedAt) CLOUD_LAST_KNOWN_UPDATED_AT = j.updatedAt;
