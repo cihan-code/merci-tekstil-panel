@@ -311,6 +311,9 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
   <div class="nav-group-label">Yönetim Ajanı</div>
   <button data-view="ajan">🤖 Yönetim Ajanı</button>
 
+  <div class="nav-group-label">Satış Ajanı</div>
+  <button data-view="sdr">🎯 Satış Ajanı</button>
+
   <div class="nav-group-label">Satış &amp; Üretim</div>
   <button data-view="isler">💼 İşler</button>
   <button data-view="uretim">🏭 Üretim Takip</button>
@@ -432,6 +435,43 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
       <button type="button" class="btn small secondary" id="ajanUsageRefresh">Yenile</button>
     </div>
     <div class="panel-box"><ul class="stat-list" id="ajanUsageList"><li style="color:var(--muted);">—</li></ul></div>
+  </section>
+
+  <!-- SATIŞ AJANI (SDR) -->
+  <section class="view" id="view-sdr">
+    <div class="page-header"><h2>🎯 Satış Ajanı</h2></div>
+
+    <div class="section-title">🔍 Yeni Araştırma <span style="font-weight:400;color:var(--muted);font-size:12px;">— internetten potansiyel yüksek adetli müşteri adayı bul</span></div>
+    <div class="panel-box">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+        <div class="field" style="flex:1;min-width:240px;"><label>Araştırma hedefi</label>
+          <input type="text" id="sdrQuery" placeholder="Örn: İstanbul'daki özel liseler / Ankara üniversite kulüpleri"></div>
+        <div class="field" style="max-width:140px;"><label>Şehir (ops.)</label><input type="text" id="sdrCity" placeholder="İstanbul"></div>
+        <div class="field" style="max-width:170px;"><label>Kurum tipi (ops.)</label>
+          <select id="sdrType"><option value="">— hepsi —</option>
+            <option>Üniversite</option><option>Üniversite Kulübü</option><option>Özel Lise</option><option>Okul</option>
+            <option>Kurumsal Firma</option><option>Etkinlik/Organizasyon</option><option>Spor Kulübü</option></select></div>
+        <button class="btn" id="sdrResearchBtn">Araştır</button>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-top:8px;" id="sdrResearchStatus"></div>
+    </div>
+
+    <div class="section-title">Geçmiş Araştırmalar</div>
+    <div class="panel-box">
+      <div id="sdrResearchList" style="font-size:13px;"></div>
+      <div id="sdrCandidates" style="margin-top:12px;"></div>
+    </div>
+
+    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+      <span>🎯 Lead Havuzu</span>
+      <div id="sdrFilters" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+    </div>
+    <div class="panel-box"><ul class="stat-list" id="sdrLeadStats"></ul></div>
+    <div class="panel-box" style="margin-top:12px;">
+      <div class="toolbar"><input type="text" id="sdrLeadSearch" placeholder="Kurum, şehir ara..."><span class="count" id="sdrLeadCount" style="margin-left:auto;color:var(--muted);font-size:12px;"></span></div>
+      <div class="table-wrap"><table class="data-table" id="sdrLeadTable"></table></div>
+    </div>
+    <div id="sdrLeadDetail" style="margin-top:12px;"></div>
   </section>
 
   <!-- FATURALAR -->
@@ -5361,6 +5401,272 @@ async function belgeCommitProdForm(id, existingJobAction) {
 
 document.getElementById('belgeUploadBtn').addEventListener('click', belgeUpload);
 
+// ================= SATIŞ AJANI (SDR) =================
+const SDR_STATUS_FILTERS = [
+  { key: '', label: 'Hepsi' },
+  { key: 'Yeni', label: 'Yeni' },
+  { key: 'Mail Hazır', label: 'Mail Taslakları' },
+  { key: 'Mail Gönderildi', label: 'Gönderilen' },
+  { key: '__gorusme', label: 'Görüşme', match: ['Yanıt Var', 'Görüşülüyor', 'Teklif Aşaması'] },
+  { key: 'Kazanıldı', label: 'Kazanılan' },
+  { key: 'Uygun Değil', label: 'Elenen' },
+];
+let SDR_ACTIVE_FILTER = '';
+let SDR_POLL_TIMER = null;
+let SDR_OPEN_RESEARCH = null;
+
+function sdrLeads() { return Array.isArray(DATA.leads) ? DATA.leads : []; }
+
+async function renderSatisAjani() {
+  if (!matBackendReady()) {
+    document.getElementById('sdrResearchList').innerHTML = '<div style="color:var(--muted);">Ajan sunucusu bağlı değil.</div>';
+    return;
+  }
+  sdrRenderResearchList();
+  sdrRefreshStatus();
+  sdrRenderFilters();
+  sdrRenderLeadTable();
+}
+
+// ---- Araştırma ----
+async function sdrRunResearch() {
+  const btn = document.getElementById('sdrResearchBtn');
+  const q = document.getElementById('sdrQuery').value.trim();
+  if (!q) { flash('Araştırma hedefi girin.', 'error'); return; }
+  btn.disabled = true;
+  document.getElementById('sdrResearchStatus').textContent = '⏳ Araştırma başlatılıyor… (sunucu uykudaysa 1 dk sürebilir)';
+  try {
+    await matApi('/api/sdr/research', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: q, city: document.getElementById('sdrCity').value.trim() || undefined, type: document.getElementById('sdrType').value || undefined }),
+    });
+    if (!SDR_POLL_TIMER) SDR_POLL_TIMER = setInterval(sdrPollTick, 4000);
+  } catch (e) {
+    btn.disabled = false;
+    document.getElementById('sdrResearchStatus').innerHTML = '<span style="color:var(--red);">' + esc(e.message) + '</span>';
+  }
+}
+async function sdrPollTick() {
+  try {
+    const st = await (await matApi('/api/sdr/status')).json();
+    if (!st.running) {
+      clearInterval(SDR_POLL_TIMER); SDR_POLL_TIMER = null;
+      document.getElementById('sdrResearchBtn').disabled = false;
+      if (st.lastError) { document.getElementById('sdrResearchStatus').innerHTML = '<span style="color:var(--red);">Hata: ' + esc(st.lastError) + '</span>'; }
+      else { document.getElementById('sdrResearchStatus').textContent = ''; SDR_OPEN_RESEARCH = st.lastResearchId || null; }
+      sdrRenderResearchList();
+    }
+  } catch (e) { /* Render uykuda olabilir */ }
+}
+async function sdrRefreshStatus() {
+  try {
+    const st = await (await matApi('/api/sdr/status')).json();
+    const el = document.getElementById('sdrResearchStatus');
+    if (st.running) { el.textContent = '⏳ Araştırma çalışıyor…'; if (!SDR_POLL_TIMER) SDR_POLL_TIMER = setInterval(sdrPollTick, 4000); }
+    else if (!el.textContent) el.textContent = 'Bugün ' + (st.researchToday || 0) + '/' + (st.dailyCap || 6) + ' araştırma yapıldı.';
+  } catch (e) {}
+}
+async function sdrRenderResearchList() {
+  const box = document.getElementById('sdrResearchList');
+  try {
+    const list = await (await matApi('/api/sdr/research?limit=20')).json();
+    if (!list.length) { box.innerHTML = '<div style="color:var(--muted);">Henüz araştırma yok.</div>'; document.getElementById('sdrCandidates').innerHTML = ''; return; }
+    box.innerHTML = '<div class="table-wrap"><table class="data-table"><thead><tr><th>Tarih</th><th>Hedef</th><th>Aday</th><th>Maliyet</th><th></th></tr></thead><tbody>'
+      + list.map(r => '<tr data-id="' + esc(r.id) + '"><td>' + esc((r.createdAt || '').slice(0, 16).replace('T', ' ')) + '</td>'
+        + '<td>' + esc(r.query) + (r.mock ? ' <span style="color:var(--muted);">(MOCK)</span>' : '') + '</td>'
+        + '<td>' + (r.candidateCount || 0) + '</td>'
+        + '<td>' + (r.costUsd ? '$' + Number(r.costUsd).toFixed(3) : '$0') + '</td>'
+        + '<td><button class="btn small secondary" data-act="open">Adayları Gör</button> <button class="btn small danger" data-act="del">Sil</button></td></tr>').join('')
+      + '</tbody></table></div>';
+    box.querySelectorAll('tr[data-id]').forEach(tr => {
+      tr.querySelector('[data-act="open"]').addEventListener('click', () => sdrShowCandidates(tr.dataset.id));
+      tr.querySelector('[data-act="del"]').addEventListener('click', async () => {
+        if (!confirm('Bu araştırma kaydı silinsin mi? (Lead Havuzundaki lead\'ler etkilenmez)')) return;
+        try { await matApi('/api/sdr/research/' + tr.dataset.id, { method: 'DELETE' }); sdrRenderResearchList(); } catch (e) { flash('Silinemedi: ' + e.message, 'error'); }
+      });
+    });
+    if (SDR_OPEN_RESEARCH && list.some(r => r.id === SDR_OPEN_RESEARCH)) sdrShowCandidates(SDR_OPEN_RESEARCH);
+  } catch (e) { box.innerHTML = '<div style="color:var(--muted);">Araştırma listesi okunamadı.</div>'; }
+}
+async function sdrShowCandidates(id) {
+  SDR_OPEN_RESEARCH = id;
+  const box = document.getElementById('sdrCandidates');
+  box.innerHTML = '<div style="color:var(--muted);">Yükleniyor…</div>';
+  try {
+    const rec = await (await matApi('/api/sdr/research/' + id)).json();
+    const cs = rec.candidates || [];
+    if (!cs.length) { box.innerHTML = '<div style="color:var(--muted);">Bu araştırmada aday bulunamadı.</div>'; return; }
+    box.innerHTML = '<div class="panel-box" style="background:#fafbfd;">'
+      + '<div style="font-weight:600;margin-bottom:6px;">"' + esc(rec.query) + '" — ' + cs.length + ' aday</div>'
+      + (rec.arastirma_notu ? '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">' + esc(rec.arastirma_notu) + '</div>' : '')
+      + '<div class="table-wrap"><table class="data-table"><thead><tr><th><input type="checkbox" id="sdrCandAll"></th><th>Kurum</th><th>Tip</th><th>Şehir</th><th>Puan</th><th>Öncelik</th><th>Tah. adet</th><th>İletişim</th><th>Neden</th></tr></thead><tbody>'
+      + cs.map((c, i) => '<tr><td><input type="checkbox" class="sdrCand" value="' + i + '"></td>'
+        + '<td>' + esc(c.kurum_adi) + (c.website ? ' <a href="' + esc(c.website) + '" target="_blank" rel="noopener" style="font-size:11px;">↗</a>' : '') + '</td>'
+        + '<td>' + esc(c.kurum_tipi || '—') + '</td><td>' + esc(c.sehir || '—') + '</td>'
+        + '<td>' + (c.potansiyel_puan != null ? c.potansiyel_puan : '—') + '</td>'
+        + '<td>' + esc(c.oncelik || '—') + '</td>'
+        + '<td>' + (c.tahmini_siparis_adet != null ? c.tahmini_siparis_adet : '—') + '</td>'
+        + '<td>' + ((c.emails || []).length ? esc(c.emails[0]) : '<span style="color:var(--red);">yok</span>') + '</td>'
+        + '<td style="max-width:280px;font-size:12px;">' + esc(c.neden_uygun || '') + '</td></tr>').join('')
+      + '</tbody></table></div>'
+      + '<button class="btn" id="sdrCommitBtn" style="margin-top:10px;">Seçilenleri Lead Havuzuna Aktar</button></div>';
+    const all = document.getElementById('sdrCandAll');
+    all.addEventListener('change', () => box.querySelectorAll('.sdrCand').forEach(c => { c.checked = all.checked; }));
+    document.getElementById('sdrCommitBtn').addEventListener('click', async () => {
+      const idx = [...box.querySelectorAll('.sdrCand:checked')].map(c => parseInt(c.value, 10));
+      if (!idx.length) { flash('En az bir aday seçin.', 'error'); return; }
+      try {
+        const r = await (await matApi('/api/sdr/leads/commit', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ researchId: id, candidateIndexes: idx, source_query: rec.query }),
+        })).json();
+        flash((r.created || []).length + ' lead eklendi' + (r.skipped && r.skipped.length ? ', ' + r.skipped.length + ' atlandı (zaten kayıtlı)' : '') + '.', 'success');
+        if (r.updatedAt) { const c = await pullCloudPanelData(6000); if (c && c.data) { DATA = c.data; CLOUD_LAST_KNOWN_UPDATED_AT = c.updatedAt; localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA)); } }
+        renderSatisAjani();
+      } catch (e) { flash('Aktarılamadı: ' + e.message, 'error'); }
+    });
+  } catch (e) { box.innerHTML = '<div style="color:var(--red);">' + esc(e.message) + '</div>'; }
+}
+
+// ---- Lead Havuzu ----
+function sdrRenderFilters() {
+  const wrap = document.getElementById('sdrFilters');
+  wrap.innerHTML = SDR_STATUS_FILTERS.map(f =>
+    '<button class="btn small ' + (SDR_ACTIVE_FILTER === f.key ? '' : 'secondary') + '" data-f="' + esc(f.key) + '">' + esc(f.label) + '</button>').join('');
+  wrap.querySelectorAll('button').forEach(b => b.addEventListener('click', () => { SDR_ACTIVE_FILTER = b.dataset.f; sdrRenderFilters(); sdrRenderLeadTable(); }));
+}
+function sdrFilteredLeads() {
+  const f = SDR_STATUS_FILTERS.find(x => x.key === SDR_ACTIVE_FILTER);
+  let list = sdrLeads();
+  if (f && f.match) list = list.filter(l => f.match.includes(l.durum));
+  else if (SDR_ACTIVE_FILTER) list = list.filter(l => l.durum === SDR_ACTIVE_FILTER);
+  return list;
+}
+function sdrRenderLeadStats() {
+  const all = sdrLeads();
+  const by = {};
+  all.forEach(l => { by[l.durum] = (by[l.durum] || 0) + 1; });
+  const won = all.filter(l => l.pipeline_id || l.durum === 'Kazanıldı').length;
+  document.getElementById('sdrLeadStats').innerHTML =
+    '<li><span>Toplam lead</span><strong>' + all.length + '</strong></li>'
+    + '<li><span>Yüksek öncelikli</span><strong>' + all.filter(l => l.oncelik === 'Yüksek').length + '</strong></li>'
+    + '<li><span>Mail gönderildi</span><strong>' + (by['Mail Gönderildi'] || 0) + '</strong></li>'
+    + '<li><span>Görüşmede</span><strong>' + ((by['Yanıt Var'] || 0) + (by['Görüşülüyor'] || 0) + (by['Teklif Aşaması'] || 0)) + '</strong></li>'
+    + '<li><span>Pipeline\'a dönen</span><strong>' + won + '</strong></li>';
+}
+function sdrRenderLeadTable() {
+  sdrRenderLeadStats();
+  const table = document.getElementById('sdrLeadTable');
+  const rows = sdrFilteredLeads();
+  const q = (document.getElementById('sdrLeadSearch').value || '').toLowerCase();
+  const filtered = q ? rows.filter(l => (l.kurum_adi + ' ' + (l.sehir || '')).toLowerCase().includes(q)) : rows;
+  document.getElementById('sdrLeadCount').textContent = filtered.length + ' lead';
+  if (!filtered.length) { table.innerHTML = '<tbody><tr><td style="color:var(--muted);">Lead yok.</td></tr></tbody>'; return; }
+  table.innerHTML = '<thead><tr><th>Kurum</th><th>Tip</th><th>Şehir</th><th>Puan</th><th>Öncelik</th><th>Durum</th><th>Tah. adet</th><th>Takip</th></tr></thead><tbody>'
+    + filtered.map(l => '<tr data-id="' + l.id + '" style="cursor:pointer;">'
+      + '<td>' + esc(l.kurum_adi) + '</td><td>' + esc(l.kurum_tipi || '—') + '</td><td>' + esc(l.sehir || '—') + '</td>'
+      + '<td>' + (l.potansiyel_puan != null ? l.potansiyel_puan : '—') + '</td>'
+      + '<td>' + esc(l.oncelik || '—') + '</td>'
+      + '<td>' + esc(l.durum) + '</td>'
+      + '<td>' + (l.tahmini_siparis_adet != null ? l.tahmini_siparis_adet : '—') + '</td>'
+      + '<td>' + esc(l.followup_tarihi || '—') + '</td></tr>').join('')
+    + '</tbody>';
+  table.querySelectorAll('tr[data-id]').forEach(tr => tr.addEventListener('click', () => sdrOpenLead(parseInt(tr.dataset.id, 10))));
+}
+async function sdrRefreshFromCloud() {
+  try { const c = await pullCloudPanelData(6000); if (c && c.data) { DATA = c.data; CLOUD_LAST_KNOWN_UPDATED_AT = c.updatedAt; localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA)); } } catch (e) {}
+}
+function sdrOpenLead(id) {
+  const l = sdrLeads().find(x => x.id === id);
+  const box = document.getElementById('sdrLeadDetail');
+  if (!l) { box.innerHTML = ''; return; }
+  const kisiler = (l.ilgili_kisiler || []).map(k => esc((k.unvan || '') + (k.ad ? ' — ' + k.ad : '') + (k.email ? ' (' + k.email + ')' : ''))).join('<br>') || '—';
+  const statusOpts = ['Yeni', 'Araştırıldı', 'Mail Hazır', 'Mail Gönderildi', 'Yanıt Var', 'Görüşülüyor', 'Teklif Aşaması', 'Kazanıldı', 'Kaybedildi', 'Uygun Değil']
+    .map(s => '<option' + (l.durum === s ? ' selected' : '') + '>' + s + '</option>').join('');
+  box.innerHTML = '<div class="panel-box">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;"><b>' + esc(l.kurum_adi) + '</b>'
+    + '<button class="btn danger small" id="sdrDelLead">Sil</button></div>'
+    + '<div style="font-size:12.5px;color:var(--muted);margin:6px 0;">' + esc(l.kurum_tipi || '') + (l.sektor ? ' · ' + esc(l.sektor) : '') + (l.sehir ? ' · ' + esc(l.sehir) : '') + ' · sahibi: ' + esc(l.assigned_to || '—') + '</div>'
+    + (l.neden_uygun ? '<div style="font-size:13px;margin-bottom:8px;">' + esc(l.neden_uygun) + '</div>' : '')
+    + '<div class="grid-2" style="gap:12px;">'
+    + '<div><label style="font-size:12px;color:var(--muted);">İletişim</label><div style="font-size:12.5px;">'
+    + 'Mail: ' + ((l.emails || []).length ? esc(l.emails.join(', ')) : '<span style="color:var(--red);">bulunamadı</span>') + '<br>'
+    + 'Tel: ' + ((l.phones || []).length ? esc(l.phones.join(', ')) : '—') + '<br>'
+    + (l.website ? '<a href="' + esc(l.website) + '" target="_blank" rel="noopener">Web sitesi</a> ' : '')
+    + (l.instagram ? '· <a href="' + esc(l.instagram) + '" target="_blank" rel="noopener">Instagram</a> ' : '')
+    + (l.linkedin ? '· <a href="' + esc(l.linkedin) + '" target="_blank" rel="noopener">LinkedIn</a>' : '')
+    + '</div></div>'
+    + '<div><label style="font-size:12px;color:var(--muted);">İlgili kişiler</label><div style="font-size:12.5px;">' + kisiler + '</div></div>'
+    + '</div>'
+    + (l.ilk_iletisim_onerisi ? '<div style="font-size:12.5px;margin-top:8px;"><b>İlk iletişim önerisi:</b> ' + esc(l.ilk_iletisim_onerisi) + '</div>' : '')
+    + '<div class="form-row" style="margin-top:10px;">'
+    + '<div class="field"><label>Durum</label><select id="sdrLeadStatus">' + statusOpts + '</select></div>'
+    + '<div class="field"><label>Takip Tarihi</label><input type="date" id="sdrLeadFollow" value="' + esc(l.followup_tarihi || '') + '"></div>'
+    + '</div>'
+    + '<div class="field"><label>Not</label><textarea id="sdrLeadNote" rows="2">' + esc(l.note || '') + '</textarea></div>'
+    + '<div class="inline-form"><button class="btn secondary small" id="sdrSaveLead">Kaydet</button></div>'
+    + '<hr style="border:none;border-top:1px solid var(--border);margin:12px 0;">'
+    + '<div class="section-title" style="font-size:13px;margin:0 0 8px;">✉️ İlk Temas Maili</div>'
+    + (l.mail_taslagi
+      ? '<div class="field"><label>Konu</label><input id="sdrMailKonu" value="' + esc(l.mail_taslagi.konu || '') + '"></div>'
+        + '<div class="field"><label>Gövde</label><textarea id="sdrMailGovde" rows="10">' + esc(l.mail_taslagi.govde || '') + '</textarea></div>'
+        + '<div class="inline-form"><button class="btn small secondary" id="sdrRegenMail">Yeniden Oluştur</button>'
+        + '<button class="btn small secondary" id="sdrSaveMail">Taslağı Kaydet</button>'
+        + '<button class="btn small" id="sdrMarkSent">Gönderildi İşaretle</button></div>'
+        + '<div style="font-size:11.5px;color:var(--muted);margin-top:4px;">Faz 1: maili info@mercitex.com üzerinden SEN gönderirsin, sonra "Gönderildi İşaretle" de.</div>'
+      : '<button class="btn small" id="sdrGenMail">Mail Taslağı Oluştur</button>')
+    + (l.gonderilen_mailler && l.gonderilen_mailler.length
+      ? '<div style="font-size:12px;color:var(--muted);margin-top:8px;">Gönderilen: ' + l.gonderilen_mailler.map(m => esc(m.tarih + ' · ' + m.konu)).join(' | ') + '</div>' : '')
+    + '<hr style="border:none;border-top:1px solid var(--border);margin:12px 0;">'
+    + (l.pipeline_id
+      ? '<div class="flash flash-success" style="margin:0;">✅ Potansiyel İşler\'e aktarıldı (#' + l.pipeline_id + '). Buradan sonra "Potansiyel İşler" sekmesi devralır.</div>'
+      : '<button class="btn" id="sdrConvert">Potansiyel İşler\'e Aktar</button>')
+    + '</div>';
+
+  const call = async (path, body, okMsg) => {
+    try {
+      const r = await (await matApi(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) })).json();
+      if (r.error) throw new Error(r.error);
+      if (okMsg) flash(okMsg, 'success');
+      await sdrRefreshFromCloud();
+      renderSatisAjani();
+      sdrOpenLead(id);
+      return r;
+    } catch (e) { flash(e.message, 'error'); }
+  };
+  const g = i => { const e = document.getElementById(i); return e ? e.value : ''; };
+  const bind = (elId, fn) => { const e = document.getElementById(elId); if (e) e.addEventListener('click', fn); };
+
+  bind('sdrSaveLead', () => call('/api/sdr/leads/' + id, { durum: g('sdrLeadStatus'), followup_tarihi: g('sdrLeadFollow') || null, note: g('sdrLeadNote') }, 'Kaydedildi.'));
+  bind('sdrDelLead', () => { if (confirm('Bu lead silinsin mi?')) sdrDeleteLead(id); });
+  bind('sdrGenMail', () => sdrGenEmail(id));
+  bind('sdrRegenMail', () => sdrGenEmail(id));
+  bind('sdrSaveMail', () => call('/api/sdr/leads/' + id, { mail_taslagi: { konu: g('sdrMailKonu'), govde: g('sdrMailGovde') } }, 'Taslak kaydedildi.'));
+  bind('sdrMarkSent', () => { if (confirm('Bu maili info@mercitex.com üzerinden gönderdiniz mi? "Gönderildi" olarak işaretlenecek.')) call('/api/sdr/leads/' + id, { mark_sent: true, konu: g('sdrMailKonu') }, 'Gönderildi olarak işaretlendi.'); });
+  bind('sdrConvert', () => { if (confirm('Bu lead "Potansiyel İşler"e aktarılsın mı?')) call('/api/sdr/leads/' + id + '/convert', {}, 'Potansiyel İşler\'e aktarıldı.'); });
+
+  box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+async function sdrDeleteLead(id) {
+  try { await matApi('/api/sdr/leads/' + id, { method: 'DELETE' }); flash('Lead silindi.', 'success'); await sdrRefreshFromCloud(); document.getElementById('sdrLeadDetail').innerHTML = ''; renderSatisAjani(); }
+  catch (e) { flash('Silinemedi: ' + e.message, 'error'); }
+}
+async function sdrGenEmail(id) {
+  flash('Mail taslağı hazırlanıyor…', 'success');
+  try {
+    const d = await (await matApi('/api/sdr/leads/' + id + '/email', { method: 'POST' })).json();
+    if (d.error) throw new Error(d.error);
+    await matApi('/api/sdr/leads/' + id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mail_taslagi: { konu: d.konu, govde: d.govde } }) });
+    if (!d.hasRecipient) flash('Taslak hazır — ancak gönderilecek mail adresi bulunamadı, lead detayına elle ekleyin.', 'error');
+    await sdrRefreshFromCloud();
+    renderSatisAjani();
+    sdrOpenLead(id);
+  } catch (e) { flash('Taslak oluşturulamadı: ' + e.message, 'error'); }
+}
+document.getElementById('sdrResearchBtn').addEventListener('click', sdrRunResearch);
+document.getElementById('sdrQuery').addEventListener('keydown', e => { if (e.key === 'Enter') sdrRunResearch(); });
+document.getElementById('sdrLeadSearch').addEventListener('input', sdrRenderLeadTable);
+
 const VIEW_RENDER_MAP = {
   dashboard: renderDashboard, isler: renderIsler, gelir: renderGelir,
   gider: () => { renderGider(); renderSabit(); },
@@ -5369,7 +5675,7 @@ const VIEW_RENDER_MAP = {
   okul: () => { renderOkulMail(); renderOkulTakip(); },
   hedefler: renderHedefler, maliyet: renderMaliyetSablonlari, gorevler: renderGorevler,
   belgeler: renderBelgeOlusturucu, yoneticiler: renderYoneticiler,
-  materyaller: renderMateryaller, ajan: renderYonetimAjani,
+  materyaller: renderMateryaller, ajan: renderYonetimAjani, sdr: renderSatisAjani,
   faturalar: renderFaturalar,
 };
 
