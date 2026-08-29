@@ -441,6 +441,8 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
   <section class="view" id="view-sdr">
     <div class="page-header"><h2>🎯 Satış Ajanı</h2></div>
 
+    <div class="panel-box" id="sdrDigest" style="display:none;"></div>
+
     <div class="section-title">🔍 Yeni Araştırma <span style="font-weight:400;color:var(--muted);font-size:12px;">— internetten potansiyel yüksek adetli müşteri adayı bul</span></div>
     <div class="panel-box">
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
@@ -5422,10 +5424,31 @@ async function renderSatisAjani() {
     document.getElementById('sdrResearchList').innerHTML = '<div style="color:var(--muted);">Ajan sunucusu bağlı değil.</div>';
     return;
   }
+  sdrRenderDigest();
   sdrRenderResearchList();
   sdrRefreshStatus();
   sdrRenderFilters();
   sdrRenderLeadTable();
+}
+
+async function sdrRenderDigest() {
+  const box = document.getElementById('sdrDigest');
+  try {
+    const d = await (await matApi('/api/sdr/digest')).json();
+    const parts = [];
+    if ((d.overdueFollowups || []).length) {
+      parts.push('<b>Takibi geçmiş (' + d.overdueFollowups.length + '):</b> '
+        + d.overdueFollowups.slice(0, 6).map(l => '<a href="#" data-lead="' + l.id + '">' + esc(l.kurum_adi) + '</a> <span style="color:var(--muted);font-size:11px;">(' + esc(l.durum) + ')</span>').join(' · '));
+    }
+    if ((d.needDraft || []).length) {
+      parts.push('<b>Mail taslağı bekleyen (' + d.needDraft.length + '):</b> '
+        + d.needDraft.slice(0, 6).map(l => '<a href="#" data-lead="' + l.id + '">' + esc(l.kurum_adi) + '</a>').join(' · '));
+    }
+    if (!parts.length) { box.style.display = 'none'; return; }
+    box.style.display = 'block';
+    box.innerHTML = '<div style="font-size:12.5px;line-height:1.7;">📌 <b>Bugün</b><br>' + parts.join('<br>') + '</div>';
+    box.querySelectorAll('a[data-lead]').forEach(a => a.addEventListener('click', (e) => { e.preventDefault(); sdrOpenLead(parseInt(a.dataset.lead, 10)); }));
+  } catch (e) { box.style.display = 'none'; }
 }
 
 // ---- Araştırma ----
