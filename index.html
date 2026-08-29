@@ -4858,23 +4858,55 @@ async function renderBelgeIsleme() {
   const box = document.getElementById('belgeListe');
   if (!box || !matBackendReady()) { if (box) box.innerHTML = ''; return; }
   try {
-    const list = await (await matApi('/api/agent/documents?limit=40')).json();
+    const list = (await (await matApi('/api/agent/documents?limit=60')).json()).filter(d => d.status !== 'discarded');
     if (!list.length) { box.innerHTML = '<div style="color:var(--muted);font-size:12.5px;">Henüz belge yok.</div>'; return; }
-    box.innerHTML = '<div class="table-wrap"><table class="data-table"><thead><tr><th>Dosya</th><th>Tür</th><th>Tutar / Sipariş</th><th>Durum</th><th></th></tr></thead><tbody>'
-      + list.filter(d => d.status !== 'discarded').map(d => {
+    box.innerHTML = '<div style="display:flex;justify-content:flex-end;margin-bottom:6px;"><button class="btn small danger" id="belgeBulkDel">Tüm belge kayıtlarını sil</button></div>'
+      + '<div class="table-wrap"><table class="data-table"><thead><tr><th>Dosya</th><th>Tür</th><th>Tutar / Sipariş</th><th>Durum</th><th></th></tr></thead><tbody>'
+      + list.map(d => {
         const st = { pending: 'Yüklendi', extracted: 'Okundu — onay bekliyor', committed: 'İşlendi' }[d.status] || d.status;
         const label = d.humanLabel || (d.direction && d.documentType ? belgeHumanLabel(d.documentType, d.direction) : '—');
         const amt = d.documentType === 'production_form'
           ? (d.orderNo ? esc(d.orderNo) : '—')
           : (d.amount != null ? fmtCurrency(d.amount) : '—');
-        return '<tr data-id="' + esc(d.id) + '"><td>' + esc(d.originalName) + '</td>'
+        return '<tr data-id="' + esc(d.id) + '" data-committed="' + (d.status === 'committed' ? '1' : '') + '" data-kind="' + esc(d.committedKind || '') + '"><td>' + esc(d.originalName) + '</td>'
           + '<td>' + esc(label) + '</td>'
           + '<td>' + amt + '</td>'
           + '<td>' + esc(st) + '</td>'
-          + '<td><button class="btn small secondary" data-act="open">' + (d.status === 'committed' ? 'Gör' : 'İncele') + '</button></td></tr>';
+          + '<td style="white-space:nowrap;"><button class="btn small secondary" data-act="open">' + (d.status === 'committed' ? 'Gör' : 'İncele') + '</button> '
+          + '<button class="btn small danger" data-act="del">Sil</button></td></tr>';
       }).join('') + '</tbody></table></div>';
     box.querySelectorAll('tr[data-id]').forEach(tr => {
       tr.querySelector('[data-act="open"]').addEventListener('click', () => belgeOpenPreview(tr.dataset.id));
+      tr.querySelector('[data-act="del"]').addEventListener('click', async (ev) => {
+        ev.stopPropagation();
+        const committed = tr.dataset.committed === '1';
+        const warn = committed
+          ? '⚠️ Bu belge İŞLENMİŞ. Belge kaydı ve dosyası silinecek, ancak oluşturduğu ' + (tr.dataset.kind || 'finans/iş') + ' kaydı PANELDE KALIR (onu Gelir / Gider / Faturalar / İş Takip sekmesinden ayrıca silin).\n\nDevam edilsin mi?'
+          : 'Bu belge kaydı ve dosyası silinsin mi? (Geri alınamaz)';
+        if (!confirm(warn)) return;
+        try {
+          await matApi('/api/agent/documents/' + tr.dataset.id, { method: 'DELETE' });
+          flash('Belge kaydı silindi.', 'success');
+          if ((document.getElementById('belgePreview').innerHTML || '').includes(tr.dataset.id)) document.getElementById('belgePreview').innerHTML = '';
+          renderBelgeIsleme();
+        } catch (e) { flash('Silinemedi: ' + e.message, 'error'); }
+      });
+    });
+    const bulk = document.getElementById('belgeBulkDel');
+    if (bulk) bulk.addEventListener('click', async () => {
+      const committedCount = list.filter(d => d.status === 'committed').length;
+      const msg = 'Belge İşleme listesindeki TÜM belge kayıtları ve dosyaları silinsin mi? (' + list.length + ' kayıt'
+        + (committedCount ? ', ' + committedCount + ' tanesi işlenmiş — oluşan finans/iş kayıtları PANELDE KALIR' : '') + ')\n\nGeri alınamaz.';
+      if (!confirm(msg)) return;
+      bulk.disabled = true;
+      try {
+        const r = await (await matApi('/api/agent/documents/delete', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: list.map(d => d.id) }),
+        })).json();
+        flash((r.deleted || 0) + ' belge kaydı silindi.', 'success');
+        document.getElementById('belgePreview').innerHTML = '';
+        renderBelgeIsleme();
+      } catch (e) { bulk.disabled = false; flash('Silinemedi: ' + e.message, 'error'); }
     });
   } catch (e) { box.innerHTML = '<div style="color:var(--muted);">Belge listesi okunamadı.</div>'; }
 }
