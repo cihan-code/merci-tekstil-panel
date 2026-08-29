@@ -419,12 +419,18 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
       <div id="belgePreview" style="margin-top:12px;"></div>
     </div>
 
-    <div class="section-title">Geçmiş Çıktılar</div>
+    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
+      <span>Geçmiş Çıktılar</span>
+      <button type="button" class="btn danger small" id="ajanBulkDel">Seçili tipin çıktılarını sil</button>
+    </div>
     <div class="panel-box">
       <div class="table-wrap"><table class="data-table" id="ajanHistoryTable"></table></div>
     </div>
 
-    <div class="section-title">💵 API Maliyeti</div>
+    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
+      <span>💵 API Maliyeti</span>
+      <button type="button" class="btn small secondary" id="ajanUsageRefresh">Yenile</button>
+    </div>
     <div class="panel-box"><ul class="stat-list" id="ajanUsageList"><li style="color:var(--muted);">—</li></ul></div>
   </section>
 
@@ -4573,21 +4579,35 @@ async function renderYonetimAjani() {
   }
   // Geçmiş liste
   try {
-    const list = await (await matApi('/api/agent/outputs?limit=40')).json();
+    const list = await (await matApi('/api/agent/outputs?limit=60')).json();
     if (!list.length) { histTable.innerHTML = '<tbody><tr><td style="color:var(--muted);">Kayıt yok.</td></tr></tbody>'; }
     else {
-      histTable.innerHTML = '<thead><tr><th>Tarih</th><th>Tip</th><th>Başlık</th><th>Üretildi</th></tr></thead><tbody>'
-        + list.map((r) => '<tr data-id="' + esc(r.id) + '" style="cursor:pointer;">'
-          + '<td>' + esc(r.date) + '</td><td>' + esc(AJAN_TYPE_LABELS[r.type] || r.type) + '</td>'
-          + '<td>' + esc(r.title) + '</td><td>' + esc(ajanFmtStamp(r.createdAt)) + '</td></tr>').join('')
+      histTable.innerHTML = '<thead><tr><th>Tarih</th><th>Tip</th><th>Başlık</th><th>Üretildi</th><th></th></tr></thead><tbody>'
+        + list.map((r) => '<tr data-id="' + esc(r.id) + '">'
+          + '<td class="ajan-hist-open" style="cursor:pointer;">' + esc(r.date) + '</td>'
+          + '<td class="ajan-hist-open" style="cursor:pointer;">' + esc(AJAN_TYPE_LABELS[r.type] || r.type) + '</td>'
+          + '<td class="ajan-hist-open" style="cursor:pointer;">' + esc(r.title) + '</td>'
+          + '<td class="ajan-hist-open" style="cursor:pointer;">' + esc(ajanFmtStamp(r.createdAt)) + '</td>'
+          + '<td><button type="button" class="btn danger small ajan-hist-del">Sil</button></td></tr>').join('')
         + '</tbody>';
       histTable.querySelectorAll('tr[data-id]').forEach((tr) => {
-        tr.addEventListener('click', async () => {
+        tr.querySelectorAll('.ajan-hist-open').forEach((td) => td.addEventListener('click', async () => {
           try {
             const rec = await (await matApi('/api/agent/outputs/' + tr.dataset.id)).json();
             ajanShowOutput(rec);
             window.scrollTo({ top: document.getElementById('ajanContent').offsetTop - 20, behavior: 'smooth' });
           } catch (e) { flash('Çıktı açılamadı: ' + e.message, 'error'); }
+        }));
+        const del = tr.querySelector('.ajan-hist-del');
+        if (del) del.addEventListener('click', async (ev) => {
+          ev.stopPropagation();
+          if (!confirm('Bu çıktı silinsin mi? (Geri alınamaz — yalnız ajan çıktısı, panel verisi etkilenmez.)')) return;
+          del.disabled = true;
+          try {
+            await matApi('/api/agent/outputs/' + tr.dataset.id, { method: 'DELETE' });
+            flash('Çıktı silindi.', 'success');
+            renderYonetimAjani();
+          } catch (e) { del.disabled = false; flash('Silinemedi: ' + e.message, 'error'); }
         });
       });
     }
@@ -4630,6 +4650,25 @@ async function ajanPollTick() {
 }
 
 document.getElementById('ajanTypeSelect').addEventListener('change', renderYonetimAjani);
+(function () { const b = document.getElementById('ajanUsageRefresh'); if (b) b.addEventListener('click', ajanRenderUsage); })();
+(function () {
+  const b = document.getElementById('ajanBulkDel');
+  if (!b) return;
+  b.addEventListener('click', async () => {
+    const type = document.getElementById('ajanTypeSelect').value;
+    const label = AJAN_TYPE_LABELS[type] || type;
+    if (!confirm('"' + label + '" tipindeki TÜM ajan çıktıları silinsin mi? Geri alınamaz (panel verisi etkilenmez).')) return;
+    b.disabled = true;
+    try {
+      const r = await (await matApi('/api/agent/outputs/delete', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type }),
+      })).json();
+      flash((r.deleted || 0) + ' çıktı silindi.', 'success');
+      renderYonetimAjani();
+    } catch (e) { flash('Silinemedi: ' + e.message, 'error'); }
+    finally { b.disabled = false; }
+  });
+})();
 document.getElementById('ajanRunBtn').addEventListener('click', async () => {
   const type = document.getElementById('ajanTypeSelect').value;
   const btn = document.getElementById('ajanRunBtn');
@@ -4649,19 +4688,48 @@ document.getElementById('ajanRunBtn').addEventListener('click', async () => {
 });
 
 // ---- API maliyet özeti ----
+function ajanUsd(v) {
+  const n = Number(v) || 0;
+  if (n === 0) return '$0';
+  if (n < 0.01) return '$' + n.toFixed(5);
+  if (n < 1) return '$' + n.toFixed(4);
+  return '$' + n.toFixed(2);
+}
 async function ajanRenderUsage() {
   const el = document.getElementById('ajanUsageList');
   if (!el) return;
+  el.innerHTML = '<li style="color:var(--muted);">Yükleniyor…</li>';
   try {
-    const u = await (await matApi('/api/agent/usage?limit=1')).json();
+    const u = await (await matApi('/api/agent/usage?limit=25')).json();
     const s = u.summary || {};
-    const fmt = (w) => w ? ('$' + (w.costUsd || 0).toFixed(3) + ' · ' + (w.calls || 0) + ' çağrı') : '—';
-    el.innerHTML =
-      '<li><span>Bugün</span><strong>' + fmt(s.today) + '</strong></li>'
+    const fmt = (w) => w ? (ajanUsd(w.costUsd) + ' · ' + (w.calls || 0) + ' çağrı') : '—';
+    const opLine = (w) => {
+      const ops = Object.entries((w && w.byOp) || {}).sort((a, b) => b[1].costUsd - a[1].costUsd);
+      if (!ops.length) return '';
+      return '<li style="color:var(--muted);font-size:11.5px;padding-left:8px;">'
+        + ops.map(([op, x]) => esc(op) + ' ' + ajanUsd(x.costUsd) + ' (' + x.calls + ')').join(' · ') + '</li>';
+    };
+    let html =
+      '<li><span>Bugün (İstanbul)</span><strong>' + fmt(s.today) + '</strong></li>'
+      + opLine(s.today)
+      + '<li><span>Dün</span><strong>' + fmt(s.yesterday) + '</strong></li>'
       + '<li><span>Son 7 gün</span><strong>' + fmt(s.d7) + '</strong></li>'
       + '<li><span>Son 30 gün</span><strong>' + fmt(s.d30) + '</strong></li>'
       + '<li style="color:var(--muted);font-size:11.5px;"><span>Toplam kayıtlı çağrı</span><span>' + (u.totalCalls || 0) + '</span></li>';
-  } catch (e) { el.innerHTML = '<li style="color:var(--muted);">Okunamadı.</li>'; }
+    if ((u.byDay || []).length) {
+      html += '<li style="margin-top:6px;font-weight:600;font-size:12px;">Son günler</li>'
+        + u.byDay.slice(0, 7).map((d) => '<li style="font-size:11.5px;"><span>' + esc(d.day) + '</span><span>' + ajanUsd(d.costUsd) + ' · ' + d.calls + '</span></li>').join('');
+    }
+    if ((u.entries || []).length) {
+      html += '<li style="margin-top:6px;font-weight:600;font-size:12px;">Son çağrılar</li>'
+        + u.entries.slice(0, 8).map((e) => {
+          const t = (e.ts || '').replace('T', ' ').slice(5, 16);
+          const bad = e.ok === false ? ' style="color:var(--red);"' : '';
+          return '<li' + bad + ' style="font-size:11px;"><span>' + esc(t) + ' ' + esc(e.opType || '?') + (e.mock ? ' (mock)' : '') + (e.ok === false ? ' ✗' : '') + '</span><span>' + ajanUsd(e.costUsd) + '</span></li>';
+        }).join('');
+    }
+    el.innerHTML = html;
+  } catch (e) { el.innerHTML = '<li style="color:var(--muted);">Okunamadı: ' + esc(e.message) + '</li>'; }
 }
 
 // ---- "Ajana Söyle" ----
