@@ -307,6 +307,87 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
 .md-body table { border-collapse:collapse; width:100%; font-size:12.5px; }
 .md-body th, .md-body td { border:1px solid var(--border); padding:6px 9px; text-align:left; white-space:nowrap; }
 .md-body th { background:#f8f9fc; color:var(--navy); font-weight:700; }
+
+/* ===== Satis Ajani (SDR) — "Avci Konsolu" gorunumu · yalniz #view-sdr ===== */
+#view-sdr {
+  --sdr-teal:#2e8f7c; --sdr-green:#1f9d64; --sdr-tint:#f4faf8; --sdr-line:#d9e8e2;
+  --sdr-amber:#d98a2b; --sdr-gray:#8b96a4;
+}
+#view-sdr .agent-hero {
+  background: radial-gradient(130% 180% at 100% 0%, #1d4b43 0%, var(--navy) 44%, var(--navy2) 100%);
+  position:relative; overflow:hidden;
+}
+#view-sdr .sdr-radar { position:absolute; right:24px; top:50%; width:150px; height:150px; transform:translateY(-50%); pointer-events:none; }
+#view-sdr .sdr-radar i {
+  position:absolute; inset:0; margin:auto; width:16px; height:16px; border-radius:50%;
+  border:1.5px solid rgba(120,224,193,0.55); animation: sdrPing 3.6s ease-out infinite;
+}
+#view-sdr .sdr-radar i:nth-child(2){ animation-delay:1.2s; }
+#view-sdr .sdr-radar i:nth-child(3){ animation-delay:2.4s; }
+@keyframes sdrPing { 0%{width:16px;height:16px;opacity:0.85;} 100%{width:150px;height:150px;opacity:0;} }
+
+#view-sdr .sdr-head { display:flex; align-items:center; gap:10px; margin:26px 0 12px; }
+#view-sdr .sdr-head .ic { width:26px; height:26px; border-radius:8px; flex-shrink:0; display:grid; place-items:center; font-size:14px; background:var(--sdr-teal); color:#fff; }
+#view-sdr .sdr-head h3 { margin:0; font-size:12.5px; font-weight:700; letter-spacing:0.4px; text-transform:uppercase; color:var(--navy); white-space:nowrap; }
+#view-sdr .sdr-head .rule { flex:1; height:1px; background:linear-gradient(90deg,var(--sdr-line),transparent); }
+#view-sdr .sdr-head .meta { font-size:11.5px; color:var(--muted); font-weight:600; white-space:nowrap; }
+
+#view-sdr .sdr-card { background:var(--sdr-tint); border:1px solid var(--sdr-line); border-radius:12px; padding:16px 18px; }
+#view-sdr .sdr-card .sdr-card-t { font-weight:700; font-size:12.5px; color:var(--navy); margin-bottom:11px; }
+#view-sdr .sdr-card .sdr-card-t span { font-weight:400; color:var(--muted); }
+#view-sdr .sdr-deck { display:grid; grid-template-columns:1.5fr 1fr; gap:14px; align-items:start; }
+@media (max-width:880px){ #view-sdr .sdr-deck { grid-template-columns:1fr; } }
+
+#view-sdr .sdr-funnel { display:flex; gap:6px; flex-wrap:wrap; }
+#view-sdr .sdr-stage { flex:1; min-width:96px; background:#fff; border:1px solid var(--sdr-line); border-radius:10px; padding:12px 12px 13px; position:relative; overflow:hidden; }
+#view-sdr .sdr-stage .n { font-size:22px; font-weight:800; line-height:1; color:var(--navy); font-variant-numeric:tabular-nums; }
+#view-sdr .sdr-stage .k { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.4px; color:var(--muted); margin-top:6px; }
+#view-sdr .sdr-stage .bar { position:absolute; left:0; right:0; bottom:0; height:3px; background:#9fb0c4; }
+#view-sdr .sdr-stage.s2 .bar{ background:var(--sdr-teal); }
+#view-sdr .sdr-stage.s3 .bar{ background:var(--sdr-green); }
+#view-sdr .sdr-stage.hot .n{ color:var(--sdr-green); }
+
+#view-sdr .sdr-chip { border:1px solid var(--sdr-line); background:#fff; color:var(--navy); border-radius:18px; padding:5px 11px; font-size:12px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:6px; transition:border-color .15s, background .15s; }
+#view-sdr .sdr-chip:hover { border-color:var(--sdr-teal); }
+#view-sdr .sdr-chip .c { background:#eef0f4; color:var(--muted); border-radius:10px; padding:0 6px; font-size:10.5px; font-weight:700; }
+#view-sdr .sdr-chip.on { background:var(--sdr-teal); color:#fff; border-color:var(--sdr-teal); }
+#view-sdr .sdr-chip.on .c { background:rgba(255,255,255,0.26); color:#fff; }
+
+#view-sdr .pri { display:inline-flex; align-items:center; gap:6px; font-weight:600; font-size:12px; white-space:nowrap; }
+#view-sdr .pri::before { content:''; width:8px; height:8px; border-radius:50%; background:var(--sdr-gray); flex-shrink:0; }
+#view-sdr .pri.h::before { background:var(--sdr-green); box-shadow:0 0 0 3px rgba(31,157,100,0.16); }
+#view-sdr .pri.m::before { background:var(--sdr-amber); }
+
+#view-sdr .score { display:inline-flex; align-items:center; gap:7px; }
+#view-sdr .score .t { width:38px; height:6px; border-radius:4px; background:#e7ebf1; overflow:hidden; flex-shrink:0; }
+#view-sdr .score .f { display:block; height:100%; border-radius:4px; background:var(--sdr-teal); }
+#view-sdr .score .v { font-size:12px; font-weight:700; font-variant-numeric:tabular-nums; color:var(--navy); }
+#view-sdr .score.hi .f { background:var(--sdr-green); }
+#view-sdr .score.lo .f { background:var(--sdr-amber); }
+
+#view-sdr .st { display:inline-block; padding:2px 9px; border-radius:20px; font-size:11px; font-weight:700; white-space:nowrap; }
+#view-sdr .st.new { background:#eef1f6; color:#54617a; }
+#view-sdr .st.ready { background:#fdf0e4; color:var(--accent); }
+#view-sdr .st.sent { background:#e6f0fb; color:#2f6fb0; }
+#view-sdr .st.talk { background:#eae4fb; color:#6a4bc0; }
+#view-sdr .st.won { background:#e5f6ed; color:var(--green); }
+#view-sdr .st.lost { background:#f2f3f5; color:#98a1af; }
+
+#view-sdr table.data-table tbody tr td:first-child { border-left:3px solid transparent; }
+#view-sdr table.data-table tbody tr.p-h td:first-child { border-left-color:var(--sdr-green); }
+#view-sdr table.data-table tbody tr.p-m td:first-child { border-left-color:var(--sdr-amber); }
+
+#view-sdr .lead-band { background:linear-gradient(135deg,var(--navy),#1d4b43); color:#fff; border-radius:12px 12px 0 0; padding:14px 18px; display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; }
+#view-sdr .lead-band h3 { margin:0; color:#fff; font-size:16px; }
+#view-sdr .lead-band .sub { font-size:11.5px; opacity:0.82; margin-top:4px; }
+#view-sdr .lead-band .pri { color:#fff; }
+#view-sdr .lead-body { border:1px solid var(--sdr-line); border-top:none; border-radius:0 0 12px 12px; padding:16px 18px; background:#fff; }
+
+#view-sdr .sdr-empty { text-align:center; padding:26px 16px; color:var(--muted); font-size:13px; }
+#view-sdr .sdr-empty .ico { font-size:26px; opacity:0.4; display:block; margin-bottom:8px; }
+
+@media (prefers-reduced-motion: reduce){ #view-sdr .sdr-radar { display:none; } }
+@media (max-width:600px){ #view-sdr .sdr-radar { display:none; } }
 </style>
 </head>
 <body>
@@ -509,6 +590,7 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
   <!-- SATIŞ AJANI (SDR) -->
   <section class="view" id="view-sdr">
     <div class="agent-hero">
+      <div class="sdr-radar" aria-hidden="true"><i></i><i></i><i></i></div>
       <div class="ah-left">
         <h2>🎯 Satış Ajanı</h2>
         <div class="ah-sub">İnternetten yüksek adetli müşteri adayı araştırır, puanlar, ilk temas maili taslağı hazırlar.</div>
@@ -520,37 +602,39 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
 
     <div class="panel-box agent-card teal" id="sdrDigest" style="display:none;"></div>
 
-    <div class="section-title">📧 Gmail Bağlantısı <span style="font-weight:400;color:var(--muted);font-size:12px;">— mailler info@mercitex.com üzerinden, senin onayınla gönderilir</span></div>
-    <div class="panel-box" id="sdrGmailBox"><span style="color:var(--muted);font-size:13px;">Yükleniyor…</span></div>
-
-    <div class="section-title">🔍 Yeni Araştırma <span style="font-weight:400;color:var(--muted);font-size:12px;">— internetten potansiyel yüksek adetli müşteri adayı bul</span></div>
-    <div class="panel-box">
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
-        <div class="field" style="flex:1;min-width:240px;"><label>Araştırma hedefi</label>
-          <input type="text" id="sdrQuery" placeholder="Örn: İstanbul'daki özel liseler / Ankara üniversite kulüpleri"></div>
-        <div class="field" style="max-width:140px;"><label>Şehir (ops.)</label><input type="text" id="sdrCity" placeholder="İstanbul"></div>
-        <div class="field" style="max-width:170px;"><label>Kurum tipi (ops.)</label>
-          <select id="sdrType"><option value="">— hepsi —</option>
-            <option>Üniversite</option><option>Üniversite Kulübü</option><option>Özel Lise</option><option>Okul</option>
-            <option>Kurumsal Firma</option><option>Etkinlik/Organizasyon</option><option>Spor Kulübü</option></select></div>
-        <button class="btn" id="sdrResearchBtn">Araştır</button>
+    <div class="sdr-head"><span class="ic">🛰️</span><h3>Kontrol Güvertesi</h3><span class="rule"></span></div>
+    <div class="sdr-deck">
+      <div class="sdr-card">
+        <div class="sdr-card-t">🔍 Yeni Araştırma <span>— internetten potansiyel yüksek adetli aday bul</span></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+          <div class="field" style="flex:1;min-width:220px;"><label>Araştırma hedefi</label>
+            <input type="text" id="sdrQuery" placeholder="Örn: İstanbul'daki özel liseler / Ankara üniversite kulüpleri"></div>
+          <div class="field" style="max-width:140px;"><label>Şehir (ops.)</label><input type="text" id="sdrCity" placeholder="İstanbul"></div>
+          <div class="field" style="max-width:170px;"><label>Kurum tipi (ops.)</label>
+            <select id="sdrType"><option value="">— hepsi —</option>
+              <option>Üniversite</option><option>Üniversite Kulübü</option><option>Özel Lise</option><option>Okul</option>
+              <option>Kurumsal Firma</option><option>Etkinlik/Organizasyon</option><option>Spor Kulübü</option></select></div>
+          <button class="btn" id="sdrResearchBtn">Araştır</button>
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-top:8px;" id="sdrResearchStatus"></div>
       </div>
-      <div style="font-size:12px;color:var(--muted);margin-top:8px;" id="sdrResearchStatus"></div>
+      <div class="sdr-card">
+        <div class="sdr-card-t">📧 Gmail Bağlantısı <span>— info@mercitex.com üzerinden, senin onayınla</span></div>
+        <div id="sdrGmailBox"><span style="color:var(--muted);font-size:13px;">Yükleniyor…</span></div>
+      </div>
     </div>
 
-    <div class="section-title">Geçmiş Araştırmalar</div>
-    <div class="panel-box">
+    <div class="sdr-head"><span class="ic">📇</span><h3>Geçmiş Araştırmalar</h3><span class="rule"></span></div>
+    <div class="sdr-card">
       <div id="sdrResearchList" style="font-size:13px;"></div>
       <div id="sdrCandidates" style="margin-top:12px;"></div>
     </div>
 
-    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-      <span>🎯 Lead Havuzu</span>
-      <div id="sdrFilters" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
-    </div>
-    <div class="panel-box"><ul class="stat-list" id="sdrLeadStats"></ul></div>
-    <div class="panel-box" style="margin-top:12px;">
-      <div class="toolbar"><input type="text" id="sdrLeadSearch" placeholder="Kurum, şehir ara..."><span class="count" id="sdrLeadCount" style="margin-left:auto;color:var(--muted);font-size:12px;"></span></div>
+    <div class="sdr-head"><span class="ic">🎯</span><h3>Lead Havuzu</h3><span class="rule"></span><span class="meta" id="sdrLeadCount"></span></div>
+    <div class="sdr-funnel" id="sdrLeadStats" style="margin-bottom:12px;"></div>
+    <div id="sdrFilters" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;"></div>
+    <div class="sdr-card">
+      <div class="toolbar"><input type="text" id="sdrLeadSearch" placeholder="Kurum, şehir ara..."></div>
       <div class="table-wrap"><table class="data-table" id="sdrLeadTable"></table></div>
     </div>
     <div id="sdrLeadDetail" style="margin-top:12px;"></div>
@@ -5520,6 +5604,22 @@ let SDR_GMAIL = { connected: false, email: null, sentToday: 0, dailyCap: 20, con
 
 function sdrLeads() { return Array.isArray(DATA.leads) ? DATA.leads : []; }
 
+function sdrPriMeta(p) {
+  if (p === 'Yüksek') return { cls: 'h', row: 'p-h' };
+  if (p === 'Orta') return { cls: 'm', row: 'p-m' };
+  return { cls: 'l', row: '' };
+}
+function sdrScoreHtml(v) {
+  if (v == null || isNaN(Number(v))) return '<span style="color:var(--muted);">—</span>';
+  const n = Math.max(0, Math.min(100, Number(v)));
+  const cls = n >= 70 ? 'hi' : (n < 40 ? 'lo' : '');
+  return '<span class="score ' + cls + '"><span class="t"><span class="f" style="width:' + n + '%"></span></span><span class="v">' + esc(String(v)) + '</span></span>';
+}
+function sdrStatusHtml(d) {
+  const map = { 'Yeni':'new','Araştırıldı':'new','Mail Hazır':'ready','Mail Gönderildi':'sent','Yanıt Var':'talk','Görüşülüyor':'talk','Teklif Aşaması':'talk','Kazanıldı':'won','Kaybedildi':'lost','Uygun Değil':'lost' };
+  return '<span class="st ' + (map[d] || 'new') + '">' + esc(d || '—') + '</span>';
+}
+
 async function renderSatisAjani() {
   if (!matBackendReady()) {
     document.getElementById('sdrResearchList').innerHTML = '<div style="color:var(--muted);">Ajan sunucusu bağlı değil.</div>';
@@ -5649,7 +5749,7 @@ async function sdrRenderResearchList() {
   const box = document.getElementById('sdrResearchList');
   try {
     const list = await (await matApi('/api/sdr/research?limit=20')).json();
-    if (!list.length) { box.innerHTML = '<div style="color:var(--muted);">Henüz araştırma yok.</div>'; document.getElementById('sdrCandidates').innerHTML = ''; return; }
+    if (!list.length) { box.innerHTML = '<div class="sdr-empty"><span class="ico">🛰️</span>Henüz araştırma yok. Yukarıdan bir hedef girip <b>Araştır</b>a bas.</div>'; document.getElementById('sdrCandidates').innerHTML = ''; return; }
     box.innerHTML = '<div class="table-wrap"><table class="data-table"><thead><tr><th>Tarih</th><th>Hedef</th><th>Aday</th><th>Maliyet</th><th></th></tr></thead><tbody>'
       + list.map(r => '<tr data-id="' + esc(r.id) + '"><td>' + esc((r.createdAt || '').slice(0, 16).replace('T', ' ')) + '</td>'
         + '<td>' + esc(r.query) + (r.mock ? ' <span style="color:var(--muted);">(MOCK)</span>' : '') + '</td>'
@@ -5680,14 +5780,17 @@ async function sdrShowCandidates(id) {
       + ((rec.sources || []).length ? '<div style="font-size:11.5px;color:var(--muted);margin-bottom:6px;">Kaynak: ' + rec.sources.map(s => esc(s.name) + (s.ran ? ' (' + (s.count || 0) + ')' : ' —')).join(' · ') + '</div>' : '')
       + (rec.arastirma_notu ? '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">' + esc(rec.arastirma_notu) + '</div>' : '')
       + '<div class="table-wrap"><table class="data-table"><thead><tr><th><input type="checkbox" id="sdrCandAll"></th><th>Kurum</th><th>Tip</th><th>Şehir</th><th>Puan</th><th>Öncelik</th><th>Tah. adet</th><th>İletişim</th><th>Neden</th></tr></thead><tbody>'
-      + cs.map((c, i) => '<tr><td><input type="checkbox" class="sdrCand" value="' + i + '"></td>'
+      + cs.map((c, i) => {
+        const pm = sdrPriMeta(c.oncelik);
+        return '<tr class="' + pm.row + '"><td><input type="checkbox" class="sdrCand" value="' + i + '"></td>'
         + '<td>' + esc(c.kurum_adi) + (c.website ? ' <a href="' + esc(c.website) + '" target="_blank" rel="noopener" style="font-size:11px;">↗</a>' : '') + '</td>'
         + '<td>' + esc(c.kurum_tipi || '—') + '</td><td>' + esc(c.sehir || '—') + '</td>'
-        + '<td>' + (c.potansiyel_puan != null ? c.potansiyel_puan : '—') + '</td>'
-        + '<td>' + esc(c.oncelik || '—') + '</td>'
+        + '<td>' + sdrScoreHtml(c.potansiyel_puan) + '</td>'
+        + '<td>' + (c.oncelik ? '<span class="pri ' + pm.cls + '">' + esc(c.oncelik) + '</span>' : '—') + '</td>'
         + '<td>' + (c.tahmini_siparis_adet != null ? c.tahmini_siparis_adet : '—') + '</td>'
         + '<td>' + ((c.emails || []).length ? esc(c.emails[0]) : '<span style="color:var(--red);">yok</span>') + '</td>'
-        + '<td style="max-width:280px;font-size:12px;">' + esc(c.neden_uygun || '') + '</td></tr>').join('')
+        + '<td style="max-width:280px;font-size:12px;">' + esc(c.neden_uygun || '') + '</td></tr>';
+      }).join('')
       + '</tbody></table></div>'
       + '<button class="btn" id="sdrCommitBtn" style="margin-top:10px;">Seçilenleri Lead Havuzuna Aktar</button></div>';
     const all = document.getElementById('sdrCandAll');
@@ -5711,8 +5814,10 @@ async function sdrShowCandidates(id) {
 // ---- Lead Havuzu ----
 function sdrRenderFilters() {
   const wrap = document.getElementById('sdrFilters');
+  const leads = sdrLeads();
+  const cnt = f => !f.key ? leads.length : (f.match ? leads.filter(l => f.match.includes(l.durum)).length : leads.filter(l => l.durum === f.key).length);
   wrap.innerHTML = SDR_STATUS_FILTERS.map(f =>
-    '<button class="btn small ' + (SDR_ACTIVE_FILTER === f.key ? '' : 'secondary') + '" data-f="' + esc(f.key) + '">' + esc(f.label) + '</button>').join('');
+    '<button class="sdr-chip ' + (SDR_ACTIVE_FILTER === f.key ? 'on' : '') + '" data-f="' + esc(f.key) + '">' + esc(f.label) + '<span class="c">' + cnt(f) + '</span></button>').join('');
   wrap.querySelectorAll('button').forEach(b => b.addEventListener('click', () => { SDR_ACTIVE_FILTER = b.dataset.f; sdrRenderFilters(); sdrRenderLeadTable(); }));
 }
 function sdrFilteredLeads() {
@@ -5727,12 +5832,17 @@ function sdrRenderLeadStats() {
   const by = {};
   all.forEach(l => { by[l.durum] = (by[l.durum] || 0) + 1; });
   const won = all.filter(l => l.pipeline_id || l.durum === 'Kazanıldı').length;
-  document.getElementById('sdrLeadStats').innerHTML =
-    '<li><span>Toplam lead</span><strong>' + all.length + '</strong></li>'
-    + '<li><span>Yüksek öncelikli</span><strong>' + all.filter(l => l.oncelik === 'Yüksek').length + '</strong></li>'
-    + '<li><span>Mail gönderildi</span><strong>' + (by['Mail Gönderildi'] || 0) + '</strong></li>'
-    + '<li><span>Görüşmede</span><strong>' + ((by['Yanıt Var'] || 0) + (by['Görüşülüyor'] || 0) + (by['Teklif Aşaması'] || 0)) + '</strong></li>'
-    + '<li><span>Pipeline\'a dönen</span><strong>' + won + '</strong></li>';
+  const talk = (by['Yanıt Var'] || 0) + (by['Görüşülüyor'] || 0) + (by['Teklif Aşaması'] || 0);
+  const stages = [
+    { k: 'Toplam', n: all.length, c: 's1' },
+    { k: 'Yüksek Öncelik', n: all.filter(l => l.oncelik === 'Yüksek').length, c: 's1' },
+    { k: 'Mail Gönderildi', n: (by['Mail Gönderildi'] || 0), c: 's2' },
+    { k: 'Görüşmede', n: talk, c: 's2' },
+    { k: 'Pipeline', n: won, c: 's3', hot: true },
+  ];
+  document.getElementById('sdrLeadStats').innerHTML = stages.map(s =>
+    '<div class="sdr-stage ' + s.c + (s.hot ? ' hot' : '') + '"><div class="n">' + s.n + '</div><div class="k">' + s.k + '</div><div class="bar"></div></div>'
+  ).join('');
 }
 function sdrRenderLeadTable() {
   sdrRenderLeadStats();
@@ -5743,13 +5853,16 @@ function sdrRenderLeadTable() {
   document.getElementById('sdrLeadCount').textContent = filtered.length + ' lead';
   if (!filtered.length) { table.innerHTML = '<tbody><tr><td style="color:var(--muted);">Lead yok.</td></tr></tbody>'; return; }
   table.innerHTML = '<thead><tr><th>Kurum</th><th>Tip</th><th>Şehir</th><th>Puan</th><th>Öncelik</th><th>Durum</th><th>Tah. adet</th><th>Takip</th></tr></thead><tbody>'
-    + filtered.map(l => '<tr data-id="' + l.id + '" style="cursor:pointer;">'
+    + filtered.map(l => {
+      const pm = sdrPriMeta(l.oncelik);
+      return '<tr data-id="' + l.id + '" class="' + pm.row + '" style="cursor:pointer;">'
       + '<td>' + esc(l.kurum_adi) + '</td><td>' + esc(l.kurum_tipi || '—') + '</td><td>' + esc(l.sehir || '—') + '</td>'
-      + '<td>' + (l.potansiyel_puan != null ? l.potansiyel_puan : '—') + '</td>'
-      + '<td>' + esc(l.oncelik || '—') + '</td>'
-      + '<td>' + esc(l.durum) + '</td>'
+      + '<td>' + sdrScoreHtml(l.potansiyel_puan) + '</td>'
+      + '<td>' + (l.oncelik ? '<span class="pri ' + pm.cls + '">' + esc(l.oncelik) + '</span>' : '—') + '</td>'
+      + '<td>' + sdrStatusHtml(l.durum) + '</td>'
       + '<td>' + (l.tahmini_siparis_adet != null ? l.tahmini_siparis_adet : '—') + '</td>'
-      + '<td>' + esc(l.followup_tarihi || '—') + '</td></tr>').join('')
+      + '<td>' + esc(l.followup_tarihi || '—') + '</td></tr>';
+    }).join('')
     + '</tbody>';
   table.querySelectorAll('tr[data-id]').forEach(tr => tr.addEventListener('click', () => sdrOpenLead(parseInt(tr.dataset.id, 10))));
 }
@@ -5763,10 +5876,14 @@ function sdrOpenLead(id) {
   const kisiler = (l.ilgili_kisiler || []).map(k => esc((k.unvan || '') + (k.ad ? ' — ' + k.ad : '') + (k.email ? ' (' + k.email + ')' : ''))).join('<br>') || '—';
   const statusOpts = ['Yeni', 'Araştırıldı', 'Mail Hazır', 'Mail Gönderildi', 'Yanıt Var', 'Görüşülüyor', 'Teklif Aşaması', 'Kazanıldı', 'Kaybedildi', 'Uygun Değil']
     .map(s => '<option' + (l.durum === s ? ' selected' : '') + '>' + s + '</option>').join('');
-  box.innerHTML = '<div class="panel-box">'
-    + '<div style="display:flex;justify-content:space-between;align-items:center;"><b>' + esc(l.kurum_adi) + '</b>'
+  const _pm = sdrPriMeta(l.oncelik);
+  box.innerHTML = '<div class="lead-band">'
+    + '<div><h3>' + esc(l.kurum_adi) + '</h3><div class="sub">' + esc(l.kurum_tipi || '') + (l.sektor ? ' · ' + esc(l.sektor) : '') + (l.sehir ? ' · ' + esc(l.sehir) : '') + ' · sahibi: ' + esc(l.assigned_to || '—') + '</div></div>'
+    + '<div style="display:flex;gap:10px;align-items:center;">'
+    + (l.oncelik ? '<span class="pri ' + _pm.cls + '">' + esc(l.oncelik) + '</span>' : '')
     + '<button class="btn danger small" id="sdrDelLead">Sil</button></div>'
-    + '<div style="font-size:12.5px;color:var(--muted);margin:6px 0;">' + esc(l.kurum_tipi || '') + (l.sektor ? ' · ' + esc(l.sektor) : '') + (l.sehir ? ' · ' + esc(l.sehir) : '') + ' · sahibi: ' + esc(l.assigned_to || '—') + '</div>'
+    + '</div>'
+    + '<div class="lead-body">'
     + (l.neden_uygun ? '<div style="font-size:13px;margin-bottom:8px;">' + esc(l.neden_uygun) + '</div>' : '')
     + '<div class="grid-2" style="gap:12px;">'
     + '<div><label style="font-size:12px;color:var(--muted);">İletişim</label><div style="font-size:12.5px;">'
