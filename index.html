@@ -5734,7 +5734,7 @@ async function sdrRefreshStatus() {
     const st = await (await matApi('/api/sdr/status')).json();
     const el = document.getElementById('sdrResearchStatus');
     const src = st.sources || {};
-    const srcLine = 'Kaynaklar: OpenStreetMap ✓ · Google Places ' + (src.places ? '✓' : '— (API anahtarı yok)') + ' · web araması ✓';
+    const srcLine = 'Kaynaklar: Google Places ' + (src.places ? '✓' : '— (API anahtarı yok / hatalı)') + ' · web araması ✓';
     if (st.running) {
       agentSetPill('sdrStatusPill', 'running', 'Araştırıyor');
       el.textContent = '⏳ Araştırma çalışıyor…';
