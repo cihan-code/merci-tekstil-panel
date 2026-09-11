@@ -86,6 +86,22 @@ main { flex:1; min-width:0; padding: 22px 28px 60px; }
 .flash { padding:10px 16px; border-radius:8px; margin-bottom:14px; font-size:13.5px; }
 .flash-success { background:#e5f6ed; color:var(--green); }
 .flash-error { background:#fbeae8; color:var(--red); }
+/* --- Bulut kayit durumu + hata kodu gostergeleri --- */
+.sync-badge { border:1px solid rgba(255,255,255,0.35); background:rgba(255,255,255,0.10); color:#fff; font-size:12px; font-weight:700; padding:5px 11px; border-radius:999px; cursor:pointer; display:inline-flex; align-items:center; gap:7px; white-space:nowrap; font-family:inherit; }
+.sync-badge:hover { background:rgba(255,255,255,0.18); }
+.sync-badge::before { content:''; width:8px; height:8px; border-radius:50%; background:var(--green); flex-shrink:0; }
+.sync-badge.busy::before { background:#e8b04b; }
+.sync-badge.err { background:rgba(192,57,43,0.40); border-color:#ff8a7e; }
+.sync-badge.err::before { background:#ff6b5e; }
+.sync-bar { position:fixed; top:0; left:0; right:0; z-index:99999; background:var(--red); color:#fff; padding:12px 16px; font-size:13.5px; line-height:1.5; box-shadow:0 2px 12px rgba(0,0,0,0.3); display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:center; text-align:center; }
+.sync-bar .sync-bar-msg { font-weight:600; }
+.sync-bar .sync-bar-detail { font-weight:400; opacity:0.9; font-size:12.5px; width:100%; }
+.sync-bar .code { background:rgba(255,255,255,0.22); border-radius:6px; padding:2px 8px; font-weight:700; letter-spacing:0.4px; margin-right:6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.sync-bar button { background:#fff; color:var(--red); border:none; padding:7px 14px; border-radius:6px; font-weight:700; cursor:pointer; font-size:12.5px; font-family:inherit; }
+.sync-bar button.ghost { background:transparent; color:#fff; border:1px solid rgba(255,255,255,0.65); }
+.flash-code-badge { display:inline-block; background:var(--red); color:#fff; border-radius:5px; padding:1px 7px; font-weight:700; font-size:12px; margin-right:8px; letter-spacing:0.3px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.flash-code-copy { margin-left:10px; background:none; border:1px solid var(--red); color:var(--red); border-radius:6px; padding:2px 9px; font-size:11.5px; font-weight:700; cursor:pointer; font-family:inherit; }
+.err-code-cell { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight:700; color:var(--red); white-space:nowrap; }
 .page-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; flex-wrap:wrap; gap:10px; }
 .page-header h2 { margin:0; font-size:19px; color:var(--navy); }
 .btn { display:inline-block; background: var(--accent); color:#fff; border:none; padding:9px 18px; border-radius:8px; font-size:13.5px; font-weight:600; text-decoration:none; cursor:pointer; }
@@ -428,6 +444,7 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
     </div>
   </div>
   <div class="user-box">
+    <button class="sync-badge" id="syncBadge" type="button" title="Bulut kayıt durumu">Bağlanıyor…</button>
     <div class="notif-bell-wrap">
       <button class="notif-bell-btn" id="notifBellBtn" type="button" title="Bildirimler">🔔<span class="notif-bell-count" id="notifBellCount">0</span></button>
       <div class="notif-dropdown" id="notifDropdown">
@@ -1262,6 +1279,23 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
       <div class="inline-form" style="margin-top:10px;"><button type="button" class="btn secondary small" id="btnRefreshYedekler">Yedekleri Yenile</button></div>
       <div class="table-wrap" style="margin-top:12px;"><table class="data-table" id="yedeklerTable"></table></div>
     </div>
+
+    <div class="section-title" style="margin-top:22px;">🩺 Hata Kayıtları</div>
+    <div class="panel-box">
+      <p style="font-size:12.5px;color:var(--muted);margin-top:-4px;">
+        Bir işlem hata yüzünden iptal olduğunda panel bir <b>hata kodu</b> üretip buraya yazar.
+        Kod, sorunun nereden geldiğini tek noktaya indirger:
+        <b>SYNC-*</b> buluta kaydetme · <b>PULL-*</b> bulut okuma · <b>API-*</b> diğer sunucu istekleri ·
+        <b>LOC-*</b> bu cihazın belleği · <b>JS-*</b> beklenmeyen kod hatası.
+        Sorun yaşarsanız <b>Tümünü Kopyala</b> deyip metni geliştiriciye gönderin — kod, nedeni doğrudan gösterir.
+      </p>
+      <div class="inline-form" style="margin-top:10px;">
+        <button type="button" class="btn secondary small" id="btnCopyHataKayit">Tümünü Kopyala</button>
+        <button type="button" class="btn secondary small" id="btnRefreshHataKayit">Yenile</button>
+        <button type="button" class="btn danger small" id="btnClearHataKayit">Temizle</button>
+      </div>
+      <div class="table-wrap" style="margin-top:12px;"><table class="data-table" id="hataKayitTable"></table></div>
+    </div>
   </section>
 
 </main>
@@ -1428,6 +1462,144 @@ let CLOUD_SAVE_TIMER = null;
 // sessizce yazmasını engeller (bkz. 12 Ağustos 2026 veri kaybı olayı).
 let CLOUD_LAST_KNOWN_UPDATED_AT = null;
 let CLOUD_CONFLICT = false;
+// --- Kaydetme durumu (veri kaybının kök nedeni buradaydı) ---
+// CLOUD_DIRTY: yerelde yapılmış ama buluta ONAYLANMIŞ şekilde yazılmamış değişiklik var.
+//   Bu bayrak açıkken buluttan gelen veri yerelin ÜZERİNE YAZILMAZ. Eskiden 25 sn'lik
+//   periyodik tazeleme (ve sekmeye geri dönüş tazelemesi) bu kontrolü yapmadığı için,
+//   kaydet'e basıldıktan sonra bulut yazması tamamlanmadan gelen bir tazeleme, yeni
+//   girilen kaydı ekrandan ve bellekten siliyordu; ardından bekleyen yazma da bu
+//   silinmiş hâli buluta göndererek kaybı kalıcı hâle getiriyordu.
+let CLOUD_DIRTY = false;
+let CLOUD_INFLIGHT = false;        // POST uçuşta (aynı anda ikinci POST gönderme)
+let CLOUD_PENDING_AGAIN = false;   // uçuş sırasında yeni değişiklik geldi
+let CLOUD_RETRY_TIMER = null;
+let CLOUD_RETRY_N = 0;
+let CLOUD_RESOLVING = false;       // çakışma çözülürken ikinci gönderim başlamasın
+let CLOUD_BASE_JSON = null;        // CLOUD_LAST_KNOWN_UPDATED_AT damgasına karşılık gelen veri
+let BOOT_LOCAL_JSON = null;        // oturuma başlarken elimizdeki veri (çakışma teşhisi için)
+let SYNC_BADGE_STATE = 'init';
+const CLOUD_SAVE_DEBOUNCE_MS = 700;
+const CLOUD_PUSH_TIMEOUT_MS = 45000;   // Render soğuk başlangıcı 30 sn'yi bulabiliyor
+const CLOUD_RETRY_STEPS = [2000, 5000, 10000, 20000, 30000, 60000];
+const RESCUE_KEY = 'merciPanelUnsynced_v1';
+
+// ---------------- HATA KODU SİSTEMİ ----------------
+// Paneldeki HER iptal olan işlem buraya düşer: kod + açıklama + teknik ayrıntı + zaman.
+// Kullanıcı "Yöneticiler & Ayarlar > Hata Kayıtları"ndan tek tuşla kopyalayıp gönderir;
+// kod, hatanın kaynağını koddaki tek bir noktaya indirger.
+// Kod aileleri: SYNC-* bulut kaydetme · PULL-* bulut okuma · API-* diğer uç noktalar
+//               LOC-*  tarayıcı deposu   · JS-*   beklenmeyen kod hatası
+const ERROR_LOG_KEY = 'merciPanelErrors_v1';
+const ERROR_LOG_MAX = 60;
+const PANEL_ERROR_HINTS = {
+  'SYNC-001': 'Sunucuya ulaşılamadı (internet yok veya sunucu uykuda). Otomatik tekrar denenir.',
+  'SYNC-002': 'Kaydetme 45 sn içinde tamamlanamadı (sunucu soğuk başlangıçta olabilir). Otomatik tekrar denenir.',
+  'SYNC-003': 'Bulut verisi başka bir cihazdan değiştirilmiş; hangi sürümün kalacağına siz karar verirsiniz.',
+  'SYNC-004': 'Bu sekme bulut damgasını alamamıştı; bayat veriyle üzerine yazma engellendi.',
+  'SYNC-005': 'Veride bozuk bir alan var (sayı alanına metin gibi). Sunucu tüm kaydı reddetti.',
+  'SYNC-006': 'API anahtarı geçersiz/eksik — sunucu isteği reddetti.',
+  'SYNC-007': 'Sunucu tarafında hata. Otomatik tekrar denenir.',
+  'SYNC-008': 'Sunucudan beklenmeyen yanıt.',
+  'SYNC-009': 'Sunucu yanıtı okunamadı; kaydın alınıp alınmadığı belirsiz.',
+  'SYNC-010': 'Çakışma kontrolü için bulut verisi okunamadı.',
+  'SYNC-011': 'Kaydedilmemiş değişiklik olduğu için buluttan gelen veri uygulanmadı (veri kaybı önlendi).',
+  'SYNC-012': 'Önceki oturumdan buluta gönderilememiş değişiklikler bulundu.',
+  'PULL-001': 'Bulut verisi okunamadı (ağ hatası).',
+  'PULL-002': 'Bulut verisi okunamadı (sunucu hata kodu döndü).',
+  'PULL-003': 'Açılışta bulut verisi alınamadı; bu cihazdaki veriyle devam edildi.',
+  'LOC-001': 'Tarayıcı deposuna yazılamadı (kota dolu veya gizli sekme).',
+  'LOC-002': 'Tarayıcı deposundaki veri okunamadı/bozuk.',
+  'LOC-003': 'Yedek dosyası oluşturulamadı.',
+  'JS-001': 'Beklenmeyen kod hatası — işlem yarıda kalmış olabilir.',
+  'JS-002': 'Yakalanmamış hata (promise) — işlem yarıda kalmış olabilir.',
+};
+let PANEL_ERRORS = [];
+try {
+  const _rawErr = localStorage.getItem(ERROR_LOG_KEY);
+  const _parsedErr = _rawErr ? JSON.parse(_rawErr) : [];
+  if (Array.isArray(_parsedErr)) PANEL_ERRORS = _parsedErr;
+} catch (e) { /* bozuk log kaydı önemsiz */ }
+
+function panelErrorHint(code) { return PANEL_ERROR_HINTS[code] || ''; }
+
+// Tek giriş noktası. opts.silent=true ise ekrana bildirim çıkmaz (yalnız kayda geçer).
+function panelError(code, msg, detail, opts) {
+  opts = opts || {};
+  let who = '';
+  try { who = CURRENT_USER || ''; } catch (e) { /* henüz tanımlı değil */ }
+  let view = '';
+  try { const v = document.querySelector('.view.active'); view = v ? v.id.replace('view-', '') : ''; } catch (e) {}
+  const entry = {
+    code: String(code),
+    msg: String(msg || ''),
+    detail: (detail === null || detail === undefined) ? '' : String(detail).slice(0, 400),
+    at: new Date().toISOString(),
+    view: view,
+    user: who,
+  };
+  PANEL_ERRORS.unshift(entry);
+  if (PANEL_ERRORS.length > ERROR_LOG_MAX) PANEL_ERRORS.length = ERROR_LOG_MAX;
+  try { localStorage.setItem(ERROR_LOG_KEY, JSON.stringify(PANEL_ERRORS)); } catch (e) {}
+  try { console.error('[' + entry.code + '] ' + entry.msg, entry.detail); } catch (e) {}
+  if (!opts.silent) { try { flashCode(entry.code, entry.msg); } catch (e) {} }
+  try { if (document.getElementById('hataKayitTable')) renderHataKayitlari(); } catch (e) {}
+  return entry.code;
+}
+
+// Hata kodunu görünür kılan bildirim (normal flash 3.5 sn'de kayboluyor, bu 14 sn durur).
+function flashCode(code, msg) {
+  const area = document.getElementById('flashArea');
+  if (!area) return;
+  const div = document.createElement('div');
+  div.className = 'flash flash-error';
+  div.innerHTML = '<span class="flash-code-badge">' + esc(code) + '</span>' + esc(msg)
+    + '<button type="button" class="flash-code-copy">Kodu Kopyala</button>';
+  area.innerHTML = '';
+  area.appendChild(div);
+  const btn = div.querySelector('.flash-code-copy');
+  if (btn) btn.addEventListener('click', () => copyPanelText(panelErrorLineFor(code), 'Hata kodu kopyalandı.'));
+  setTimeout(() => { if (div.parentNode) div.parentNode.removeChild(div); }, 14000);
+}
+
+function panelErrorLineFor(code) {
+  const e = PANEL_ERRORS.find(x => x.code === code) || PANEL_ERRORS[0];
+  if (!e) return code;
+  return 'MERCI PANEL HATA · ' + e.code + ' · ' + new Date(e.at).toLocaleString('tr-TR')
+    + ' · sekme=' + (e.view || '-') + ' · ' + e.msg + (e.detail ? (' · ' + e.detail) : '');
+}
+
+function panelErrorReportText() {
+  const head = 'MERCI PANEL HATA KAYITLARI (' + new Date().toLocaleString('tr-TR') + ')\n'
+    + 'panel sürümü: ' + PANEL_BUILD + ' · tarayıcı: ' + navigator.userAgent + '\n'
+    + '----------------------------------------\n';
+  if (!PANEL_ERRORS.length) return head + '(kayıt yok)';
+  return head + PANEL_ERRORS.map(e => (
+    new Date(e.at).toLocaleString('tr-TR') + '  [' + e.code + ']  sekme=' + (e.view || '-')
+    + (e.user ? ('  kullanıcı=' + e.user) : '') + '\n    ' + e.msg + (e.detail ? ('\n    ayrıntı: ' + e.detail) : '')
+  )).join('\n');
+}
+
+function copyPanelText(text, okMsg) {
+  const done = () => flash(okMsg || 'Kopyalandı.', 'success');
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, () => fallbackCopy(text, done));
+      return;
+    }
+  } catch (e) {}
+  fallbackCopy(text, done);
+}
+function fallbackCopy(text, done) {
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+    document.body.removeChild(ta); done();
+  } catch (e) { flash('Kopyalanamadı, metni elle seçin.', 'error'); }
+}
+
+// Panel sürüm damgası — hata raporunda hangi sürümün konuşulduğunu bilmek için.
+const PANEL_BUILD = '2026-09-11-sync-guard';
 
 function round2(v) { return Math.round((v||0)*100)/100; }
 function todayISO() { return new Date().toISOString().slice(0,10); }
@@ -1438,14 +1610,43 @@ function fmtDate(v) { if(!v) return '-'; const d=new Date(v+'T00:00:00'); if(isN
 function esc(v) { if (v===null||v===undefined) return ''; return String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 function loadData() {
-  let raw = localStorage.getItem(STORAGE_KEY);
+  let raw = null;
+  try { raw = localStorage.getItem(STORAGE_KEY); }
+  catch (e) { panelError('LOC-002', 'Tarayıcı deposu okunamadı, geçici veriyle açılıyor.', e && e.message, { silent: true }); }
   if (!raw) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(SEED_DATA));
-    raw = JSON.stringify(SEED_DATA);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(SEED_DATA)); } catch (e) {}
+    return JSON.parse(JSON.stringify(SEED_DATA));
   }
-  return JSON.parse(raw);
+  try { return JSON.parse(raw); }
+  catch (e) {
+    // Bozuk yerel veri: BOZUK HÂLİ SİLMEDEN boş iskeletle aç, gerçek veri buluttan gelsin.
+    panelError('LOC-002', 'Bu cihazdaki kayıt bozuk okundu; veri buluttan tazelenecek.', e && e.message, { silent: true });
+    return JSON.parse(JSON.stringify(SEED_DATA));
+  }
 }
-function saveData() { localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA)); pushCloudPanelData(); }
+// Tek kaydetme kapısı: önce cihaza yaz, sonra buluta gönder.
+// ÖNEMLİ: localStorage yazması patlarsa (kota/gizli sekme) eskiden buradan fırlayan hata
+// çağıran form handler'ını yarıda kesiyor ve bulut yazması hiç başlamıyordu. Artık hata
+// yakalanır, kayıt yine de buluta gönderilir.
+function saveData() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA)); }
+  catch (e) { panelError('LOC-001', 'Bu cihazın belleğine yazılamadı; kayıt yalnızca buluta gönderilecek.', e && e.message); }
+  markDirtyAndPush();
+}
+// Yerelde degisiklik yapildi: "buluta gitmedi" isaretini koy ve gonderimi planla.
+// saveData ve saveAuth AYNI kapidan gecer — aksi halde yalniz yonetici/sifre degisikligi
+// yapan bir islem "kirli" sayilmaz ve periyodik tazeleme onu sessizce geri alabilir.
+function markDirtyAndPush() {
+  if (!CLOUD_SYNC_READY) return;   // açılış senkronu bitmeden buluta yazma (şema göçleri)
+  CLOUD_DIRTY = true;
+  if (CLOUD_INFLIGHT) CLOUD_PENDING_AGAIN = true;
+  setRescueMark();
+  setSyncBadge('pending');
+  pushCloudPanelData();
+}
+function setRescueMark() { try { localStorage.setItem(RESCUE_KEY, JSON.stringify({ at: new Date().toISOString() })); } catch (e) {} }
+function clearRescueMark() { try { localStorage.removeItem(RESCUE_KEY); } catch (e) {} }
+function hasRescueMark() { try { return !!localStorage.getItem(RESCUE_KEY); } catch (e) { return false; } }
 let DATA = loadData();
 migrateTasksSchema();
 migratePriceTiersV2();
@@ -1540,64 +1741,296 @@ async function pullCloudPanelData(timeoutMs) {
       signal: controller.signal,
     });
     clearTimeout(timer);
-    if (!res.ok) return null;
+    if (!res.ok) {
+      let srv = '';
+      try { const j = await res.json(); srv = (j && j.code) ? j.code : ''; } catch (e) {}
+      panelError('PULL-002', 'Bulut verisi okunamadı (HTTP ' + res.status + ').', srv, { silent: true });
+      return null;
+    }
     return await res.json();
   } catch (e) {
     clearTimeout(timer);
+    panelError('PULL-001', 'Bulut verisine ulaşılamadı.', (e && e.name === 'AbortError') ? 'zaman aşımı' : (e && e.message), { silent: true });
     return null;
   }
 }
 
+// Kaydetme isteğini geciktirerek toparla (art arda düzenlemeler tek istek olsun).
 function pushCloudPanelData() {
   if (!matBackendReady()) return;
-  if (CLOUD_CONFLICT) return; // Çakışma çözülene (sayfa yenilenene) kadar yeni kayıt göndermeyi durdur.
+  if (CLOUD_CONFLICT) return; // kullanıcı kararı bekleniyor
   clearTimeout(CLOUD_SAVE_TIMER);
-  CLOUD_SAVE_TIMER = setTimeout(() => {
-    fetch(MATERIALS_API_BASE + '/api/paneldata', {
+  CLOUD_SAVE_TIMER = setTimeout(runCloudPush, CLOUD_SAVE_DEBOUNCE_MS);
+}
+
+// Asıl kaydetme. Tek seferde TEK istek uçar (paralel iki POST birbirini 409'a düşürüyordu).
+async function runCloudPush() {
+  if (!matBackendReady() || CLOUD_CONFLICT || CLOUD_RESOLVING) return;
+  if (CLOUD_INFLIGHT) { CLOUD_PENDING_AGAIN = true; return; }
+  clearTimeout(CLOUD_RETRY_TIMER);
+  CLOUD_INFLIGHT = true;
+  CLOUD_PENDING_AGAIN = false;
+  setSyncBadge('saving');
+
+  const dataJson = JSON.stringify(DATA);
+  const stampSent = CLOUD_LAST_KNOWN_UPDATED_AT;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), CLOUD_PUSH_TIMEOUT_MS);
+  let res = null, netErr = null;
+  try {
+    res = await fetch(MATERIALS_API_BASE + '/api/paneldata', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': MATERIALS_API_KEY },
-      body: JSON.stringify({ data: DATA, auth: AUTH, expectedUpdatedAt: CLOUD_LAST_KNOWN_UPDATED_AT }),
-    }).then(async (res) => {
-      if (res.status === 409) {
-        const j = await res.json().catch(() => null);
-        showCloudConflictBanner(j && j.error);
-        return;
-      }
-      if (res.status === 422) {
-        const j = await res.json().catch(() => null);
-        const det = (j && j.details && j.details[0]) ? (' (' + j.details[0].path + ': ' + j.details[0].problem + ')') : '';
-        showCloudConflictBanner((j && j.error ? j.error : 'Veri doğrulanamadı, buluta kaydedilmedi.') + det);
-        return;
-      }
-      if (!res.ok) return;
-      const j = await res.json().catch(() => null);
-      if (j && j.updatedAt) CLOUD_LAST_KNOWN_UPDATED_AT = j.updatedAt;
-    }).catch(() => {});
-  }, 700);
+      body: JSON.stringify({ data: DATA, auth: AUTH, expectedUpdatedAt: stampSent }),
+      signal: controller.signal,
+    });
+  } catch (e) { netErr = e; }
+  clearTimeout(timer);
+
+  // Yanıt gövdesi okunurken kullanıcı yeni bir kayıt yapabilir; bu yüzden "uçuşta"
+  // bayrağı gövde okunduktan SONRA iner. Aksi halde o an yapılan kayıt yanlışlıkla
+  // "gönderildi" sayılır ve korumasız kalırdı.
+  let body = null;
+  if (!netErr) { try { body = await res.json(); } catch (e) { body = null; } }
+  CLOUD_INFLIGHT = false;
+
+  if (netErr) {
+    const aborted = !!(netErr && netErr.name === 'AbortError');
+    scheduleCloudRetry(
+      aborted ? 'SYNC-002' : 'SYNC-001',
+      aborted ? 'Kaydetme zaman aşımına uğradı' : 'Sunucuya ulaşılamadı, kayıt buluta gitmedi',
+      netErr && netErr.message);
+    return;
+  }
+
+  if (res.ok) {
+    CLOUD_BASE_JSON = dataJson;
+    if (body && body.updatedAt) CLOUD_LAST_KNOWN_UPDATED_AT = body.updatedAt;
+    else panelError('SYNC-009', 'Sunucu yanıtı okunamadı; kaydın alındığı doğrulanamadı.', '', { silent: true });
+    CLOUD_RETRY_N = 0;
+    if (CLOUD_PENDING_AGAIN) { setSyncBadge('pending'); pushCloudPanelData(); }
+    else { CLOUD_DIRTY = false; clearRescueMark(); setSyncBadge('ok'); }
+    return;
+  }
+
+  const srvCode = (body && body.code) ? body.code : ('HTTP-' + res.status);
+  const srvMsg = (body && body.error) ? body.error : ('HTTP ' + res.status);
+
+  if (res.status === 409) { handleCloudConflict(srvCode, srvMsg); return; }
+
+  if (res.status === 422) {
+    const d = (body && body.details && body.details[0]) ? body.details[0] : null;
+    const det = d ? (d.path + ' → ' + d.problem) : '';
+    panelError('SYNC-005',
+      'Kaydetme iptal edildi: veride bozuk bir alan var.' + (det ? (' Sorunlu alan: ' + det) : ''),
+      srvCode + (det ? (' | ' + det) : '') + ' | toplam ' + ((body && body.details) ? body.details.length : 0) + ' sorun');
+    setSyncBadge('error', 'SYNC-005');
+    return;   // aynı veri tekrar gönderilse yine reddedilir — otomatik tekrar yok
+  }
+
+  if (res.status === 401 || res.status === 403) {
+    panelError('SYNC-006', 'Kaydetme reddedildi: sunucu yetkilendirmesi geçersiz (API anahtarı).', srvCode);
+    setSyncBadge('error', 'SYNC-006');
+    return;
+  }
+
+  if (res.status >= 500) { scheduleCloudRetry('SYNC-007', 'Sunucu hatası, kayıt alınamadı', srvCode + ' | ' + srvMsg); return; }
+  scheduleCloudRetry('SYNC-008', 'Beklenmeyen sunucu yanıtı (' + res.status + ')', srvCode + ' | ' + srvMsg);
 }
-// Başka bir cihaz araya girip veriyi güncellediği için bu cihazın kaydı reddedildiğinde
-// gösterilir. Sessizce üzerine yazmak yerine kullanıcıyı açıkça uyarıp sayfa yenilemeye
-// yönlendiriyoruz — 12 Ağustos 2026'daki veri kaybının tekrarlanmaması için eklendi.
-function showCloudConflictBanner(serverMsg) {
+
+// Geçici hatalarda (ağ/zaman aşımı/5xx) vazgeçme — artan aralıkla tekrar dene.
+function scheduleCloudRetry(code, msg, detail) {
+  CLOUD_RETRY_N++;
+  const wait = CLOUD_RETRY_STEPS[Math.min(CLOUD_RETRY_N - 1, CLOUD_RETRY_STEPS.length - 1)];
+  const loud = (CLOUD_RETRY_N === 1 || CLOUD_RETRY_N % 5 === 0);
+  panelError(code,
+    msg + '. Değişiklikleriniz bu cihazda duruyor; ' + Math.round(wait / 1000) + ' sn sonra tekrar denenecek (deneme ' + CLOUD_RETRY_N + ').',
+    detail, { silent: !loud });
+  setSyncBadge('error', code);
+  clearTimeout(CLOUD_RETRY_TIMER);
+  CLOUD_RETRY_TIMER = setTimeout(runCloudPush, wait);
+}
+
+// 409: sunucu "bu arada veri değişti" diyor. Önce GERÇEKTEN değişmiş mi diye bak.
+// Çoğu vaka sahte çakışmadır (açılışta damga alınamamış, ya da ajan/başka sekme aynı
+// veriyi yazmış). Sahte ise damgayı tazeleyip sessizce tekrar dener; gerçek ise
+// kullanıcıya sorar ve HİÇBİR ŞEYİ kendiliğinden silmez.
+async function handleCloudConflict(srvCode, srvMsg) {
+  const code = (srvCode === 'PD-409-STALE') ? 'SYNC-004' : 'SYNC-003';
+  CLOUD_RESOLVING = true;
+  const cloud = await pullCloudPanelData(20000);
+  CLOUD_RESOLVING = false;
+  if (!cloud || !cloud.data) {
+    scheduleCloudRetry('SYNC-010', 'Çakışma kontrolü için bulut verisi okunamadı', srvCode);
+    return;
+  }
+  const cloudJson = JSON.stringify(cloud.data);
+  const base = (CLOUD_BASE_JSON !== null) ? CLOUD_BASE_JSON : BOOT_LOCAL_JSON;
+  if (base !== null && cloudJson === base) {
+    CLOUD_LAST_KNOWN_UPDATED_AT = cloud.updatedAt || null;
+    CLOUD_BASE_JSON = cloudJson;
+    panelError(code + 'R', 'Bulut damgası tazelendi, kayıt otomatik tekrar deneniyor (gerçek çakışma yok).', srvCode, { silent: true });
+    CLOUD_RETRY_N = 0;
+    runCloudPush();
+    return;
+  }
+  panelError(code, 'Kaydetme iptal edildi: bulut verisi bu arada değişmiş. Hangi sürümün kalacağını seçin.', srvCode + ' | ' + srvMsg, { silent: true });
+  showSyncDecisionBar({
+    code: code,
+    headline: (code === 'SYNC-004')
+      ? 'Bu sekme bulut verisini doğrulayamadı; kaydınız güvenlik için durduruldu.'
+      : 'Bulut verisi başka bir yerden değiştirilmiş; kaydınız durduruldu.',
+    cloud: cloud,
+  });
+}
+
+// Veri kaybettirmeyen karar bandı: kullanıcı seçmeden hiçbir sürüm silinmez.
+function showSyncDecisionBar(o) {
   if (CLOUD_CONFLICT) return;
   CLOUD_CONFLICT = true;
+  clearTimeout(CLOUD_RETRY_TIMER);
+  setSyncBadge('conflict', o.code);
+  const old = document.getElementById('cloudConflictBanner');
+  if (old && old.parentNode) old.parentNode.removeChild(old);
+
   const bar = document.createElement('div');
   bar.id = 'cloudConflictBanner';
-  bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#c0392b;color:#fff;text-align:center;padding:12px 16px;font-family:-apple-system,Arial,sans-serif;font-size:13.5px;font-weight:600;box-shadow:0 2px 10px rgba(0,0,0,0.3);';
-  const msg = serverMsg && String(serverMsg).trim()
-    ? esc(serverMsg)
-    : 'Başka bir cihaz bu arada veriyi güncelledi. Değişiklikleriniz kaydedilmedi.';
-  bar.innerHTML = '⚠️ ' + msg + ' — veri kaybını önlemek için sayfayı yenileyin. <button onclick="location.reload()" style="margin-left:10px;background:#fff;color:#c0392b;border:none;padding:6px 14px;border-radius:6px;font-weight:700;cursor:pointer;">Sayfayı Yenile</button>';
+  bar.className = 'sync-bar';
+  bar.innerHTML =
+    '<span class="sync-bar-msg"><span class="code">' + esc(o.code) + '</span>⚠️ ' + esc(o.headline) + '</span>'
+    + '<button type="button" id="syncKeepMine">Benim Sürümüm Kalsın</button>'
+    + '<button type="button" class="ghost" id="syncTakeCloud">Bulut Sürümünü Al</button>'
+    + '<button type="button" class="ghost" id="syncDownload">Yedeğimi İndir</button>'
+    + '<span class="sync-bar-detail">' + esc(cloudDiffSummary(o.cloud.data))
+    + ' — "Benim sürümüm" seçilirse bulut sürümü sunucuda otomatik yedeklenir (Yöneticiler &gt; Veri Yedekleri).</span>';
   document.body.appendChild(bar);
+
+  document.getElementById('syncDownload').addEventListener('click', downloadLocalBackup);
+  document.getElementById('syncTakeCloud').addEventListener('click', () => {
+    if (!confirm('Buluttaki sürüm alınacak. Bu cihazda kaydedilmemiş değişiklikleriniz kaybolur.\n\nÖnce "Yedeğimi İndir" ile kopya almanız önerilir. Devam edilsin mi?')) return;
+    CLOUD_CONFLICT = false;
+    CLOUD_DIRTY = false;
+    CLOUD_PENDING_AGAIN = false;
+    clearRescueMark();
+    adoptCloudSnapshot(o.cloud, { force: true });
+    removeSyncDecisionBar();
+    try { renderAll(); populateLoginNames(); } catch (e) {}
+    flash('Bulut sürümü alındı.', 'success');
+    setSyncBadge(CLOUD_DIRTY ? 'pending' : 'ok');   // göç fonksiyonları yeni değişiklik üretmiş olabilir
+  });
+  document.getElementById('syncKeepMine').addEventListener('click', () => {
+    if (!confirm('Bu cihazdaki sürüm buluta yazılacak ve buluttaki değişiklikler onun yerini alacak.\n\nBulut sürümü sunucuda otomatik yedeklenir. Devam edilsin mi?')) return;
+    CLOUD_CONFLICT = false;
+    CLOUD_LAST_KNOWN_UPDATED_AT = o.cloud.updatedAt || null;   // taze damga = bilinçli üzerine yazma
+    CLOUD_BASE_JSON = JSON.stringify(o.cloud.data);
+    CLOUD_RETRY_N = 0;
+    removeSyncDecisionBar();
+    setSyncBadge('saving');
+    runCloudPush();
+  });
+}
+function removeSyncDecisionBar() {
+  const bar = document.getElementById('cloudConflictBanner');
+  if (bar && bar.parentNode) bar.parentNode.removeChild(bar);
+}
+
+// İki sürüm arasındaki kayıt sayısı farkını insan diliyle özetler (karar vermeyi kolaylaştırır).
+function cloudDiffSummary(cloudData) {
+  const labels = {
+    jobs: 'İşler', customers: 'Müşteriler', incomes: 'Gelir', expenses: 'Gider',
+    tasks: 'Görevler', uretimTakip: 'Üretim', pipeline: 'Potansiyel', debts: 'Borç-Alacak',
+    invoices: 'Faturalar', suppliers: 'Tedarikçi', okulTakip: 'Okul Takip', okulMail: 'Okul Mail',
+    fixedExpenses: 'Sabit Gider', leads: 'Lead',
+  };
+  const parts = [];
+  Object.keys(labels).forEach(k => {
+    const mine = Array.isArray(DATA[k]) ? DATA[k].length : 0;
+    const theirs = (cloudData && Array.isArray(cloudData[k])) ? cloudData[k].length : 0;
+    if (mine !== theirs) parts.push(labels[k] + ': sizde ' + mine + ', bulutta ' + theirs);
+  });
+  return parts.length ? ('Fark — ' + parts.join(' · ')) : 'Kayıt sayıları aynı, içerik farklı.';
+}
+
+function downloadLocalBackup() {
+  try {
+    const blob = new Blob([JSON.stringify({ data: DATA, auth: AUTH, savedAt: new Date().toISOString() }, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'merci-panel-yedek-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.json';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => { try { URL.revokeObjectURL(url); } catch (e) {} }, 5000);
+    flash('Yedek dosyası indirildi.', 'success');
+  } catch (e) { panelError('LOC-003', 'Yedek dosyası oluşturulamadı.', e && e.message); }
+}
+
+// Başlıktaki bulut kayıt rozeti — kaydın gerçekten gidip gitmediği artık görünür.
+function setSyncBadge(state, code) {
+  SYNC_BADGE_STATE = state;
+  const el = document.getElementById('syncBadge');
+  if (!el) return;
+  const map = {
+    init:     { cls: '',     text: 'Bağlanıyor…',   title: 'Bulut bağlantısı kuruluyor.' },
+    stale:    { cls: 'busy', text: 'Bulut bekleniyor', title: 'Bulut verisi alınamadı; bu cihazdaki veriyle devam ediliyor.' },
+    ok:       { cls: '',     text: 'Kayıtlı',       title: 'Tüm değişiklikler buluta kaydedildi.' },
+    saving:   { cls: 'busy', text: 'Kaydediliyor…', title: 'Değişiklikler buluta gönderiliyor.' },
+    pending:  { cls: 'busy', text: 'Bekliyor…',     title: 'Kaydedilecek değişiklik var.' },
+    error:    { cls: 'err',  text: 'Kaydedilmedi',  title: 'Kaydetme başarısız — Yöneticiler & Ayarlar > Hata Kayıtları' },
+    conflict: { cls: 'err',  text: 'Çakışma',       title: 'Bulut verisi değişmiş, seçim bekleniyor.' },
+    offline:  { cls: 'err',  text: 'Çevrimdışı',    title: 'İnternet bağlantısı yok; değişiklikler cihazda bekliyor.' },
+  };
+  const m = map[state] || map.ok;
+  el.className = 'sync-badge ' + m.cls;
+  el.textContent = m.text + (code ? (' · ' + code) : '');
+  el.title = m.title + (code ? ('\nHata kodu: ' + code + (panelErrorHint(code) ? ('\n' + panelErrorHint(code)) : '')) : '');
+}
+
+// Buluttan gelen veriyi uygulamanın TEK yolu. Kaydedilmemiş değişiklik varken uygulamaz.
+function adoptCloudSnapshot(cloud, opts) {
+  opts = opts || {};
+  if (!cloud || !cloud.data) return false;
+  if (!opts.force && (CLOUD_DIRTY || CLOUD_INFLIGHT)) {
+    panelError('SYNC-011', 'Kaydedilmemiş değişiklik olduğu için buluttan gelen veri uygulanmadı.', '', { silent: true });
+    pushCloudPanelData();
+    return false;
+  }
+  DATA = cloud.data;
+  if (cloud.auth) AUTH = cloud.auth;
+  CLOUD_LAST_KNOWN_UPDATED_AT = cloud.updatedAt || null;
+  CLOUD_BASE_JSON = JSON.stringify(cloud.data);
+  // Buluttan gelen veri henüz eski yapıda olabilir — göç fonksiyonlarını tekrar çalıştır.
+  migrateTasksSchema();
+  migratePriceTiersV2();
+  migrateHedeflerAylik();
+  migrateSupplierCategories();
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA));
+    localStorage.setItem(AUTH_KEY, JSON.stringify(AUTH));
+  } catch (e) { panelError('LOC-001', 'Bulut verisi bu cihaza yazılamadı (kota?).', e && e.message, { silent: true }); }
+  return true;
 }
 async function matApi(path, opts) {
   opts = opts || {};
   const headers = Object.assign({ 'x-api-key': MATERIALS_API_KEY }, opts.headers || {});
-  const res = await fetch(MATERIALS_API_BASE + path, Object.assign({}, opts, { headers }));
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), opts.timeoutMs || 90000);
+  let res;
+  try {
+    res = await fetch(MATERIALS_API_BASE + path, Object.assign({}, opts, { headers, signal: controller.signal }));
+  } catch (e) {
+    clearTimeout(timer);
+    const code = (e && e.name === 'AbortError') ? 'API-TIMEOUT' : 'API-NET';
+    panelError(code, 'Sunucuya ulaşılamadı: ' + path, e && e.message, { silent: true });
+    throw new Error('Sunucuya ulaşılamadı [' + code + ']');
+  }
+  clearTimeout(timer);
   if (!res.ok) {
     let msg = 'İstek başarısız (' + res.status + ')';
-    try { const j = await res.json(); if (j.error) msg = j.error; } catch(e) {}
-    throw new Error(msg);
+    let srv = '';
+    try { const j = await res.json(); if (j && j.error) msg = j.error; if (j && j.code) srv = j.code; } catch (e) {}
+    const code = 'API-' + res.status;
+    panelError(code, msg + ' — ' + path, srv, { silent: true });
+    throw new Error(msg + ' [' + code + (srv ? ('/' + srv) : '') + ']');
   }
   return res;
 }
@@ -1913,7 +2346,11 @@ function loadAuth() {
   }
   return JSON.parse(raw);
 }
-function saveAuth() { localStorage.setItem(AUTH_KEY, JSON.stringify(AUTH)); pushCloudPanelData(); }
+function saveAuth() {
+  try { localStorage.setItem(AUTH_KEY, JSON.stringify(AUTH)); }
+  catch (e) { panelError('LOC-001', 'Yönetici/şifre değişikliği bu cihaza yazılamadı; yalnızca buluta gönderilecek.', e && e.message); }
+  markDirtyAndPush();
+}
 let AUTH = loadAuth();
 let CURRENT_USER = null;
 
@@ -4419,6 +4856,28 @@ function renderYoneticiler() {
     }
   }});
   renderYedekler();
+  renderHataKayitlari();
+}
+
+// ---------------- HATA KAYITLARI ----------------
+// Paneldeki her iptal olmuş işlemin kodu, açıklaması ve teknik ayrıntısı burada.
+function renderHataKayitlari() {
+  const table = document.getElementById('hataKayitTable');
+  if (!table) return;
+  const head = '<thead><tr><th style="width:145px;">Zaman</th><th style="width:105px;">Kod</th><th>Ne oldu</th><th style="width:110px;">Sekme</th></tr></thead>';
+  if (!PANEL_ERRORS.length) {
+    table.innerHTML = head + '<tbody><tr><td colspan="4" style="color:var(--muted);">Kayıtlı hata yok — iptal olan bir işlem olmamış.</td></tr></tbody>';
+    return;
+  }
+  table.innerHTML = head + '<tbody>' + PANEL_ERRORS.map(e => (
+    '<tr><td>' + esc(new Date(e.at).toLocaleString('tr-TR')) + '</td>'
+    + '<td class="err-code-cell">' + esc(e.code) + '</td>'
+    + '<td>' + esc(e.msg)
+      + (panelErrorHint(e.code) ? '<div style="color:var(--muted);font-size:11.5px;margin-top:3px;">' + esc(panelErrorHint(e.code)) + '</div>' : '')
+      + (e.detail ? '<div style="color:var(--muted);font-size:11.5px;margin-top:2px;font-family:ui-monospace,Menlo,monospace;word-break:break-word;">' + esc(e.detail) + '</div>' : '')
+    + '</td>'
+    + '<td>' + esc(e.view || '—') + '</td></tr>'
+  )).join('') + '</tbody>';
 }
 function populateLoginNames() {
   const sel = document.getElementById('loginName');
@@ -4460,20 +4919,32 @@ async function restoreYedek(filename) {
     const res = await matApi('/api/paneldata/backups/' + encodeURIComponent(filename));
     const backup = await res.json();
     if (!backup || !backup.data) { flash('Yedek verisi okunamadı.', 'error'); return; }
-    await matApi('/api/paneldata', {
+    // Sunucu bayat yazmaları reddediyor: önce güncel damgayı al, geri yüklemeyi onunla gönder.
+    // (Damga gönderilmediği için geri yükleme 409 alıp sessizce başarısız oluyordu.)
+    const cur = await pullCloudPanelData(20000);
+    const saveRes = await matApi('/api/paneldata', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ data: backup.data, auth: backup.auth || AUTH }),
+      body: JSON.stringify({ data: backup.data, auth: backup.auth || AUTH, expectedUpdatedAt: cur ? (cur.updatedAt || null) : null }),
     });
+    const saved = await saveRes.json().catch(() => null);
     DATA = backup.data;
     if (backup.auth) AUTH = backup.auth;
+    CLOUD_LAST_KNOWN_UPDATED_AT = (saved && saved.updatedAt) ? saved.updatedAt : null;
+    CLOUD_BASE_JSON = JSON.stringify(backup.data);
+    CLOUD_DIRTY = false;
+    CLOUD_PENDING_AGAIN = false;
+    clearRescueMark();
+    setSyncBadge('ok');
     // Buluttan/eski bir yedekten gelen veri henüz en güncel şema göçlerini içermeyebilir.
     migrateTasksSchema();
     migratePriceTiersV2();
     migrateHedeflerAylik();
     migrateSupplierCategories();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA));
-    localStorage.setItem(AUTH_KEY, JSON.stringify(AUTH));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA));
+      localStorage.setItem(AUTH_KEY, JSON.stringify(AUTH));
+    } catch (e) { panelError('LOC-001', 'Geri yüklenen veri bu cihaza yazılamadı.', e && e.message, { silent: true }); }
     flash('Yedek geri yüklendi.');
     renderAll();
     renderYedekler();
@@ -4482,6 +4953,27 @@ async function restoreYedek(filename) {
   }
 }
 document.getElementById('btnRefreshYedekler').addEventListener('click', renderYedekler);
+document.getElementById('btnRefreshHataKayit').addEventListener('click', renderHataKayitlari);
+document.getElementById('btnCopyHataKayit').addEventListener('click', () => copyPanelText(panelErrorReportText(), 'Hata kayıtları kopyalandı — mesaj olarak gönderebilirsiniz.'));
+document.getElementById('btnClearHataKayit').addEventListener('click', () => {
+  if (!confirm('Hata kayıtları silinsin mi? (Yalnızca bu cihazdaki kayıt listesi temizlenir, veriye dokunulmaz.)')) return;
+  PANEL_ERRORS = [];
+  try { localStorage.removeItem(ERROR_LOG_KEY); } catch (e) {}
+  renderHataKayitlari();
+  flash('Hata kayıtları temizlendi.', 'success');
+});
+// Başlıktaki kayıt rozeti: tıklayınca hata kayıtlarına götürür.
+(function wireSyncBadge() {
+  const b = document.getElementById('syncBadge');
+  if (!b) return;
+  b.addEventListener('click', () => {
+    if (CLOUD_DIRTY && !CLOUD_INFLIGHT && !CLOUD_CONFLICT) { CLOUD_RETRY_N = 0; runCloudPush(); }
+    switchView('yoneticiler');
+    renderYoneticiler();
+    const t = document.getElementById('hataKayitTable');
+    if (t) t.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+})();
 document.getElementById('formYonetici').addEventListener('submit', (e) => {
   e.preventDefault();
   const fd = new FormData(e.target);
@@ -5804,7 +6296,7 @@ async function sdrShowCandidates(id) {
           body: JSON.stringify({ researchId: id, candidateIndexes: idx, source_query: rec.query }),
         })).json();
         flash((r.created || []).length + ' lead eklendi' + (r.skipped && r.skipped.length ? ', ' + r.skipped.length + ' atlandı (zaten kayıtlı)' : '') + '.', 'success');
-        if (r.updatedAt) { const c = await pullCloudPanelData(6000); if (c && c.data) { DATA = c.data; CLOUD_LAST_KNOWN_UPDATED_AT = c.updatedAt; localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA)); } }
+        if (r.updatedAt) { const c = await pullCloudPanelData(6000); adoptCloudSnapshot(c); }
         renderSatisAjani();
       } catch (e) { flash('Aktarılamadı: ' + e.message, 'error'); }
     });
@@ -5867,7 +6359,7 @@ function sdrRenderLeadTable() {
   table.querySelectorAll('tr[data-id]').forEach(tr => tr.addEventListener('click', () => sdrOpenLead(parseInt(tr.dataset.id, 10))));
 }
 async function sdrRefreshFromCloud() {
-  try { const c = await pullCloudPanelData(6000); if (c && c.data) { DATA = c.data; CLOUD_LAST_KNOWN_UPDATED_AT = c.updatedAt; localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA)); } } catch (e) {}
+  try { const c = await pullCloudPanelData(6000); adoptCloudSnapshot(c); } catch (e) {}
 }
 function sdrOpenLead(id) {
   const l = sdrLeads().find(x => x.id === id);
@@ -6191,6 +6683,16 @@ function enterApp(userName) {
   document.getElementById('currentUserLabel').textContent = userName;
   switchView('dashboard');
   renderAll();
+  // Önceki oturumda buluta gönderilemeyen değişiklikler varsa kullanıcı karar versin.
+  if (PENDING_UNSYNCED_CLOUD) {
+    const c = PENDING_UNSYNCED_CLOUD;
+    PENDING_UNSYNCED_CLOUD = null;
+    showSyncDecisionBar({
+      code: 'SYNC-012',
+      headline: 'Önceki oturumdan buluta gönderilememiş değişiklikler var ve bulut sürümü de farklı.',
+      cloud: c,
+    });
+  }
 }
 
 document.getElementById('loginForm').addEventListener('submit', (e) => {
@@ -6228,24 +6730,34 @@ function initSession() {
 
 // Sayfa açılışında bulut verisini çek (İşler, Gelir, Gider, Görevler vb. ekip arasında ortak olsun).
 // Bulut ulaşılamazsa (offline) bu cihazdaki en son bilinen veriyle devam eder.
-function applyCloudSnapshot(cloud) {
-  if (!cloud || !cloud.data) return false;
-  DATA = cloud.data;
-  if (cloud.auth) AUTH = cloud.auth;
-  CLOUD_LAST_KNOWN_UPDATED_AT = cloud.updatedAt || null;
-  // Buluttan gelen veri henüz eski yapıda olabilir — göç fonksiyonlarını tekrar çalıştır.
-  migrateTasksSchema();
-  migratePriceTiersV2();
-  migrateHedeflerAylik();
-  migrateSupplierCategories();
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA));
-  localStorage.setItem(AUTH_KEY, JSON.stringify(AUTH));
-  return true;
-}
+let PENDING_UNSYNCED_CLOUD = null;
+function applyCloudSnapshot(cloud) { return adoptCloudSnapshot(cloud); }
 (async function bootCloudSync() {
+  // Oturuma hangi veriyle başladığımızı not et: sahte çakışmaları (sunucu gerçekte değişmemiş,
+  // yalnız damga eksik) bununla ayırt edip kullanıcıyı rahatsız etmeden kendiliğinden düzeltiriz.
+  BOOT_LOCAL_JSON = JSON.stringify(DATA);
+  const hadUnsynced = hasRescueMark();
   const cloud = await pullCloudPanelData(8000);
-  const ok = applyCloudSnapshot(cloud);
+  let ok = false;
+  if (cloud && cloud.data) {
+    const cloudJson = JSON.stringify(cloud.data);
+    if (hadUnsynced && cloudJson !== BOOT_LOCAL_JSON) {
+      // Geçen oturumda buluta ulaşmamış değişiklikler var ve bulut da farklı. Hiçbirini silme:
+      // damgayı al, yerel veriyi koru, girişten sonra kullanıcıya sor.
+      CLOUD_LAST_KNOWN_UPDATED_AT = cloud.updatedAt || null;
+      CLOUD_BASE_JSON = cloudJson;
+      PENDING_UNSYNCED_CLOUD = cloud;
+      ok = true;
+      panelError('SYNC-012', 'Önceki oturumdan buluta gönderilememiş değişiklikler bulundu; karar bekleniyor.', '', { silent: true });
+    } else {
+      ok = adoptCloudSnapshot(cloud, { force: true });
+      clearRescueMark();
+    }
+  } else {
+    panelError('PULL-003', 'Açılışta bulut verisi alınamadı; bu cihazdaki veriyle devam ediliyor.', '', { silent: true });
+  }
   CLOUD_SYNC_READY = true;
+  setSyncBadge(ok ? 'ok' : 'stale', ok ? null : 'PULL-003');
   populateLoginNames();
   const submitBtn = document.getElementById('loginSubmitBtn');
   const syncNote = document.getElementById('loginSyncNote');
@@ -6263,7 +6775,9 @@ function applyCloudSnapshot(cloud) {
         await new Promise((r) => setTimeout(r, 5000 + i * 5000));
         if (CLOUD_CONFLICT) return;
         const c = await pullCloudPanelData(8000);
-        if (applyCloudSnapshot(c)) {
+        if (c && c.data && adoptCloudSnapshot(c)) {
+          clearRescueMark();
+          setSyncBadge(CLOUD_DIRTY ? 'pending' : 'ok');
           try { renderAll(); populateLoginNames(); } catch (e) {}
           return;
         }
@@ -6275,55 +6789,75 @@ function applyCloudSnapshot(cloud) {
 // Uygulama açıkken periyodik olarak buluttaki en güncel veriyi kontrol et (ekip arkadaşlarının
 // eklediği kayıtlar otomatik görünsün). Açık bir pencere/form varsa araya girmemek için o an
 // atlanır, bir sonraki turda tekrar denenir.
-setInterval(async () => {
-  if (!CLOUD_SYNC_READY) return;
-  if (document.getElementById('appShell').classList.contains('hidden')) return;
+//
+// KRİTİK: Bu tazeleme eskiden "kaydedilmemiş değişiklik var mı" diye BAKMIYORDU. Kaydet'e
+// basıldıktan sonra bulut yazması tamamlanmadan gelen bir tur, yeni girilen kaydı bellekten
+// ve ekrandan siliyor, ardından bekleyen yazma bu silinmiş hâli buluta göndererek kaybı
+// kalıcı yapıyordu. Artık kaydedilmemiş değişiklik varken buluttan gelen veri UYGULANMAZ;
+// bunun yerine bekleyen kayıt tekrar gönderilir.
+async function cloudRefreshTick() {
+  if (!CLOUD_SYNC_READY || CLOUD_CONFLICT) return;
+  if (CLOUD_DIRTY || CLOUD_INFLIGHT) { pushCloudPanelData(); return; }
+  const shell = document.getElementById('appShell');
+  if (!shell || shell.classList.contains('hidden')) return;
   if (document.querySelector('.modal-overlay.active')) return;
   const active = document.activeElement;
   if (active && ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName)) return;
   const cloud = await pullCloudPanelData(7000);
   if (!cloud || !cloud.data) return;
-  CLOUD_LAST_KNOWN_UPDATED_AT = cloud.updatedAt || null;
-  const newSnapshot = JSON.stringify(cloud.data) + JSON.stringify(cloud.auth || {});
-  const curSnapshot = JSON.stringify(DATA) + JSON.stringify(AUTH);
-  if (newSnapshot === curSnapshot) return;
-  DATA = cloud.data;
-  if (cloud.auth) AUTH = cloud.auth;
-  migrateTasksSchema();
-  migratePriceTiersV2();
-  migrateHedeflerAylik();
-  migrateSupplierCategories();
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA));
-  localStorage.setItem(AUTH_KEY, JSON.stringify(AUTH));
+  if (CLOUD_DIRTY || CLOUD_INFLIGHT || CLOUD_CONFLICT) return;   // istek sürerken düzenleme yapılmış olabilir
+  const cloudJson = JSON.stringify(cloud.data);
+  if (CLOUD_BASE_JSON !== null && cloudJson === CLOUD_BASE_JSON) {
+    CLOUD_LAST_KNOWN_UPDATED_AT = cloud.updatedAt || null;   // sunucu değişmemiş, yalnız damga tazelendi
+    return;
+  }
+  const theirs = cloudJson + JSON.stringify(cloud.auth || {});
+  const mine = JSON.stringify(DATA) + JSON.stringify(AUTH);
+  if (theirs === mine) {
+    CLOUD_LAST_KNOWN_UPDATED_AT = cloud.updatedAt || null;
+    CLOUD_BASE_JSON = cloudJson;
+    return;
+  }
+  if (!adoptCloudSnapshot(cloud)) return;
   renderAll();
   populateLoginNames();
-}, 25000);
+}
+setInterval(cloudRefreshTick, 25000);
 
 // Sekme uzun süre arka planda kalıp (bilgisayar uyudu, sekme değiştirildi vb.) tekrar öne
-// geldiğinde hemen bir kez bulut verisini tazele. Böylece "günlerdir arka planda açık kalmış
-// bayat bir sekme" senaryosunda, kullanıcı bir şey düzenlemeden ÖNCE veri güncel hale gelir —
-// 12 Ağustos 2026'daki veri kaybının olası nedenlerinden birine karşı ek önlem.
-document.addEventListener('visibilitychange', async () => {
+// geldiğinde: bekleyen bir kayıt varsa ÖNCE onu gönder, yoksa bulut verisini tazele.
+document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
-  if (!CLOUD_SYNC_READY || CLOUD_CONFLICT) return;
-  if (document.querySelector('.modal-overlay.active')) return;
-  const active = document.activeElement;
-  if (active && ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName)) return;
-  const cloud = await pullCloudPanelData(7000);
-  if (!cloud || !cloud.data) return;
-  CLOUD_LAST_KNOWN_UPDATED_AT = cloud.updatedAt || null;
-  const newSnapshot = JSON.stringify(cloud.data) + JSON.stringify(cloud.auth || {});
-  const curSnapshot = JSON.stringify(DATA) + JSON.stringify(AUTH);
-  if (newSnapshot === curSnapshot) return;
-  DATA = cloud.data;
-  if (cloud.auth) AUTH = cloud.auth;
-  migrateTasksSchema();
-  migratePriceTiersV2();
-  migrateHedeflerAylik();
-  migrateSupplierCategories();
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA));
-  localStorage.setItem(AUTH_KEY, JSON.stringify(AUTH));
-  renderAll();
-  populateLoginNames();
+  if (CLOUD_DIRTY && !CLOUD_INFLIGHT && !CLOUD_CONFLICT) { CLOUD_RETRY_N = 0; runCloudPush(); return; }
+  cloudRefreshTick();
+});
+
+// İnternet geri geldiğinde bekleyen kaydı hemen dene (kullanıcı hatırlatmak zorunda kalmasın).
+window.addEventListener('online', () => {
+  if (CLOUD_DIRTY && !CLOUD_CONFLICT) { CLOUD_RETRY_N = 0; setSyncBadge('pending'); runCloudPush(); }
+  else if (SYNC_BADGE_STATE === 'offline') setSyncBadge('ok');
+});
+window.addEventListener('offline', () => { if (!CLOUD_CONFLICT) setSyncBadge('offline'); });
+
+// Kaydedilmemiş değişiklik varken sekmeyi kapatmak = veri kaybı. Tarayıcı uyarsın.
+window.addEventListener('beforeunload', (e) => {
+  if (!CLOUD_DIRTY) return;
+  e.preventDefault();
+  e.returnValue = '';
+  return '';
+});
+
+// Beklenmeyen kod hataları da sessiz kalmasın: bir işlem yarıda kaldıysa kodu görünsün.
+window.addEventListener('error', (ev) => {
+  try {
+    const where = ev && ev.filename ? (String(ev.filename).split('/').pop() + ':' + ev.lineno + ':' + ev.colno) : '';
+    panelError('JS-001', 'İşlem beklenmeyen bir hata yüzünden yarıda kaldı: ' + ((ev && ev.message) || ''), where);
+  } catch (e) {}
+});
+window.addEventListener('unhandledrejection', (ev) => {
+  try {
+    const r = ev && ev.reason;
+    panelError('JS-002', 'İşlem tamamlanamadı: ' + ((r && r.message) || String(r || '')), (r && r.stack) ? String(r.stack).slice(0, 300) : '');
+  } catch (e) {}
 });
 </script>

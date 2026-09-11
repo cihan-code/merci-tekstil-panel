@@ -346,51 +346,132 @@ let selectedFabricColor = null;
 let kmContext = null; // {fabricId, type}
 let nmContext = null; // {sampleId}
 
-function setSyncStatus(kind, updatedAt){
+// info: 'ok' durumunda sunucu damgası, 'error' durumunda hata kodu (ör. STOK-001).
+function setSyncStatus(kind, info){
   const el = document.getElementById('syncStatus');
   if(!el) return;
   if(kind === 'loading') el.textContent = '🔄 Yükleniyor...';
   else if(kind === 'saving') el.textContent = '🔄 Kaydediliyor...';
-  else if(kind === 'ok') el.textContent = '🟢 Bağlı' + (updatedAt ? (' · ' + new Date(updatedAt).toLocaleTimeString('tr-TR')) : '');
-  else el.textContent = '🔴 Bağlantı hatası — API anahtarını kontrol edin';
+  else if(kind === 'pending') el.textContent = '🟡 Kaydedilmedi — bekliyor';
+  else if(kind === 'ok') el.textContent = '🟢 Kayıtlı' + (info ? (' · ' + new Date(info).toLocaleTimeString('tr-TR')) : '');
+  else el.textContent = '🔴 Kaydedilmedi' + (info ? (' · ' + info) : '') + ' — tekrar denenecek';
+  el.title = STOK_LAST_ERROR
+    ? ('Son hata kodu: ' + STOK_LAST_ERROR.code + '\n' + STOK_LAST_ERROR.msg + '\n' + new Date(STOK_LAST_ERROR.at).toLocaleString('tr-TR'))
+    : 'Bulut kayıt durumu';
+}
+// Stok sayfası hata kodları — ana paneldeki sistemin küçük kardeşi.
+// STOK-001 ağ · STOK-002 zaman aşımı · STOK-003 sunucu hatası · STOK-004 okuma hatası
+let STOK_LAST_ERROR = null;
+function stokError(code, msg, detail){
+  STOK_LAST_ERROR = { code: code, msg: msg, detail: String(detail || ''), at: new Date().toISOString() };
+  try { console.error('[' + code + '] ' + msg, detail); } catch(e){}
+  try {
+    const KEY = 'merciPanelErrors_v1';   // ana panelle AYNI kayıt defteri
+    const list = JSON.parse(localStorage.getItem(KEY) || '[]');
+    list.unshift({ code: code, msg: msg, detail: String(detail || '').slice(0,400), at: STOK_LAST_ERROR.at, view: 'stok', user: '' });
+    localStorage.setItem(KEY, JSON.stringify(list.slice(0, 60)));
+  } catch(e){}
+  return code;
 }
 
-async function loadState(){
+// KRİTİK: bu tazeleme eskiden "kaydedilmemiş değişiklik var mı" diye bakmadan yerel
+// veriyi sunucudakiyle DEĞİŞTİRİYORDU. Kaydet'ten hemen sonra (500 ms gecikme + istek
+// süresi içinde) gelen 20 sn'lik tur, yeni girilen kaydı siliyordu. Artık bekleyen kayıt
+// varken tazeleme atlanır ve bunun yerine kayıt tekrar denenir.
+async function loadState(opts){
+  opts = opts || {};
+  if(!opts.force && (STOK_DIRTY || STOK_INFLIGHT)){ saveState(); return; }
   setSyncStatus('loading');
   try{
-    const res = await fetch(API_BASE + '/api/stokdata', { headers: { 'x-api-key': API_KEY } });
+    const controller = new AbortController();
+    const timer = setTimeout(()=> controller.abort(), 30000);
+    const res = await fetch(API_BASE + '/api/stokdata', { headers: { 'x-api-key': API_KEY }, signal: controller.signal });
+    clearTimeout(timer);
     if(res.ok){
       const json = await res.json();
+      if(STOK_DIRTY || STOK_INFLIGHT){ setSyncStatus('pending'); return; }   // istek sürerken düzenleme yapılmış
       if(json && json.data){
         state = Object.assign({fabrics:[],movements:[],samples:[],sampleMovements:[]}, json.data);
       }
+      STOK_LAST_ERROR = null;
       setSyncStatus('ok', json.updatedAt);
     } else {
-      setSyncStatus('error');
+      let srv = '';
+      try { const j = await res.json(); srv = (j && j.code) ? j.code : ''; } catch(e){}
+      setSyncStatus('error', stokError('STOK-004', 'Stok verisi okunamadı (HTTP ' + res.status + ')', srv));
     }
-  }catch(e){ setSyncStatus('error'); }
+  }catch(e){
+    setSyncStatus('error', stokError(e && e.name === 'AbortError' ? 'STOK-002' : 'STOK-001', 'Stok verisi okunamadı', e && e.message));
+  }
   renderAll();
 }
 
 let saveTimer = null;
+let STOK_DIRTY = false;
+let STOK_INFLIGHT = false;
+let STOK_PENDING_AGAIN = false;
+let STOK_RETRY_N = 0;
+let STOK_RETRY_TIMER = null;
+const STOK_RETRY_STEPS = [2000, 5000, 10000, 20000, 30000, 60000];
+
 async function saveState(){
+  STOK_DIRTY = true;
+  if(STOK_INFLIGHT){ STOK_PENDING_AGAIN = true; return; }
+  setSyncStatus('pending');
   clearTimeout(saveTimer);
   return new Promise((resolve)=>{
-    saveTimer = setTimeout(async ()=>{
-      setSyncStatus('saving');
-      try{
-        const res = await fetch(API_BASE + '/api/stokdata', {
-          method: 'POST',
-          headers: { 'Content-Type':'application/json', 'x-api-key': API_KEY },
-          body: JSON.stringify({ data: state })
-        });
-        if(res.ok){ const json = await res.json(); setSyncStatus('ok', json.updatedAt); }
-        else setSyncStatus('error');
-      }catch(e){ setSyncStatus('error'); }
-      resolve();
-    }, 500);
+    saveTimer = setTimeout(async ()=>{ await runStokSave(); resolve(); }, 500);
   });
 }
+
+async function runStokSave(){
+  if(STOK_INFLIGHT){ STOK_PENDING_AGAIN = true; return; }
+  clearTimeout(STOK_RETRY_TIMER);
+  STOK_INFLIGHT = true;
+  STOK_PENDING_AGAIN = false;
+  setSyncStatus('saving');
+  const controller = new AbortController();
+  const timer = setTimeout(()=> controller.abort(), 45000);
+  let res = null, netErr = null;
+  try{
+    res = await fetch(API_BASE + '/api/stokdata', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'x-api-key': API_KEY },
+      body: JSON.stringify({ data: state }),
+      signal: controller.signal
+    });
+  }catch(e){ netErr = e; }
+  clearTimeout(timer);
+  STOK_INFLIGHT = false;
+
+  if(netErr){
+    scheduleStokRetry(netErr.name === 'AbortError' ? 'STOK-002' : 'STOK-001', 'Stok kaydı sunucuya gönderilemedi', netErr.message);
+    return;
+  }
+  if(res.ok){
+    const json = await res.json().catch(()=>null);
+    STOK_RETRY_N = 0;
+    STOK_LAST_ERROR = null;
+    if(STOK_PENDING_AGAIN){ setSyncStatus('pending'); clearTimeout(saveTimer); saveTimer = setTimeout(runStokSave, 500); }
+    else { STOK_DIRTY = false; setSyncStatus('ok', json && json.updatedAt); }
+    return;
+  }
+  let srv = '';
+  try { const j = await res.json(); srv = (j && j.code) ? j.code : ''; } catch(e){}
+  scheduleStokRetry('STOK-003', 'Sunucu stok kaydını reddetti (HTTP ' + res.status + ')', srv);
+}
+
+function scheduleStokRetry(code, msg, detail){
+  STOK_RETRY_N++;
+  const wait = STOK_RETRY_STEPS[Math.min(STOK_RETRY_N - 1, STOK_RETRY_STEPS.length - 1)];
+  stokError(code, msg + ' — veri bu cihazda duruyor, ' + Math.round(wait/1000) + ' sn sonra tekrar denenecek (deneme ' + STOK_RETRY_N + ')', detail);
+  setSyncStatus('error', code);
+  clearTimeout(STOK_RETRY_TIMER);
+  STOK_RETRY_TIMER = setTimeout(runStokSave, wait);
+}
+
+window.addEventListener('online', ()=>{ if(STOK_DIRTY){ STOK_RETRY_N = 0; runStokSave(); } });
+window.addEventListener('beforeunload', (e)=>{ if(!STOK_DIRTY) return; e.preventDefault(); e.returnValue = ''; return ''; });
 
 function uid(){ return Math.random().toString(36).slice(2,10); }
 function fmtNum(n){ return new Intl.NumberFormat('tr-TR',{maximumFractionDigits:1}).format(n); }
@@ -772,9 +853,9 @@ function renderAll(){
 }
 document.getElementById('s-date').value = today();
 renderFabricSwatchPicker();
-document.getElementById('refreshBtn').addEventListener('click', ()=> loadState());
+document.getElementById('refreshBtn').addEventListener('click', ()=> loadState({ force: !STOK_DIRTY }));
 setInterval(()=> loadState(), 20000);
-loadState();
+loadState({ force: true });
 </script>
 </body>
 </html>
