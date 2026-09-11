@@ -78,6 +78,10 @@ main { flex:1; min-width:0; padding: 22px 28px 60px; }
   .kpi-card { padding:12px 14px; }
   .kpi-card .value { font-size:18px; }
   .btn { padding:8px 14px; font-size:13px; }
+  /* dokunmatikte satır içi düğmeler parmakla isabet edilebilmeli */
+  .btn.small { padding:9px 14px; font-size:12.5px; }
+  .actions-cell { gap:8px; }
+  .task-row input[type=checkbox] { width:22px; height:22px; }
   .login-box { padding:26px 20px; }
 }
 .view { display:none; }
@@ -143,6 +147,12 @@ main { flex:1; min-width:0; padding: 22px 28px 60px; }
 .kanban-card select.kc-status { width:100%; margin-top:6px; font-size:11.5px; padding:5px 6px; }
 .kanban-card .kc-actions { display:flex; gap:6px; margin-top:7px; }
 .kanban-empty { color:var(--muted); font-size:12px; text-align:center; padding:14px 0; }
+/* sürükle-bırak durumları */
+.kanban-card[draggable="true"] { cursor:grab; }
+.kanban-card.kc-dragging { opacity:0.45; cursor:grabbing; }
+.kanban-col.kc-over { outline:2px dashed var(--accent); outline-offset:-4px; background:#fdf8f4; }
+/* teslim tarihi geçmiş üretim kartı — ⚠ metni kartın içinde de var, renk tek başına anlam taşımaz */
+.kanban-card.kc-late { border-left:3px solid var(--red); }
 .task-row { display:flex; flex-direction:column; gap:3px; padding:9px 10px; border-radius:8px; margin-bottom:6px; background:#f8f9fc; border-left:4px solid var(--muted); }
 .task-row:last-child { margin-bottom:0; }
 .task-row.done { opacity:0.55; }
@@ -179,6 +189,9 @@ table.data-table { width:100%; border-collapse: collapse; font-size:12.8px; }
 table.data-table th { text-align:left; padding:9px 10px; background:#f8f9fc; color:var(--navy); font-weight:700; border-bottom:2px solid var(--border); white-space:nowrap; cursor:pointer; user-select:none; }
 table.data-table td { padding:8px 10px; border-bottom:1px solid var(--border); white-space:nowrap; }
 table.data-table tr:hover td { background:#fbfbfe; }
+/* Risk satırları — renk tek başına anlam taşımaz, hücre içeriğinde ⚠ ve metin de var. */
+table.data-table tbody tr.row-alert td:first-child { box-shadow: inset 3px 0 0 var(--red); }
+table.data-table tbody tr.row-warn td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 .table-wrap { overflow-x:auto; }
 .badge { display:inline-block; padding:2px 9px; border-radius:20px; font-size:11px; font-weight:600; }
 .badge.green { background:#e5f6ed; color:var(--green); }
@@ -208,6 +221,29 @@ table.data-table tr:hover td { background:#fbfbfe; }
 .notif-banner-close:hover { opacity:1; }
 .neg-text { color: var(--red); font-weight:600; }
 .pos-text { color: var(--green); font-weight:600; }
+/* Görünür klavye odağı — specificity 0, mevcut stilleri ezmez */
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline:2px solid var(--accent); outline-offset:2px; border-radius:4px;
+}
+/* Dashboard kritik uyarı kartı — computeNotifications()'ı kalıcı olarak gösterir */
+.dash-alert-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:4px; }
+.dash-alert-head h3 { margin:0; }
+.dash-alert-count { background:var(--red); color:#fff; border-radius:20px; padding:1px 9px; font-size:11.5px; font-weight:700; }
+.dash-alert-item {
+  display:flex; gap:10px; align-items:flex-start; width:100%; text-align:left;
+  padding:9px 2px; border:none; border-bottom:1px dashed var(--border);
+  background:none; font-family:inherit; font-size:13px; color:var(--text); cursor:pointer;
+}
+.dash-alert-item:last-of-type { border-bottom:none; }
+.dash-alert-item:hover .dash-alert-text { color:var(--navy); text-decoration:underline; }
+.dash-alert-tag {
+  flex-shrink:0; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.3px;
+  padding:2px 8px; border-radius:6px; white-space:nowrap; margin-top:1px;
+}
+.dash-alert-tag.urgent { background:#fbeae8; color:var(--red); }
+.dash-alert-tag.warning { background:#fdf0e4; color:var(--accent); }
+.dash-alert-more { font-size:12px; color:var(--muted); padding-top:9px; }
+.dash-alert-ok { color:var(--green); font-size:13px; font-weight:600; }
 form.stack { display:flex; flex-direction:column; gap:14px; max-width:640px; }
 .form-row { display:grid; grid-template-columns: repeat(2, 1fr); gap:14px; }
 .form-row.wide { grid-template-columns: 1fr; }
@@ -232,8 +268,13 @@ textarea { min-height:70px; resize:vertical; }
 .login-note { font-size:11px; color:var(--muted); margin-top:14px; line-height:1.5; }
 .progress-row { margin-bottom:16px; }
 .progress-row .ph { display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:5px; }
-.progress-track { background:#eef0f5; border-radius:8px; height:10px; overflow:hidden; }
+.progress-track { background:#eef0f5; border-radius:8px; height:10px; overflow:hidden; position:relative; }
 .progress-fill { height:100%; border-radius:8px; background: linear-gradient(90deg, var(--accent2), var(--green)); }
+/* bütçe tavanı aşıldığında dolu çubuk başarı değil uyarı anlamına gelir */
+.progress-fill.over { background: linear-gradient(90deg, var(--accent), var(--red)); }
+/* yıl içinde bugün itibarıyla olunması beklenen nokta */
+.progress-pace { position:absolute; top:-3px; bottom:-3px; width:2px; background:var(--navy); opacity:0.55; }
+.pace-note { margin-top:4px; font-size:12.5px; color:var(--muted); }
 footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px; }
 .toolbar { display:flex; gap:10px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
 .toolbar input[type=text] { width:240px; }
@@ -495,7 +536,7 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
   <button data-view="faturalar">🧾 Faturalar</button>
 
   <div class="nav-group-label">Belgeler</div>
-  <button data-view="belgeler">📄 Belge Oluşturucu</button>
+  <button data-view="belgeler">📄 Belgeler</button>
   <button data-view="materyaller">🗂️ Şirket Materyalleri</button>
 
   <div class="nav-group-label">Tedarik &amp; Referans</div>
@@ -524,6 +565,8 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
   <!-- DASHBOARD (simplified) -->
   <section class="view active" id="view-dashboard">
     <div class="page-header"><h2>📊 Genel Bakış</h2></div>
+
+    <div class="panel-box" id="dashAlertBox" style="border-top:2px solid var(--red);"></div>
 
     <div class="section-title">Basit Gelir Tablosu <span style="font-weight:400;color:var(--muted);font-size:12px;">— Gelir, giderleriniz çıkarıldığında ne kadar kâr ettiğinizi gösterir</span></div>
     <div class="panel-box" id="incomeStatementBox"></div>
@@ -582,17 +625,6 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
         <button class="btn" id="ajanActBtn">Gönder</button>
       </div>
       <div id="ajanActResult" style="margin-top:12px;"></div>
-    </div>
-
-    <div class="section-title">📄 Belge İşleme <span style="font-weight:400;color:var(--muted);font-size:12px;">— dekont / fatura yükle, ajan okusun, sen onayla</span></div>
-    <div class="panel-box">
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-        <input type="file" id="belgeFile" accept=".jpg,.jpeg,.png,.webp,.pdf,image/*,application/pdf">
-        <button class="btn" id="belgeUploadBtn">Yükle</button>
-        <span id="belgeUploadMsg" style="font-size:12px;color:var(--muted);"></span>
-      </div>
-      <div id="belgeListe" style="margin-top:12px;"></div>
-      <div id="belgePreview" style="margin-top:12px;"></div>
     </div>
 
     <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
@@ -678,7 +710,7 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
         <div class="table-wrap"><table class="data-table" id="faturaSatisTable"></table></div>
       </div>
     </div>
-    <div style="font-size:12px;color:var(--muted);margin-top:10px;">Faturalar "🤖 Yönetim Ajanı → Belge İşleme" altından belge yükleyip onaylayarak oluşturulur. Kalan tutar ve durum otomatik hesaplanır.</div>
+    <div style="font-size:12px;color:var(--muted);margin-top:10px;">Faturalar "📄 Belgeler → Gelen Belge İşleme" altından belge yükleyip onaylayarak oluşturulur. Kalan tutar ve durum otomatik hesaplanır.</div>
   </section>
 
   <!-- İŞLER LIST -->
@@ -703,7 +735,7 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
 
     <div class="section-title">Tüm İşler</div>
     <div class="panel-box">
-      <div class="toolbar"><input type="text" id="islerSearch" placeholder="İş adı, müşteri, durum ara..."><span class="count" id="islerCount" style="margin-left:auto;color:var(--muted);font-size:12px;"></span></div>
+      <div class="toolbar"><input type="text" id="islerSearch" placeholder="İş adı, müşteri, durum ara..."><button type="button" class="btn small secondary" id="islerExport">⬇ CSV</button><span class="count" id="islerCount" style="margin-left:auto;color:var(--muted);font-size:12px;"></span></div>
       <div class="table-wrap"><table class="data-table" id="islerTable"></table></div>
     </div>
   </section>
@@ -735,6 +767,7 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
       <div class="chart-wrap"><canvas id="chartIncomeCat"></canvas></div>
     </div>
     <div class="section-title">Tüm Kayıtlar <span id="gelirTotalLabel" style="font-weight:400;color:var(--muted);font-size:12.5px;"></span></div>
+    <div class="toolbar"><input type="text" id="gelirSearch" placeholder="Kategori, kaynak, ödeme, not ara..."><button type="button" class="btn small secondary" id="gelirExport">⬇ CSV</button><span class="count" id="gelirCount" style="margin-left:auto;color:var(--muted);font-size:12px;"></span></div>
     <div class="panel-box"><div class="table-wrap"><table class="data-table" id="gelirTable"></table></div></div>
   </section>
 
@@ -759,6 +792,7 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
       <div class="chart-wrap"><canvas id="chartExpenseCat"></canvas></div>
     </div>
     <div class="section-title">Genel Gider Kayıtları <span id="giderTotalLabel" style="font-weight:400;color:var(--muted);font-size:12.5px;"></span></div>
+    <div class="toolbar"><input type="text" id="giderSearch" placeholder="Kategori, tedarikçi, ödeme, not ara..."><button type="button" class="btn small secondary" id="giderExport">⬇ CSV</button><span class="count" id="giderCount" style="margin-left:auto;color:var(--muted);font-size:12px;"></span></div>
     <div class="panel-box"><div class="table-wrap"><table class="data-table" id="giderTable"></table></div></div>
 
     <div class="section-title">Sabit Giderler <span style="font-weight:400;color:var(--muted);font-size:12.5px;">(aylık tekrarlayan giderler — kira, maaş vb.)</span></div>
@@ -773,6 +807,7 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
         <button type="submit" class="btn">Ekle</button>
       </form>
     </div>
+    <div class="toolbar"><input type="text" id="sabitSearch" placeholder="Gider adı, kategori, ay ara..."><button type="button" class="btn small secondary" id="sabitExport">⬇ CSV</button><span class="count" id="sabitCount" style="margin-left:auto;color:var(--muted);font-size:12px;"></span></div>
     <div class="panel-box"><div class="table-wrap"><table class="data-table" id="sabitTable"></table></div></div>
     <div style="font-size:12px;color:var(--muted);margin-top:6px;" id="sabitTotalLabel"></div>
   </section>
@@ -816,6 +851,7 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
     </div>
 
     <div class="section-title">Tüm Kayıtlar</div>
+    <div class="toolbar"><input type="text" id="borcSearch" placeholder="Firma/kişi, tür, kategori ara..."><button type="button" class="btn small secondary" id="borcExport">⬇ CSV</button><span class="count" id="borcCount" style="margin-left:auto;color:var(--muted);font-size:12px;"></span></div>
     <div class="panel-box"><div class="table-wrap"><table class="data-table" id="borcTable"></table></div></div>
   </section>
 
@@ -839,7 +875,7 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
 
     <div class="section-title">Tüm Müşteriler <span style="font-weight:400;color:var(--muted);font-size:12.5px;">İletişim ve sipariş bilgileri — sipariş sayısı işlerden otomatik sayılır</span></div>
     <div class="panel-box">
-      <div class="toolbar"><input type="text" id="musteriSearch" placeholder="Müşteri, yetkili, telefon ara..."><span class="count" id="musteriCount" style="margin-left:auto;color:var(--muted);font-size:12px;"></span></div>
+      <div class="toolbar"><input type="text" id="musteriSearch" placeholder="Müşteri, yetkili, telefon ara..."><button type="button" class="btn small secondary" id="musteriExport">⬇ CSV</button><span class="count" id="musteriCount" style="margin-left:auto;color:var(--muted);font-size:12px;"></span></div>
       <div class="table-wrap"><table class="data-table" id="musteriTable"></table></div>
     </div>
   </section>
@@ -928,14 +964,29 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
     </div>
     <div class="section-title">Tüm Tedarikçiler <span style="font-weight:400;color:var(--muted);font-size:12.5px;">(Excel'deki kategorilere göre gruplanmıştır)</span></div>
     <div class="panel-box">
-      <div class="toolbar"><input type="text" id="tedarikciSearch" placeholder="Firma, kategori ara..."><span class="count" id="tedarikciCount" style="margin-left:auto;color:var(--muted);font-size:12px;"></span></div>
+      <div class="toolbar"><input type="text" id="tedarikciSearch" placeholder="Firma, kategori ara..."><button type="button" class="btn small secondary" id="tedarikciExport">⬇ CSV</button><span class="count" id="tedarikciCount" style="margin-left:auto;color:var(--muted);font-size:12px;"></span></div>
       <div class="table-wrap"><table class="data-table" id="tedarikciTable"></table></div>
     </div>
   </section>
 
   <!-- BELGE OLUŞTURUCU -->
   <section class="view" id="view-belgeler">
-    <div class="page-header"><h2>📄 Belge Oluşturucu</h2></div>
+    <div class="page-header"><h2>📄 Belgeler</h2></div>
+
+    <!-- GELEN BELGE İŞLEME (dekont/fatura okuma) — önce bu gelir: günlük tekrar eden iş budur -->
+    <div class="section-title" style="margin-top:0;">📥 Gelen Belge İşleme <span style="font-weight:400;color:var(--muted);font-size:12px;">— dekont / fatura yükle, ajan okusun, sen onayla</span></div>
+    <div class="panel-box">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <input type="file" id="belgeFile" accept=".jpg,.jpeg,.png,.webp,.pdf,image/*,application/pdf">
+        <button class="btn" id="belgeUploadBtn">Yükle</button>
+        <span id="belgeUploadMsg" style="font-size:12px;color:var(--muted);"></span>
+      </div>
+      <div id="belgeListe" style="margin-top:12px;"></div>
+      <div id="belgePreview" style="margin-top:12px;"></div>
+    </div>
+
+    <!-- BELGE OLUŞTURUCU -->
+    <div class="section-title">🖨️ Belge Oluşturucu</div>
     <p style="font-size:13px;color:var(--muted);margin-top:-8px;">Aşağıdaki bilgileri doldurun; her kutunun altındaki "Oluştur" butonu, Canva'daki formlarınızla aynı düzende yazdırılabilir bir belge açar. İsterseniz önce bir işi seçerek bilgileri otomatik doldurabilirsiniz.</p>
 
     <!-- ÜRETİM FORMU -->
@@ -1072,7 +1123,7 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
       </form>
     </div>
     <div class="panel-box" style="margin-top:12px;">
-      <div class="toolbar"><input type="text" id="okulMailSearch" placeholder="Okul, birim ara..."><span class="count" id="okulMailCount" style="margin-left:auto;color:var(--muted);font-size:12px;"></span></div>
+      <div class="toolbar"><input type="text" id="okulMailSearch" placeholder="Okul, birim ara..."><button type="button" class="btn small secondary" id="okulMailExport">⬇ CSV</button><span class="count" id="okulMailCount" style="margin-left:auto;color:var(--muted);font-size:12px;"></span></div>
       <div class="table-wrap"><table class="data-table" id="okulMailTable"></table></div>
     </div>
 
@@ -1101,7 +1152,7 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
       </form>
     </div>
     <div class="panel-box" style="margin-top:12px;">
-      <div class="toolbar"><input type="text" id="okulTakipSearch" placeholder="Okul, kişi ara..."><span class="count" id="okulTakipCount" style="margin-left:auto;color:var(--muted);font-size:12px;"></span></div>
+      <div class="toolbar"><input type="text" id="okulTakipSearch" placeholder="Okul, kişi ara..."><button type="button" class="btn small secondary" id="okulTakipExport">⬇ CSV</button><span class="count" id="okulTakipCount" style="margin-left:auto;color:var(--muted);font-size:12px;"></span></div>
       <div class="table-wrap"><table class="data-table" id="okulTakipTable"></table></div>
     </div>
   </section>
@@ -1389,6 +1440,16 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
   <div class="modal-box">
     <h3 id="genericModalTitle">Kaydı Düzenle</h3>
     <form class="stack" id="genericModalForm"></form>
+  </div>
+</div>
+
+<!-- Müşteri 360: iletişim + işler + tahsilat + açık fırsatlar tek ekranda -->
+<div class="modal-overlay" id="custDetailModalOverlay">
+  <div class="modal-box" style="max-width:860px;">
+    <div id="custDetailBody"></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:18px;">
+      <button type="button" class="btn secondary" id="custDetailClose">Kapat</button>
+    </div>
   </div>
 </div>
 
@@ -2406,6 +2467,27 @@ function jobCollectionStatus(j) {
   if (jobCollected(j)>0) return 'Kapora Alındı';
   return 'Bekliyor';
 }
+// Bir tarihin bugüne göre kaç gün geçtiği (gelecekteyse veya boşsa 0).
+function daysOverdue(dateStr) {
+  if (!dateStr) return 0;
+  const diff = notifDaysBetween(todayISO(), dateStr);
+  return (diff !== null && diff < 0) ? Math.abs(diff) : 0;
+}
+// Teslim tarihi geçmiş aktif iş: kaç gün gecikti (gecikme yoksa 0).
+function jobOverdueDays(j) {
+  if (['Teslim Edildi','İptal'].includes(j.status)) return 0;
+  return daysOverdue(j.delivery_date);
+}
+// Kaporasız üretim riski: onaylanmış/üretimdeki iş için hiç tahsilat girilmemiş.
+// Tahsilat, panelin doğru yöntemiyle (job_id bağlı gelir kayıtları) ölçülür — deposit_received alanı değil.
+// Aynı iş numarası birden fazla kayıtta kullanılmış mı (veri girişi hatası göstergesi).
+function jobNoDuplicated(j) {
+  if (!j.job_no) return false;
+  return DATA.jobs.filter(x => x.job_no === j.job_no).length > 1;
+}
+function jobNoDeposit(j) {
+  return ['Üretimde','Onaylandı'].includes(j.status) && jobTotalAmount(j) > 0 && jobCollected(j) === 0;
+}
 function customerById(id) { return DATA.customers.find(c=>c.id===id); }
 function jobCustomerDisplay(j) {
   if (j.customer_id) { const c = customerById(j.customer_id); if (c) return c.name; }
@@ -2428,7 +2510,14 @@ function debtRemaining(d) { return round2((d.amount||0)-(d.paid_amount||0)); }
 function debtStatus(d) { const r=debtRemaining(d); if(r<=0.01) return 'Ödendi'; if((d.paid_amount||0)>0) return 'Kısmi Ödendi'; return 'Bekliyor'; }
 function debtOverdue(d) { return !!(d.due_date && d.due_date < todayISO() && debtRemaining(d) > 0.01); }
 function pipelineEstTotal(p) { return round2((p.est_quantity||0)*(p.est_unit_price||0)); }
-function pipelineExpectedValue(p) { return round2(pipelineEstTotal(p) * (p.probability||0)); }
+// Olasılık ölçeği karışık: Excel'den gelen eski kayıtlar 0-100, panelin kendi kayıtları 0-1 tutuyor.
+// Veriyi değiştirmeden okurken normalize ediyoruz — 1'den büyük her değer yüzde kabul edilir.
+// (Bu olmadan "40" olasılık beklenen değeri 40 KATINA çıkarıyordu.)
+function pipelineProbability(p) {
+  const v = p.probability || 0;
+  return v > 1 ? v / 100 : v;
+}
+function pipelineExpectedValue(p) { return round2(pipelineEstTotal(p) * pipelineProbability(p)); }
 
 // ---------------- cost template helpers ----------------
 function getTemplate(name) { return (DATA.costTemplates.products||[]).find(p=>p.name===name); }
@@ -2488,6 +2577,7 @@ function renderTable(tableId, searchId, countId, rows, columns, opts) {
   let sortCol = opts.defaultSort || null;
   let sortDir = opts.defaultDir || 1;
   let filterText = '';
+  let currentData = [];
 
   function draw() {
     let data = rows.slice();
@@ -2506,12 +2596,17 @@ function renderTable(tableId, searchId, countId, rows, columns, opts) {
         return String(av).localeCompare(String(bv), 'tr') * sortDir;
       });
     }
+    currentData = data;
     if (countId && document.getElementById(countId)) document.getElementById(countId).textContent = data.length + ' kayıt';
     let thead = '<thead><tr>' + columns.map(c => {
       const arrow = sortCol === c.key ? (sortDir===1?' ▲':' ▼') : '';
       return '<th data-key="' + c.key + '">' + c.label + arrow + '</th>';
     }).join('') + '</tr></thead>';
-    let tbody = '<tbody>' + data.map(r => '<tr>' + columns.map(c => '<td>' + (c.render ? c.render(r) : esc(r[c.key] ?? '-')) + '</td>').join('') + '</tr>').join('') + '</tbody>';
+    let tbody = '<tbody>' + data.map(r => {
+      const rc = opts.rowClass ? opts.rowClass(r) : '';
+      return '<tr' + (rc ? ' class="' + rc + '"' : '') + '>'
+        + columns.map(c => '<td>' + (c.render ? c.render(r) : esc(r[c.key] ?? '-')) + '</td>').join('') + '</tr>';
+    }).join('') + '</tbody>';
     table.innerHTML = thead + tbody;
     table.querySelectorAll('th').forEach(th => {
       th.addEventListener('click', () => {
@@ -2532,7 +2627,40 @@ function renderTable(tableId, searchId, countId, rows, columns, opts) {
   if (searchId && document.getElementById(searchId)) {
     document.getElementById(searchId).addEventListener('input', (e) => { filterText = e.target.value; draw(); });
   }
+  if (opts.exportId && document.getElementById(opts.exportId)) {
+    // renderTable her render'da yeniden çağrıldığı için onclick ataması kullanılıyor:
+    // addEventListener olsaydı her çağrıda bir dinleyici daha eklenip tek tıkta çoklu indirme olurdu.
+    document.getElementById(opts.exportId).onclick = () => {
+      const header = columns.filter(c => c.label).map(c => c.label);
+      const body = currentData.map(r => columns.filter(c => c.label).map(c => csvCellValue(c, r)));
+      downloadCsv((opts.exportName || tableId) + '_' + todayISO() + '.csv', header, body);
+    };
+  }
   draw();
+}
+
+// Hücrenin dışa aktarım değeri: render() HTML üretebildiği için ham veriyi tercih ederiz.
+function csvCellValue(c, r) {
+  if (c.exportVal) return c.exportVal(r);
+  if (c.filterVal) return c.filterVal(r);
+  const v = r[c.key];
+  return (v === null || v === undefined) ? '' : v;
+}
+
+// Excel'in Türkçe yerel ayarı ';' ayırıcı bekler; BOM olmadan Türkçe karakterler bozulur.
+function downloadCsv(filename, header, rows) {
+  const cell = v => {
+    const s = String(v ?? '').replace(/"/g, '""');
+    return '"' + s + '"';
+  };
+  const csv = [header, ...rows].map(r => r.map(cell).join(';')).join('\r\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  flash(filename + ' indirildi.', 'success');
 }
 
 // ---------------- GENERIC EDIT MODAL SYSTEM ----------------
@@ -2587,7 +2715,7 @@ const ENTITY_CONFIGS = {
     {name:'description', label:'İş Tanımı', type:'text'},
     {name:'est_quantity', label:'Tahmini Adet', type:'number'},
     {name:'est_unit_price', label:'Tahmini Birim Fiyat (₺)', type:'number', step:'0.01'},
-    {name:'probability', label:'Olasılık (%)', type:'number', transformOut: v=>round2((v||0)*100), transformIn: v=>(parseFloat(v)||0)/100},
+    {name:'probability', label:'Olasılık (%)', type:'number', transformOut: v=>round2((v>1?v/100:(v||0))*100), transformIn: v=>(parseFloat(v)||0)/100},
     {name:'status', label:'Durum', type:'select', options: () => PIPELINE_STATUSES},
     {name:'follow_up_date', label:'Takip Tarihi', type:'date'},
     {name:'note', label:'Not', type:'textarea'},
@@ -2710,8 +2838,44 @@ function makeChart(id, config) {
 }
 function sameMonth(dateStr, d) { const dd = new Date(dateStr+'T00:00:00'); return dd.getFullYear()===d.getFullYear() && dd.getMonth()===d.getMonth(); }
 
+// Dashboard kritik uyarı kartı — zil/banner ile aynı computeNotifications() kaynağını kullanır,
+// farkı: kapanmaz, her zaman görünür. Sadece acil/dikkat seviyeleri; bilgi seviyesi zilde kalır.
+const DASH_ALERT_LIMIT = 8;
+function renderDashboardAlerts() {
+  const box = document.getElementById('dashAlertBox');
+  if (!box) return;
+  const alerts = computeNotifications().filter(n => n.level === 'urgent' || n.level === 'warning');
+
+  if (!alerts.length) {
+    box.style.borderTopColor = 'var(--green)';
+    box.innerHTML = '<div class="dash-alert-head"><h3>✅ Kritik Uyarı</h3></div>'
+      + '<div class="dash-alert-ok">Acil müdahale bekleyen bir kayıt yok.</div>';
+    return;
+  }
+
+  box.style.borderTopColor = 'var(--red)';
+  const shown = alerts.slice(0, DASH_ALERT_LIMIT);
+  box.innerHTML = '<div class="dash-alert-head"><h3>🚨 Kritik Uyarılar</h3>'
+    + '<span class="dash-alert-count">' + alerts.length + '</span></div>'
+    + shown.map(n => '<button type="button" class="dash-alert-item" data-view="' + esc(n.view) + '">'
+      + '<span class="dash-alert-tag ' + n.level + '">' + (n.level === 'urgent' ? 'Acil' : 'Dikkat') + '</span>'
+      + '<span class="dash-alert-text">' + esc(n.text) + '</span></button>').join('')
+    + (alerts.length > shown.length
+      ? '<div class="dash-alert-more">…ve ' + (alerts.length - shown.length) + ' uyarı daha — 🔔 simgesinden görebilirsiniz.</div>'
+      : '');
+
+  box.querySelectorAll('.dash-alert-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const view = btn.dataset.view;
+      switchView(view);
+      if (VIEW_RENDER_MAP[view]) VIEW_RENDER_MAP[view]();
+    });
+  });
+}
+
 // ---------------- DASHBOARD (simplified income-statement style) ----------------
 function renderDashboard() {
+  renderDashboardAlerts();
   const jobs = DATA.jobs, incomes = DATA.incomes, expenses = DATA.expenses, fixed = DATA.fixedExpenses, debts = DATA.debts;
 
   const totalIncome = incomes.reduce((s,i)=>s+(i.amount||0),0);
@@ -2838,20 +3002,36 @@ function renderIsler() {
   renderIslerAylik();
 
   renderTable('islerTable', 'islerSearch', 'islerCount', DATA.jobs, [
-    {key:'job_no', label:'İş No', render:j=>'<a href="#" data-action="detay" data-id="'+j.id+'">'+esc(j.job_no)+'</a>', sortVal:j=>{ const m=String(j.job_no||'').match(/(\d+)\s*$/); return m?parseInt(m[1],10):0; }},
+    {key:'job_no', label:'İş No', render:j=>'<a href="#" data-action="detay" data-id="'+j.id+'">'+esc(j.job_no)+'</a>'
+      + (jobNoDuplicated(j) ? ' <span class="badge orange" title="Bu iş numarası birden fazla kayıtta kullanılmış">⚠ tekrar</span>' : ''),
+      sortVal:j=>{ const m=String(j.job_no||'').match(/(\d+)\s*$/); return m?parseInt(m[1],10):0; }, exportVal:j=>j.job_no||''},
     {key:'order_date', label:'Tarih', render:j=>fmtDate(j.order_date)},
+    {key:'delivery_date', label:'Teslim', render:j=>{
+      const late = jobOverdueDays(j);
+      if (!j.delivery_date) return '-';
+      return late
+        ? '<span class="neg-text">⚠ ' + fmtDate(j.delivery_date) + ' (' + late + ' gün gecikti)</span>'
+        : esc(fmtDate(j.delivery_date));
+    }, exportVal:j=>j.delivery_date || ''},
     {key:'title', label:'İş Adı'},
     {key:'customer', label:'Müşteri', render:j=>esc(jobCustomerDisplay(j)), filterVal:j=>jobCustomerDisplay(j), sortVal:j=>jobCustomerDisplay(j)},
     {key:'product_type', label:'Ürün'},
     {key:'quantity', label:'Adet', render:j=>fmtNum(j.quantity)},
-    {key:'total_amount', label:'Toplam Bedel', render:j=>fmtCurrency(jobTotalAmount(j)), sortVal:j=>jobTotalAmount(j)},
-    {key:'total_cost', label:'Maliyet', render:j=>fmtCurrency(jobTotalCost(j)), sortVal:j=>jobTotalCost(j)},
-    {key:'gross_profit', label:'Brüt Kâr', render:j=>'<span class="'+(jobGrossProfit(j)<0?'neg-text':'pos-text')+'">'+fmtCurrency(jobGrossProfit(j))+'</span>', sortVal:j=>jobGrossProfit(j)},
-    {key:'margin', label:'Marj', render:j=>fmtPercent(jobMargin(j)), sortVal:j=>jobMargin(j)},
-    {key:'status', label:'Durum', render:j=>'<span class="badge '+jobStatusBadgeClass(j.status)+'">'+esc(j.status)+'</span>', sortVal:j=>jobStatusSortKey(j)},
-    {key:'collection', label:'Tahsilat', render:j=>'<span class="badge '+(jobCollectionStatus(j)==='Tamamı Alındı'?'green':'gray')+'">'+jobCollectionStatus(j)+'</span>'},
+    {key:'total_amount', label:'Toplam Bedel', render:j=>fmtCurrency(jobTotalAmount(j)), sortVal:j=>jobTotalAmount(j), exportVal:j=>jobTotalAmount(j)},
+    {key:'total_cost', label:'Maliyet', render:j=>fmtCurrency(jobTotalCost(j)), sortVal:j=>jobTotalCost(j), exportVal:j=>jobTotalCost(j)},
+    {key:'gross_profit', label:'Brüt Kâr', render:j=>'<span class="'+(jobGrossProfit(j)<0?'neg-text':'pos-text')+'">'+fmtCurrency(jobGrossProfit(j))+'</span>', sortVal:j=>jobGrossProfit(j), exportVal:j=>jobGrossProfit(j)},
+    {key:'margin', label:'Marj', render:j=>fmtPercent(jobMargin(j)), sortVal:j=>jobMargin(j), exportVal:j=>round2(jobMargin(j)*100)},
+    {key:'status', label:'Durum', render:j=>'<span class="badge '+jobStatusBadgeClass(j.status)+'">'+esc(j.status)+'</span>', sortVal:j=>jobStatusSortKey(j), exportVal:j=>j.status||''},
+    {key:'collection', label:'Tahsilat', render:j=>{
+      if (jobNoDeposit(j)) return '<span class="badge red">⚠ Kaporasız</span>';
+      return '<span class="badge '+(jobCollectionStatus(j)==='Tamamı Alındı'?'green':'gray')+'">'+jobCollectionStatus(j)+'</span>';
+    }, exportVal:j=>jobNoDeposit(j) ? 'Kaporasız' : jobCollectionStatus(j)},
     {key:'actions', label:'', render:j=>'<button class="btn small secondary" data-action="detay" data-id="'+j.id+'">Detay</button>'},
-  ], { defaultSort:'job_no', defaultDir:-1, actions: { detay: showJobDetail } });
+  ], {
+    defaultSort:'job_no', defaultDir:-1, actions: { detay: showJobDetail },
+    exportId:'islerExport', exportName:'isler',
+    rowClass:j => jobOverdueDays(j) ? 'row-alert' : (jobNoDeposit(j) ? 'row-warn' : ''),
+  });
 }
 
 // İş No'daki sipariş tarihine göre ay ay iş sayısı ve toplam bedel/maliyet/kâr özeti
@@ -3840,10 +4020,11 @@ function renderGelir() {
     {key:'source', label:'Müşteri / Kaynak'},
     {key:'amount', label:'Tutar', render:i=>fmtCurrency(i.amount), sortVal:i=>i.amount},
     {key:'payment_method', label:'Ödeme'},
-    {key:'job', label:'İlgili İş', render:i=>{ const j=DATA.jobs.find(x=>x.id===i.job_id); return j? j.job_no : '-'; }},
+    {key:'job', label:'İlgili İş', render:i=>{ const j=DATA.jobs.find(x=>x.id===i.job_id); return j? esc(j.job_no) : '-'; },
+      filterVal:i=>{ const j=DATA.jobs.find(x=>x.id===i.job_id); return j? j.job_no : ''; }},
     {key:'note', label:'Not'},
     {key:'actions', label:'', render:i=>'<div class="actions-cell"><button class="btn small secondary" data-action="edit" data-id="'+i.id+'">Düzenle</button><button class="btn small danger" data-action="del" data-id="'+i.id+'">Sil</button></div>'},
-  ], { defaultSort:'date', defaultDir:-1, actions: {
+  ], { defaultSort:'date', defaultDir:-1, exportId:'gelirExport', exportName:'gelir', actions: {
     edit: id => openGenericEditModal('income', id),
     del: id => { if(!confirm('Bu gelir kaydı silinsin mi?')) return; DATA.incomes = DATA.incomes.filter(x=>x.id!==id); saveData(); flash('Kayıt silindi.'); renderGelir(); renderDashboard(); }
   }});
@@ -3866,7 +4047,7 @@ function renderGider() {
     {key:'payment_method', label:'Ödeme'},
     {key:'note', label:'Not'},
     {key:'actions', label:'', render:e=>'<div class="actions-cell"><button class="btn small secondary" data-action="edit" data-id="'+e.id+'">Düzenle</button><button class="btn small danger" data-action="del" data-id="'+e.id+'">Sil</button></div>'},
-  ], { defaultSort:'date', defaultDir:-1, actions: {
+  ], { defaultSort:'date', defaultDir:-1, exportId:'giderExport', exportName:'gider', actions: {
     edit: id => openGenericEditModal('expense', id),
     del: id => { if(!confirm('Bu gider kaydı silinsin mi?')) return; DATA.expenses = DATA.expenses.filter(x=>x.id!==id); saveData(); flash('Kayıt silindi.'); renderGider(); renderDashboard(); }
   }});
@@ -3888,11 +4069,14 @@ function renderBorc() {
     {key:'category', label:'Kategori'},
     {key:'amount', label:'Tutar', render:d=>fmtCurrency(d.amount), sortVal:d=>d.amount},
     {key:'paid_amount', label:'Ödenen', render:d=>fmtCurrency(d.paid_amount||0)},
-    {key:'remaining', label:'Kalan', render:d=>fmtCurrency(debtRemaining(d)), sortVal:d=>debtRemaining(d)},
-    {key:'due_date', label:'Vade', render:d=>'<span class="'+(debtOverdue(d)?'neg-text':'')+'">'+fmtDate(d.due_date)+'</span>'},
-    {key:'status', label:'Durum', render:d=>'<span class="badge '+(debtStatus(d)==='Kapandı'?'green':(debtOverdue(d)?'red':'orange'))+'">'+debtStatus(d)+'</span>'},
+    {key:'remaining', label:'Kalan', render:d=>fmtCurrency(debtRemaining(d)), sortVal:d=>debtRemaining(d), exportVal:d=>debtRemaining(d)},
+    {key:'due_date', label:'Vade', render:d=>debtOverdue(d)
+      ? '<span class="neg-text">⚠ '+fmtDate(d.due_date)+'</span>'
+      : '<span>'+fmtDate(d.due_date)+'</span>', exportVal:d=>d.due_date || ''},
+    {key:'status', label:'Durum', render:d=>'<span class="badge '+(debtStatus(d)==='Kapandı'?'green':(debtOverdue(d)?'red':'orange'))+'">'+debtStatus(d)+'</span>', exportVal:d=>debtStatus(d)},
     {key:'actions', label:'', render:d=>'<div class="actions-cell"><button class="btn small secondary" data-action="edit" data-id="'+d.id+'">Düzenle</button><button class="btn small danger" data-action="del" data-id="'+d.id+'">Sil</button></div>'},
-  ], { defaultSort:'due_date', defaultDir:1, actions: {
+  ], { defaultSort:'due_date', defaultDir:1, exportId:'borcExport', exportName:'borc-alacak',
+    rowClass:d => debtOverdue(d) ? 'row-alert' : '', actions: {
     edit: id => openGenericEditModal('debt', id),
     del: id => { if(!confirm('Bu borç/alacak kaydı silinsin mi?')) return; DATA.debts = DATA.debts.filter(x=>x.id!==id); saveData(); flash('Kayıt silindi.'); renderBorc(); renderDashboard(); }
   }});
@@ -3968,7 +4152,7 @@ function renderSabit() {
     {key:'category', label:'Kategori'},
     {key:'amount', label:'Tutar', render:f=>fmtCurrency(f.amount), sortVal:f=>f.amount},
     {key:'actions', label:'', render:f=>'<div class="actions-cell"><button class="btn small secondary" data-action="edit" data-id="'+f.id+'">Düzenle</button><button class="btn small danger" data-action="del" data-id="'+f.id+'">Sil</button></div>'},
-  ], { defaultSort:'date', defaultDir:-1, actions: {
+  ], { defaultSort:'date', defaultDir:-1, exportId:'sabitExport', exportName:'sabit-gider', actions: {
     edit: id => openGenericEditModal('fixedExpense', id),
     del: id => { if(!confirm('Bu sabit gider silinsin mi?')) return; DATA.fixedExpenses = DATA.fixedExpenses.filter(x=>x.id!==id); saveData(); flash('Kayıt silindi.'); renderSabit(); renderDashboard(); }
   }});
@@ -3991,11 +4175,11 @@ function renderMusteriler() {
     {key:'phone', label:'Telefon'},
     {key:'email', label:'E-posta'},
     {key:'address', label:'Adres'},
-    {key:'first_order', label:'İlk Sipariş', render:c=>{ const d=customerFirstOrderDate(c); return d? fmtDate(d) : '-'; }, sortVal:c=>customerFirstOrderDate(c)||''},
-    {key:'orders', label:'Sipariş Sayısı', render:c=>fmtNum(customerTotalOrders(c)), sortVal:c=>customerTotalOrders(c)},
+    {key:'first_order', label:'İlk Sipariş', render:c=>{ const d=customerFirstOrderDate(c); return d? fmtDate(d) : '-'; }, sortVal:c=>customerFirstOrderDate(c)||'', exportVal:c=>customerFirstOrderDate(c)||''},
+    {key:'orders', label:'Sipariş Sayısı', render:c=>fmtNum(customerTotalOrders(c)), sortVal:c=>customerTotalOrders(c), exportVal:c=>customerTotalOrders(c)},
     {key:'category', label:'Kategori'},
     {key:'actions', label:'', render:c=>'<div class="actions-cell"><button class="btn small secondary" data-action="edit" data-id="'+c.id+'">Düzenle</button><button class="btn small danger" data-action="del" data-id="'+c.id+'">Sil</button></div>'},
-  ], { defaultSort:'name', defaultDir:1, actions: {
+  ], { defaultSort:'name', defaultDir:1, exportId:'musteriExport', exportName:'musteriler', actions: {
     detay: id => showCustomerDetail(id),
     edit: id => openGenericEditModal('customer', id),
     del: id => { if(!confirm('Bu müşteri silinsin mi? (Bağlı işler silinmez)')) return; DATA.customers = DATA.customers.filter(x=>x.id!==id); saveData(); flash('Müşteri silindi.'); renderMusteriler(); }
@@ -4008,11 +4192,115 @@ document.getElementById('formMusteri').addEventListener('submit', (e) => {
   saveData(); e.target.reset();
   flash('Müşteri eklendi.'); renderMusteriler();
 });
+// Müşteri 360 — iletişim, sipariş geçmişi, tahsilat ve açık fırsatlar tek ekranda.
 function showCustomerDetail(id) {
   const c = DATA.customers.find(x=>x.id===id);
   if (!c) return;
-  const jobs = customerJobs(c);
-  alert(esc(c.name) + '\n' + (c.phone||'') + '  ' + (c.email||'') + '\nToplam Sipariş: ' + customerTotalOrders(c) + '\nToplam Ciro: ' + fmtCurrency(customerTotalRevenue(c)) + '\nTahsilat Durumu: ' + customerCollectionStatus(c));
+  const jobs = customerJobs(c).slice().sort((a,b)=>(b.order_date||'').localeCompare(a.order_date||''));
+  const totalRevenue = customerTotalRevenue(c);
+  const collected = round2(jobs.reduce((s,j)=>s+jobCollected(j),0));
+  const remaining = round2(totalRevenue - collected);
+  // Fırsatlar müşteri adıyla eşleşir: pipeline kayıtlarında customer_id alanı yok.
+  const opps = (DATA.pipeline||[]).filter(p =>
+    !['Kazanıldı','Kaybedildi'].includes(p.status) &&
+    (p.customer_name||'').toLowerCase().trim() === (c.name||'').toLowerCase().trim()
+  );
+
+  const contactBits = [
+    c.contact_person ? '👤 ' + esc(c.contact_person) : '',
+    c.phone ? '📞 <a href="tel:' + esc(String(c.phone).replace(/\s/g,'')) + '">' + esc(c.phone) + '</a>' : '',
+    c.email ? '✉️ <a href="mailto:' + esc(c.email) + '">' + esc(c.email) + '</a>' : '',
+    c.address ? '📍 ' + esc(c.address) : '',
+  ].filter(Boolean);
+
+  const jobRows = jobs.length ? jobs.map(j => {
+    const late = jobOverdueDays(j);
+    return '<tr>'
+      + '<td><a href="#" data-job="' + j.id + '">' + esc(j.job_no) + '</a></td>'
+      + '<td>' + fmtDate(j.order_date) + '</td>'
+      + '<td>' + (j.delivery_date ? (late ? '<span class="neg-text">⚠ ' + fmtDate(j.delivery_date) + '</span>' : fmtDate(j.delivery_date)) : '-') + '</td>'
+      + '<td>' + fmtCurrency(jobTotalAmount(j)) + '</td>'
+      + '<td>' + fmtCurrency(jobCollected(j)) + '</td>'
+      + '<td><span class="badge ' + jobStatusBadgeClass(j.status) + '">' + esc(j.status) + '</span></td>'
+      + '</tr>';
+  }).join('') : '<tr><td colspan="6" style="color:var(--muted);">Bu müşteriye bağlı iş kaydı yok.</td></tr>';
+
+  document.getElementById('custDetailBody').innerHTML = `
+    <h3 style="margin-bottom:4px;">${esc(c.name)}</h3>
+    <div style="font-size:12.5px;color:var(--muted);margin-bottom:14px;">
+      ${esc(c.type||'Tip belirtilmemiş')}${c.category ? ' · ' + esc(c.category) : ''}
+      ${customerFirstOrderDate(c) ? ' · İlk sipariş: ' + fmtDate(customerFirstOrderDate(c)) : ''}
+    </div>
+    ${contactBits.length ? '<div class="panel-box" style="margin-bottom:14px;font-size:13px;line-height:1.9;">' + contactBits.join('<br>') + '</div>' : ''}
+    <div class="kpi-grid" style="margin-bottom:14px;">
+      <div class="kpi-card"><div class="label">Sipariş</div><div class="value">${fmtNum(jobs.length)}</div></div>
+      <div class="kpi-card"><div class="label">Toplam Bedel</div><div class="value">${fmtCurrency(totalRevenue)}</div></div>
+      <div class="kpi-card"><div class="label">Tahsil Edilen</div><div class="value pos">${fmtCurrency(collected)}</div></div>
+      <div class="kpi-card"><div class="label">Kalan</div><div class="value ${remaining > 0.01 ? 'neg' : ''}">${fmtCurrency(remaining)}</div></div>
+    </div>
+    <div class="section-title" style="margin-top:0;">Sipariş Geçmişi</div>
+    <div class="table-wrap"><table class="data-table">
+      <thead><tr><th>İş No</th><th>Tarih</th><th>Teslim</th><th>Bedel</th><th>Tahsilat</th><th>Durum</th></tr></thead>
+      <tbody>${jobRows}</tbody>
+    </table></div>
+    ${opps.length ? `<div class="section-title">Açık Fırsatlar</div>
+      <ul class="stat-list">${opps.map(p =>
+        '<li><span>' + esc(p.description || p.status) + '</span><b>' + fmtCurrency(pipelineEstTotal(p)) + '</b></li>'
+      ).join('')}</ul>` : ''}
+    ${c.note ? '<div class="section-title">Not</div><div style="font-size:13px;">' + esc(c.note) + '</div>' : ''}
+  `;
+
+  document.getElementById('custDetailBody').querySelectorAll('a[data-job]').forEach(a => {
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      closeCustDetail();
+      showJobDetail(parseInt(a.dataset.job, 10));
+    });
+  });
+  document.getElementById('custDetailModalOverlay').classList.add('active');
+}
+function closeCustDetail() { document.getElementById('custDetailModalOverlay').classList.remove('active'); }
+document.getElementById('custDetailClose').addEventListener('click', closeCustDetail);
+document.getElementById('custDetailModalOverlay').addEventListener('click', (e) => {
+  if (e.target.id === 'custDetailModalOverlay') closeCustDetail();
+});
+
+// Açık modalları Escape ile kapat — her modalın kendi kapatma düğmesi yerinde kalır.
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  document.querySelectorAll('.modal-overlay.active').forEach(m => m.classList.remove('active'));
+});
+
+// ---------------- KANBAN SÜRÜKLE-BIRAK (ortak) ----------------
+// Karttaki durum dropdown'u KALDIRILMADI: sürükleme fareyle hızlı yol, dropdown ise
+// klavye/ekran okuyucu/dokunmatik yolu. Sürükleme tek yöntem olmamalı.
+// Beklenen işaretleme: .kanban-card[data-id] ve .kanban-col[data-status].
+function enableKanbanDnd(kanbanEl, onDrop) {
+  kanbanEl.querySelectorAll('.kanban-card[data-id]').forEach(card => {
+    card.draggable = true;
+    card.addEventListener('dragstart', e => {
+      e.dataTransfer.setData('text/plain', card.dataset.id);
+      e.dataTransfer.effectAllowed = 'move';
+      card.classList.add('kc-dragging');
+    });
+    card.addEventListener('dragend', () => card.classList.remove('kc-dragging'));
+  });
+  kanbanEl.querySelectorAll('.kanban-col[data-status]').forEach(col => {
+    col.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      col.classList.add('kc-over');
+    });
+    col.addEventListener('dragleave', e => {
+      if (!col.contains(e.relatedTarget)) col.classList.remove('kc-over');
+    });
+    col.addEventListener('drop', e => {
+      e.preventDefault();
+      col.classList.remove('kc-over');
+      const id = parseInt(e.dataTransfer.getData('text/plain'), 10);
+      if (!Number.isNaN(id)) onDrop(id, col.dataset.status);
+    });
+  });
 }
 
 // ---------------- POTANSİYEL İŞLER (Pipeline) ----------------
@@ -4020,6 +4308,25 @@ function pipelineStatusGroups() {
   const present = Array.from(new Set(DATA.pipeline.map(p=>p.status)));
   const extras = present.filter(s => !PIPELINE_STATUSES.includes(s));
   return PIPELINE_STATUSES.concat(extras.sort());
+}
+
+// Takip tarihi geçmiş, hâlâ açık fırsat: kaç gün gecikti (yoksa 0).
+function pipelineFollowUpLate(p) {
+  if (['Kazanıldı','Kaybedildi'].includes(p.status)) return 0;
+  return daysOverdue(p.follow_up_date);
+}
+
+// Durum değişiminin tek kaynağı — hem kart dropdown'u hem sürükle-bırak buraya gelir.
+function setPipelineStatus(id, newStatus) {
+  const p = DATA.pipeline.find(x=>x.id===id);
+  if (!p || !newStatus || p.status === newStatus) return;
+  const prevStatus = p.status;
+  p.status = newStatus;
+  saveData();
+  renderPotansiyel();
+  renderDashboard();
+  if (p.status === 'Kazanıldı' && prevStatus !== 'Kazanıldı') startPipelineConversion(p);
+  else flash('Durum güncellendi: ' + p.status);
 }
 
 function renderPotansiyel() {
@@ -4045,35 +4352,44 @@ function renderPotansiyel() {
   const kanban = document.getElementById('potansiyelKanban');
   kanban.innerHTML = groups.map(status => {
     const items = filtered.filter(p=>p.status===status).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-    const cards = items.length ? items.map(p => `
-      <div class="kanban-card">
+    const cards = items.length ? items.map(p => {
+      const lateDays = pipelineFollowUpLate(p);
+      return `
+      <div class="kanban-card${lateDays ? ' kc-late' : ''}" data-id="${p.id}" title="Sürükleyerek durumunu değiştirebilirsiniz">
         <div class="kc-title">${esc(p.customer_name)}</div>
+        ${lateDays ? '<div class="kc-row neg-text"><span>⚠ Takip ' + lateDays + ' gün gecikti</span></div>' : ''}
         <div class="kc-row"><span>${esc(p.description||'-')}</span></div>
         <div class="kc-row"><span>Adet: ${fmtNum(p.est_quantity)}</span><span>${fmtCurrency(pipelineEstTotal(p))}</span></div>
-        <div class="kc-row"><span>Olasılık: ${fmtPercent(p.probability||0)}</span><span>Takip: ${fmtDate(p.follow_up_date)}</span></div>
+        <div class="kc-row"><span>Olasılık: ${fmtPercent(pipelineProbability(p))}</span><span>Takip: ${fmtDate(p.follow_up_date)}</span></div>
         <select class="kc-status" data-id="${p.id}">${PIPELINE_STATUSES.map(s=>'<option value="'+esc(s)+'" '+(s===status?'selected':'')+'>'+esc(s)+'</option>').join('')}</select>
         <div class="kc-actions">
+          ${lateDays ? '<button class="btn small" data-action="gorev" data-id="' + p.id + '">→ Göreve ekle</button>' : ''}
           <button class="btn small secondary" data-action="edit" data-id="${p.id}">Düzenle</button>
           <button class="btn small danger" data-action="del" data-id="${p.id}">Sil</button>
         </div>
-      </div>`).join('') : '<div class="kanban-empty">Kayıt yok</div>';
-    return `<div class="kanban-col"><h4>${esc(status)} <span class="cnt">${items.length}</span></h4>${cards}</div>`;
+      </div>`;
+    }).join('') : '<div class="kanban-empty">Kayıt yok</div>';
+    return `<div class="kanban-col" data-status="${esc(status)}"><h4>${esc(status)} <span class="cnt">${items.length}</span></h4>${cards}</div>`;
   }).join('');
 
   kanban.querySelectorAll('select.kc-status').forEach(sel => {
-    sel.addEventListener('change', () => {
-      const id = parseInt(sel.dataset.id, 10);
-      const p = DATA.pipeline.find(x=>x.id===id);
-      if (!p) return;
-      const prevStatus = p.status;
-      p.status = sel.value;
-      saveData();
-      renderPotansiyel();
-      renderDashboard();
-      if (p.status === 'Kazanıldı' && prevStatus !== 'Kazanıldı') startPipelineConversion(p);
-      else flash('Durum güncellendi: ' + esc(p.status));
-    });
+    sel.addEventListener('change', () => setPipelineStatus(parseInt(sel.dataset.id, 10), sel.value));
   });
+  enableKanbanDnd(kanban, setPipelineStatus);
+  // Geciken takibi göreve dönüştür. Otomatik değil tek tıkla: renderAll() sık çalıştığı için
+  // render sırasında görev üretmek aynı takip için tekrar tekrar kayıt açardı.
+  kanban.querySelectorAll('[data-action="gorev"]').forEach(btn => btn.addEventListener('click', () => {
+    const p = DATA.pipeline.find(x=>x.id===parseInt(btn.dataset.id,10));
+    if (!p) return;
+    const title = 'Takip: ' + (p.customer_name || 'Potansiyel iş');
+    if (DATA.tasks.some(t => !t.done && t.title === title)) { flash('Bu takip için zaten açık bir görev var.', 'error'); return; }
+    const today = todayISO();
+    DATA.tasks.push({ id: nextId(DATA.tasks), title, note: p.description || '', assigned_to: CURRENT_USER,
+      created_by: CURRENT_USER, date: today, done: false, carried_forward: false, carried_from: null, created_date: today });
+    saveData();
+    flash('Görev oluşturuldu: ' + title);
+    renderGorevler();
+  }));
   kanban.querySelectorAll('[data-action="edit"]').forEach(btn => btn.addEventListener('click', () => openGenericEditModal('pipeline', parseInt(btn.dataset.id,10))));
   kanban.querySelectorAll('[data-action="del"]').forEach(btn => btn.addEventListener('click', () => {
     const id = parseInt(btn.dataset.id,10);
@@ -4092,6 +4408,11 @@ document.getElementById('formPotansiyel').addEventListener('submit', (e) => {
 });
 
 // ---------------- ÜRETİM TAKİP ----------------
+// Tahmini teslimat tarihi geçmiş, henüz teslim edilmemiş üretim kaydı: kaç gün gecikti (yoksa 0).
+function uretimLateDays(u) {
+  if (u.status === 'Teslim Edildi') return 0;
+  return daysOverdue(u.est_delivery);
+}
 function uretimStatusGroups() {
   const present = Array.from(new Set(DATA.uretimTakip.map(u=>u.status)));
   const extras = present.filter(s => !URETIM_STATUSES.includes(s));
@@ -4101,6 +4422,17 @@ function uretimStatusGroups() {
 // Üretim takibinde "Teslim Edildi" sütunu çok uzayabildiği için varsayılan olarak kapalı başlar;
 // başlığa tıklayınca açılıp kapanır, tercih hatırlanır (sayfa yenilenene kadar).
 let URETIM_COLLAPSED = new Set(['Teslim Edildi']);
+
+// Durum değişiminin tek kaynağı — hem kart dropdown'u hem sürükle-bırak buraya gelir.
+function setUretimStatus(id, newStatus) {
+  const u = DATA.uretimTakip.find(x=>x.id===id);
+  if (!u || !newStatus || u.status === newStatus) return;
+  u.status = newStatus;
+  saveData();
+  renderUretimTakip();
+  flash('Durum güncellendi: ' + u.status);
+}
+
 function renderUretimTakip() {
   const uretimStatusSelectEl = document.getElementById('uretimStatusSelect');
   if (uretimStatusSelectEl && !uretimStatusSelectEl.options.length) {
@@ -4115,9 +4447,12 @@ function renderUretimTakip() {
   const kanban = document.getElementById('uretimKanban');
   kanban.innerHTML = groups.map(status => {
     const items = filtered.filter(u=>u.status===status).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-    const cards = items.length ? items.map(u => `
-      <div class="kanban-card">
+    const cards = items.length ? items.map(u => {
+      const lateDays = uretimLateDays(u);
+      return `
+      <div class="kanban-card${lateDays ? ' kc-late' : ''}" data-id="${u.id}" title="Sürükleyerek durumunu değiştirebilirsiniz">
         <div class="kc-title">${esc(u.customer_name)}</div>
+        ${lateDays ? '<div class="kc-row neg-text"><span>⚠ Teslimat ' + lateDays + ' gün gecikti</span></div>' : ''}
         <div class="kc-row"><span>Adet: ${fmtNum(u.quantity)}</span><span>Teslimat: ${fmtDate(u.est_delivery)}</span></div>
         <div class="kc-row"><span>Takip: ${fmtDate(u.follow_up_date)}</span></div>
         ${u.problem_note ? '<div class="kc-row neg-text">⚠ '+esc(u.problem_note)+'</div>' : ''}
@@ -4126,9 +4461,10 @@ function renderUretimTakip() {
           <button class="btn small secondary" data-action="edit" data-id="${u.id}">Düzenle</button>
           <button class="btn small danger" data-action="del" data-id="${u.id}">Sil</button>
         </div>
-      </div>`).join('') : '<div class="kanban-empty">Kayıt yok</div>';
+      </div>`;
+    }).join('') : '<div class="kanban-empty">Kayıt yok</div>';
     const isCollapsed = URETIM_COLLAPSED.has(status);
-    return `<div class="kanban-col${isCollapsed?' collapsed':''}">
+    return `<div class="kanban-col${isCollapsed?' collapsed':''}" data-status="${esc(status)}">
       <h4 class="kanban-col-head" data-status="${esc(status)}">${esc(status)} <span class="cnt">${items.length}</span><span class="kanban-col-toggle">${isCollapsed?'▸ Göster':'▾ Gizle'}</span></h4>
       <div class="kanban-col-body">${cards}</div>
     </div>`;
@@ -4143,16 +4479,9 @@ function renderUretimTakip() {
   });
 
   kanban.querySelectorAll('select.kc-status').forEach(sel => {
-    sel.addEventListener('change', () => {
-      const id = parseInt(sel.dataset.id, 10);
-      const u = DATA.uretimTakip.find(x=>x.id===id);
-      if (!u) return;
-      u.status = sel.value;
-      saveData();
-      renderUretimTakip();
-      flash('Durum güncellendi: ' + esc(u.status));
-    });
+    sel.addEventListener('change', () => setUretimStatus(parseInt(sel.dataset.id, 10), sel.value));
   });
+  enableKanbanDnd(kanban, setUretimStatus);
   kanban.querySelectorAll('[data-action="edit"]').forEach(btn => btn.addEventListener('click', () => openGenericEditModal('uretim', parseInt(btn.dataset.id,10))));
   kanban.querySelectorAll('[data-action="del"]').forEach(btn => btn.addEventListener('click', () => {
     const id = parseInt(btn.dataset.id,10);
@@ -4203,14 +4532,31 @@ document.getElementById('formConvertToUretim').addEventListener('submit', (e) =>
 });
 
 // ---------------- TEDARİKÇİ ----------------
+// Harcama, gider kayıtlarının "payee" alanı tedarikçi adıyla eşleşerek bulunur.
+// Eşleşme adla yapıldığı için gider kaydına isim farklı yazıldıysa o tutar burada görünmez.
+function supplierExpenses(s) {
+  const name = (s.name || '').toLowerCase().trim();
+  if (!name) return [];
+  return DATA.expenses.filter(e => (e.payee || '').toLowerCase().trim() === name);
+}
+function supplierSpend(s) { return round2(supplierExpenses(s).reduce((sum, e) => sum + (e.amount || 0), 0)); }
+function supplierLastPurchase(s) {
+  const dates = supplierExpenses(s).map(e => e.date).filter(Boolean).sort();
+  return dates.length ? dates[dates.length - 1] : null;
+}
+
 function renderTedarikci() {
   renderTable('tedarikciTable', 'tedarikciSearch', 'tedarikciCount', DATA.suppliers, [
     {key:'category', label:'Kategori', render:s=>'<span class="badge">'+esc(s.category)+'</span>'},
     {key:'name', label:'Firma / Kişi'},
-    {key:'phone', label:'Telefon'},
+    {key:'phone', label:'Telefon', render:s=>s.phone
+      ? '<a href="tel:'+esc(String(s.phone).replace(/\s/g,''))+'">'+esc(s.phone)+'</a>'
+      : '-'},
+    {key:'spend', label:'Toplam Harcama', render:s=>fmtCurrency(supplierSpend(s)), sortVal:s=>supplierSpend(s), exportVal:s=>supplierSpend(s)},
+    {key:'last_purchase', label:'Son Alım', render:s=>{ const d=supplierLastPurchase(s); return d?fmtDate(d):'-'; }, sortVal:s=>supplierLastPurchase(s)||'', exportVal:s=>supplierLastPurchase(s)||''},
     {key:'note', label:'Not'},
     {key:'actions', label:'', render:s=>'<div class="actions-cell"><button class="btn small secondary" data-action="edit" data-id="'+s.id+'">Düzenle</button><button class="btn small danger" data-action="del" data-id="'+s.id+'">Sil</button></div>'},
-  ], { defaultSort:'category', defaultDir:1, actions: {
+  ], { defaultSort:'category', defaultDir:1, exportId:'tedarikciExport', exportName:'tedarikciler', actions: {
     edit: id => openGenericEditModal('supplier', id),
     del: id => { if(!confirm('Bu tedarikçi silinsin mi?')) return; DATA.suppliers = DATA.suppliers.filter(x=>x.id!==id); saveData(); flash('Kayıt silindi.'); renderTedarikci(); }
   }});
@@ -4278,9 +4624,16 @@ function renderOkulMail() {
     {key:'donus_durumu', label:'Dönüş Durumu', render:m=>'<span class="badge '+(m.donus_durumu==='Olumlu Dönüş'?'green':(m.donus_durumu==='Olumsuz Dönüş'?'red':'gray'))+'">'+esc(m.donus_durumu||'-')+'</span>'},
     {key:'mail_aciklamasi', label:'Açıklama'},
     {key:'notlar', label:'Notlar'},
-    {key:'takip_tarihi', label:'Takip', render:m=>fmtDate(m.takip_tarihi)},
+    {key:'takip_tarihi', label:'Takip', render:m=>{
+      const late = daysOverdue(m.takip_tarihi);
+      if (!m.takip_tarihi) return '-';
+      return late
+        ? '<span class="neg-text">⚠ ' + fmtDate(m.takip_tarihi) + ' (' + late + ' gün gecikti)</span>'
+        : esc(fmtDate(m.takip_tarihi));
+    }, exportVal:m=>m.takip_tarihi||''},
     {key:'actions', label:'', render:m=>'<div class="actions-cell"><button class="btn small secondary" data-action="edit" data-id="'+m.id+'">Düzenle</button><button class="btn small danger" data-action="del" data-id="'+m.id+'">Sil</button></div>'},
-  ], { defaultSort:'mail_tarihi', defaultDir:-1, actions: {
+  ], { defaultSort:'mail_tarihi', defaultDir:-1, exportId:'okulMailExport', exportName:'okul-mail',
+    rowClass:m => daysOverdue(m.takip_tarihi) ? 'row-alert' : '', actions: {
     edit: id => openGenericEditModal('okulMail', id),
     del: id => { if(!confirm('Bu mail kaydı silinsin mi?')) return; DATA.okulMail = DATA.okulMail.filter(x=>x.id!==id); saveData(); flash('Kayıt silindi.'); renderOkulMail(); }
   }});
@@ -4304,9 +4657,16 @@ function renderOkulTakip() {
     {key:'son_gorusulen', label:'Son Görüşülen'},
     {key:'son_gorusulen_pozisyon', label:'Pozisyon'},
     {key:'aciklama', label:'Açıklama'},
-    {key:'takip_tarihi', label:'Takip', render:t=>fmtDate(t.takip_tarihi)},
+    {key:'takip_tarihi', label:'Takip', render:t=>{
+      const late = daysOverdue(t.takip_tarihi);
+      if (!t.takip_tarihi) return '-';
+      return late
+        ? '<span class="neg-text">⚠ ' + fmtDate(t.takip_tarihi) + ' (' + late + ' gün gecikti)</span>'
+        : esc(fmtDate(t.takip_tarihi));
+    }, exportVal:t=>t.takip_tarihi||''},
     {key:'actions', label:'', render:t=>'<div class="actions-cell"><button class="btn small secondary" data-action="edit" data-id="'+t.id+'">Düzenle</button><button class="btn small danger" data-action="del" data-id="'+t.id+'">Sil</button></div>'},
-  ], { defaultSort:'takip_tarihi', defaultDir:-1, actions: {
+  ], { defaultSort:'takip_tarihi', defaultDir:-1, exportId:'okulTakipExport', exportName:'okul-takip',
+    rowClass:t => daysOverdue(t.takip_tarihi) ? 'row-alert' : '', actions: {
     edit: id => openGenericEditModal('okulTakip', id),
     del: id => { if(!confirm('Bu görüşme kaydı silinsin mi?')) return; DATA.okulTakip = DATA.okulTakip.filter(x=>x.id!==id); saveData(); flash('Kayıt silindi.'); renderOkulTakip(); }
   }});
@@ -4445,10 +4805,13 @@ function renderTaskListHtml(tasks, emptyText) {
 }
 
 function taskRowHtml(t) {
+  // Sol şerit zaten kişi rengini taşıyor; gecikme bu yüzden renkle değil metinli rozetle gösterilir.
+  const lateDays = t.done ? 0 : daysOverdue(t.date);
   return `<div class="task-row ${t.done?'done':''}" style="border-left-color:${managerColor(t.assigned_to)};" data-id="${t.id}">
     <div class="task-row-top">
       <input type="checkbox" class="taskDoneCheckbox" data-id="${t.id}" ${t.done?'checked':''}>
       <span class="task-title">${esc(t.title)}</span>
+      ${lateDays ? '<span class="badge red" title="Görev tarihi geçti">⚠ ' + lateDays + ' gün</span>' : ''}
       <span class="task-person-badge" style="background:${managerColor(t.assigned_to)};">${esc(t.assigned_to)}</span>
       <div class="task-actions">
         <button type="button" class="btn small secondary" data-action="edit" data-id="${t.id}">Düzenle</button>
@@ -4564,24 +4927,75 @@ document.getElementById('formBulkGorev').addEventListener('submit', (e) => {
 });
 
 // ---------------- HEDEFLER ----------------
+// "(max)" ile biten hedefler bütçe tavanıdır: az olması iyidir, aşılması kötüdür.
+function hedefIsMax(h) { return /\(max\)/i.test(h.hedef_adi || ''); }
+
 function computeHedefGerceklesen(h) {
   if (h.hedef_adi && h.hedef_adi.includes('Ciro')) return DATA.incomes.reduce((s,i)=>s+(i.amount||0),0);
+  // Gider hedefi de canlı hesaplanır; gerceklesen_excel donmuş bir Excel anlık görüntüsüydü.
+  if (h.hedef_adi && h.hedef_adi.includes('Gider')) {
+    return DATA.expenses.reduce((s,e)=>s+(e.amount||0),0)
+      + DATA.fixedExpenses.reduce((s,f)=>s+(f.amount||0),0);
+  }
   if (h.hedef_adi && h.hedef_adi.includes('Müşteri')) return DATA.customers.length;
   if (h.hedef_adi && h.hedef_adi.includes('İş')) return DATA.jobs.filter(j=>j.status==='Teslim Edildi').length;
   return h.gerceklesen_excel || 0;
 }
+// Hedef temposu: yılın/ayın ne kadarı geçtiyse hedefin de o kadarı tamamlanmış olmalı.
+function yearPacePct() {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), 0, 1);
+  const end = new Date(now.getFullYear() + 1, 0, 1);
+  return (now - start) / (end - start);
+}
+function monthPacePct() {
+  const now = new Date();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  return now.getDate() / daysInMonth;
+}
+function paceNote(pct, pacePct) {
+  const diff = pct - pacePct;
+  if (Math.abs(diff) < 0.03) return 'tempoda';
+  return diff > 0
+    ? '<span class="pos-text">tempodan ' + (diff * 100).toFixed(0) + ' puan önde</span>'
+    : '<span class="neg-text">tempodan ' + (Math.abs(diff) * 100).toFixed(0) + ' puan geride</span>';
+}
+
 function renderHedefler() {
   const progressBox = document.getElementById('hedefProgress');
   progressBox.innerHTML = DATA.hedefler.map(h => {
     const gerceklesen = computeHedefGerceklesen(h);
-    const pct = h.yillik_hedef ? Math.min(1, gerceklesen/h.yillik_hedef) : 0;
     const fmt = v => h.is_currency ? fmtCurrency(v) : fmtNum(v);
+    const ratio = h.yillik_hedef ? gerceklesen / h.yillik_hedef : 0;
+
+    if (hedefIsMax(h)) {
+      // Bütçe tavanı: dolu çubuk BAŞARI değil, tüketim demektir. Aşıldığında kırmızı.
+      const over = ratio > 1;
+      const barPct = Math.min(1, ratio) * 100;
+      return `<div style="margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+          <b>${esc(h.hedef_adi)}</b><span>${fmt(gerceklesen)} / ${fmt(h.yillik_hedef)} tavan</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill${over ? ' over' : ''}" style="width:${barPct.toFixed(1)}%;"></div>
+          <div class="progress-pace" style="left:${(yearPacePct()*100).toFixed(1)}%;" title="Bugün itibarıyla beklenen tempo"></div>
+        </div>
+        <div class="pace-note">${over
+          ? '<span class="neg-text">⚠ Bütçe ' + fmt(round2(gerceklesen - h.yillik_hedef)) + ' aşıldı (tavanın %' + (ratio*100).toFixed(0) + '\'i)</span>'
+          : 'Bütçenin %' + (ratio*100).toFixed(1) + '\'i kullanıldı'}</div>
+      </div>`;
+    }
+
+    const pct = Math.min(1, ratio);
     return `<div style="margin-bottom:14px;">
       <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
         <b>${esc(h.hedef_adi)}</b><span>${fmt(gerceklesen)} / ${fmt(h.yillik_hedef)}</span>
       </div>
-      <div class="progress-track"><div class="progress-fill" style="width:${(pct*100).toFixed(1)}%;"></div></div>
-      <div style="margin-top:4px;font-size:12.5px;color:var(--muted);">${(pct*100).toFixed(1)}% tamamlandı</div>
+      <div class="progress-track">
+        <div class="progress-fill" style="width:${(pct*100).toFixed(1)}%;"></div>
+        <div class="progress-pace" style="left:${(yearPacePct()*100).toFixed(1)}%;" title="Bugün itibarıyla beklenen tempo"></div>
+      </div>
+      <div class="pace-note">${(pct*100).toFixed(1)}% tamamlandı — ${paceNote(pct, yearPacePct())}</div>
     </div>`;
   }).join('');
   renderTable('hedeflerTable', null, null, DATA.hedefler, [
@@ -4625,8 +5039,11 @@ function renderHedeflerAylik() {
       <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
         <b>${esc(h.hedef_adi)}</b><span>${fmt(gerceklesen)} / ${fmt(h.aylik_hedef)}</span>
       </div>
-      <div class="progress-track"><div class="progress-fill" style="width:${(pct*100).toFixed(1)}%;"></div></div>
-      <div style="margin-top:4px;font-size:12.5px;color:var(--muted);">${(pct*100).toFixed(1)}% tamamlandı</div>
+      <div class="progress-track">
+        <div class="progress-fill" style="width:${(pct*100).toFixed(1)}%;"></div>
+        <div class="progress-pace" style="left:${(monthPacePct()*100).toFixed(1)}%;" title="Bugün itibarıyla beklenen tempo"></div>
+      </div>
+      <div class="pace-note">${(pct*100).toFixed(1)}% tamamlandı — ${paceNote(pct, monthPacePct())}</div>
     </div>`;
   }).join('');
   renderTable('hedeflerAylikTable', null, null, list, [
@@ -5031,6 +5448,7 @@ const NOTIF_OFFER_STALE_DAYS = 5;     // 'Teklif' durumunda kaç gündür cevap 
 const NOTIF_PIPELINE_STUCK_DAYS = 7;  // 'Görüşülüyor' aşamasında kaç gündür takılıysa uyarılsın
 const NOTIF_TARGET_DAYS_LEFT = 5;     // ay sonuna kaç gün kala hedef gerisi kontrolü başlasın
 const NOTIF_TARGET_PACE_RATIO = 0.7;  // beklenen tempo yüzde kaçının altındaysa uyarılsın
+const NOTIF_KAPORA_DETAIL_MAX = 3;    // kaç kaporasız işe kadar tek tek listelensin (üstünde tek satırda toplanır)
 
 function notifJobLabel(j) {
   return j.title || j.customer_name_free || ('İş #' + (j.job_no || j.id));
@@ -5089,6 +5507,38 @@ function computeNotifications() {
         notifs.push({ level: 'info', view: 'hedefler', text: `${h.hedef_adi}: ay sonuna ${daysRemaining} gün kala hedefin gerisinde (${fv(gerceklesen)} / ${fv(h.aylik_hedef)})` });
       }
     });
+  })();
+
+  // 1e) Kaporasız üretime girmiş / onaylanmış işler (tahsilat riski).
+  // Çok sayıda olabildiği için eşik üstünde tek satırda toplanır — yoksa bu tip
+  // tüm uyarı listesini doldurup diğer risklerin görünmesini engelliyor.
+  (function checkKaporasiz() {
+    const riskli = (DATA.jobs || []).filter(jobNoDeposit);
+    if (!riskli.length) return;
+    const toplam = round2(riskli.reduce((s, j) => s + jobTotalAmount(j), 0));
+    if (riskli.length > NOTIF_KAPORA_DETAIL_MAX) {
+      notifs.push({ level: 'urgent', view: 'isler',
+        text: `${riskli.length} işte hiç tahsilat yok (toplam ${fmtCurrency(toplam)} açık) — en büyüğü: ${notifJobLabel(riskli.slice().sort((a,b)=>jobTotalAmount(b)-jobTotalAmount(a))[0])}` });
+      return;
+    }
+    riskli.forEach(j => {
+      const inProduction = j.status === 'Üretimde';
+      notifs.push({
+        level: inProduction ? 'urgent' : 'warning',
+        view: 'isler',
+        text: `${notifJobLabel(j)}: ${inProduction ? 'üretimde' : 'onaylandı'} ama hiç tahsilat yok (${fmtCurrency(jobTotalAmount(j))} açık)`,
+      });
+    });
+  })();
+
+  // 1f) Veri kalitesi — tekrar eden iş numaraları (tek satırda toplanır, liste şişmesin)
+  (function checkDuplicateJobNos() {
+    const counts = {};
+    (DATA.jobs || []).forEach(j => { if (j.job_no) counts[j.job_no] = (counts[j.job_no] || 0) + 1; });
+    const dups = Object.keys(counts).filter(k => counts[k] > 1);
+    if (dups.length) {
+      notifs.push({ level: 'info', view: 'isler', text: `${dups.length} iş numarası birden fazla kayıtta kullanılmış: ${dups.join(', ')}` });
+    }
   })();
 
   // 2) İşlem bekleyen kayıtlar — gecikmiş görevler
@@ -5348,7 +5798,6 @@ async function renderYonetimAjani() {
   }
   ajanRefreshStatus();
   ajanRenderUsage();
-  renderBelgeIsleme();
 }
 
 const AJAN_DEFAULT_SUB = 'Şirket panelini her sabah okur, brifing ve aksiyon önerisi üretir.';
@@ -6507,7 +6956,9 @@ const VIEW_RENDER_MAP = {
   uretim: renderUretimTakip, tedarikci: renderTedarikci,
   okul: () => { renderOkulMail(); renderOkulTakip(); },
   hedefler: renderHedefler, maliyet: renderMaliyetSablonlari, gorevler: renderGorevler,
-  belgeler: renderBelgeOlusturucu, yoneticiler: renderYoneticiler,
+  // Belge İşleme backend'e istek attığı için renderAll() içinde değil, yalnız sekme açılınca çalışır.
+  belgeler: () => { renderBelgeOlusturucu(); renderBelgeIsleme(); },
+  yoneticiler: renderYoneticiler,
   materyaller: renderMateryaller, ajan: renderYonetimAjani, sdr: renderSatisAjani,
   faturalar: renderFaturalar,
 };
@@ -6605,8 +7056,17 @@ document.getElementById('formJob').addEventListener('submit', (e) => {
     const id = parseInt(idRaw, 10);
     const job = DATA.jobs.find(j=>j.id===id);
     if (!job) { flash('İş bulunamadı.', 'error'); return; }
+    // Kapora kontrolü: hiç tahsilat girilmemiş bir iş sessizce üretime geçmesin.
+    // Tutar formdaki YENİ değerlerden hesaplanır, tahsilat bu formda değişmediği için mevcut kayıttan okunur.
+    const newStatus = fd.get('status');
+    const newTotal = round2(quantity * unitPrice);
+    if (newStatus === 'Üretimde' && job.status !== 'Üretimde' && newTotal > 0 && jobCollected(job) === 0) {
+      const onay = confirm('⚠️ Kapora uyarısı\n\n"' + job.job_no + '" işi için Gelir Defteri\'nde hiç tahsilat kaydı yok'
+        + ' (toplam bedel ' + fmtCurrency(newTotal) + ').\n\nYine de "Üretimde" durumuna alınsın mı?');
+      if (!onay) return;
+    }
     job.order_date = fd.get('order_date');
-    job.status = fd.get('status');
+    job.status = newStatus;
     job.title = fd.get('title');
     job.customer_id = customerId;
     job.customer_name_free = customerNameFree;
