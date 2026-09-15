@@ -1218,6 +1218,8 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
       <p style="font-size:13px;color:var(--muted);margin-top:0;">
         Bu şablonlar "Üretim Maliyetleri Detaylı" belgenizden alınmıştır (<b id="fiyatTarihiLabel"></b> tarihli fiyatlar).
         İş formunda ürün türü ve adet seçtiğinizde bu şablonlar otomatik olarak maliyet kalemlerini hesaplar; her zaman elle düzenleyebilirsiniz.
+        Her ürünün <b>risk payı hariç sabit bir adet başı maliyeti</b> vardır; adet arttıkça yalnızca <b>risk payı yüzdesi</b> düşer —
+        aşağıdaki "Risk Payı Dahil Maliyet Tablosu" bunu adet aralığına göre otomatik hesaplar.
       </p>
       <div class="page-header" style="margin-bottom:10px;"><span></span><button type="button" class="btn small" id="btnNewTplUrun">+ Yeni Ürün Ekle</button></div>
       <div id="templateCards"></div>
@@ -1227,6 +1229,18 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
       <div class="grid-2">
         <div><h3>Baskı Maliyeti (birim)</h3><ul class="stat-list" id="baskiList"></ul></div>
         <div><h3>Nakış Maliyeti (birim)</h3><ul class="stat-list" id="nakisList"></ul></div>
+      </div>
+    </div>
+    <div class="page-header" style="margin-top:26px;"><h3 style="margin:0;font-size:15px;color:var(--navy);">🎯 Risk Payı Dahil Maliyet Tablosu (Adete Göre)</h3><button class="btn secondary small" id="btnEditRiskPct">Yüzdeleri Düzenle</button></div>
+    <div class="panel-box">
+      <p style="font-size:12.5px;color:var(--muted);margin-top:-4px;">
+        Her hücre: <b>risk payı yüzdesi / risk payı tutarı (₺) / risk payı dahil maliyet (₺)</b>.
+        Risk payı tutarı ve dahil maliyet, ürünün "Risk Payı Hariç Adet Başı Maliyet" değerinden otomatik hesaplanır — burada yalnızca yüzdeler düzenlenir.
+      </p>
+      <div class="table-wrap"><table class="data-table" id="riskPctTable"></table></div>
+      <div class="inline-form" id="riskPctEditActions" style="display:none;margin-top:12px;">
+        <button class="btn small" id="btnSaveRiskPct">Kaydet</button>
+        <button type="button" class="btn small secondary" id="btnCancelRiskPct">İptal</button>
       </div>
     </div>
     <div class="page-header" style="margin-top:26px;"><h3 style="margin:0;font-size:15px;color:var(--navy);">Adete Göre Önerilen Satış Fiyatı (Baskı/Nakış Hariç)</h3><button class="btn secondary small" id="btnEditPriceList">Fiyatları Düzenle</button></div>
@@ -1253,7 +1267,7 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
           <div class="field"><label>Koli Adedi</label><input type="number" name="box_qty"></div>
           <div class="field"><label>Ağırlık (g)</label><input type="number" name="weight_g"></div>
         </div>
-        <div class="field"><label>Baskı-Nakış Hariç Adet Başı Maliyet (₺)</label><input type="number" step="0.01" name="baski_nakis_haric_maliyet"></div>
+        <div class="field"><label>Risk Payı ve Baskı-Nakış Hariç Adet Başı Maliyet (₺)</label><input type="number" step="0.01" name="baski_nakis_haric_maliyet"></div>
         <div class="section-title" style="margin:8px 0;font-size:13px;">Maliyet Kalemleri</div>
         <div class="table-wrap"><table class="data-table" id="tplItemsTable"></table></div>
         <div class="inline-form">
@@ -1511,7 +1525,7 @@ const SEED_DATA = {
   customers: [], jobs: [], incomes: [], expenses: [], fixedExpenses: [], debts: [], pipeline: [],
   suppliers: [], hedefler: [], hedeflerAylik: [], uretimTakip: [], okulMail: [], okulTakip: [],
   tasks: [], invoices: [], supplierCategories: [],
-  costTemplates: { products: [], baski: {}, nakis: {}, price_tiers: [], price_list: {}, meta: {} },
+  costTemplates: { products: [], baski: {}, nakis: {}, price_tiers: [], price_list: {}, maliyet_risk_pct: {}, meta: {} },
 };
 
 const STORAGE_KEY = 'merciPanelData_v5';
@@ -1673,6 +1687,8 @@ function todayISO() { return new Date().toISOString().slice(0,10); }
 function fmtCurrency(v) { return new Intl.NumberFormat('tr-TR', {style:'currency', currency:'TRY', maximumFractionDigits:0}).format(v||0); }
 function fmtNum(v) { return new Intl.NumberFormat('tr-TR').format(v||0); }
 function fmtPercent(v) { return ((v||0)*100).toFixed(1)+'%'; }
+function fmtMoney2(v) { return Number(v||0).toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+function fmtRiskPct(v) { return '%' + Number(v||0).toLocaleString('tr-TR', {maximumFractionDigits:1}); }
 function fmtDate(v) { if(!v) return '-'; const d=new Date(v+'T00:00:00'); if(isNaN(d)) return v; return d.toLocaleDateString('tr-TR'); }
 function esc(v) { if (v===null||v===undefined) return ''; return String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
@@ -1717,6 +1733,7 @@ function hasRescueMark() { try { return !!localStorage.getItem(RESCUE_KEY); } ca
 let DATA = loadData();
 migrateTasksSchema();
 migratePriceTiersV2();
+migrateMaliyetRiskPct();
 migrateHedeflerAylik();
 migrateSupplierCategories();
 // Tedarikçi kategorileri artık sabit değil, kullanıcı ekleyip silebiliyor. İlk kez
@@ -1761,6 +1778,13 @@ function migratePriceTiersV2() {
   }
   ct.price_tiers_v = 2;
   saveData();
+}
+// Risk payı dahil maliyet sistemi öncesi buluttan gelen eski veride bu alan hiç yok —
+// eksikse boş nesneyle başlat ki maliyetTierInfo() undefined üzerinde patlamasın.
+function migrateMaliyetRiskPct() {
+  const ct = DATA.costTemplates;
+  if (!ct) return;
+  if (!ct.maliyet_risk_pct) { ct.maliyet_risk_pct = {}; saveData(); }
 }
 function migrateTasksSchema() {
   if (!Array.isArray(DATA.tasks)) { DATA.tasks = []; return; }
@@ -2068,6 +2092,7 @@ function adoptCloudSnapshot(cloud, opts) {
   // Buluttan gelen veri henüz eski yapıda olabilir — göç fonksiyonlarını tekrar çalıştır.
   migrateTasksSchema();
   migratePriceTiersV2();
+  migrateMaliyetRiskPct();
   migrateHedeflerAylik();
   migrateSupplierCategories();
   try {
@@ -2557,6 +2582,23 @@ function suggestedPrice(templateName, qty) {
   const idx = tiers.findIndex(t => qty >= t.min && qty <= t.max);
   if (idx === -1) return null;
   return list[idx];
+}
+// Risk payı dahil maliyet: baz maliyet (risk payı hariç, ürüne sabit) + adet aralığına göre değişen
+// risk payı yüzdesi. Risk payı tutarı = baz * yüzde/100; risk payı dahil maliyet = baz + risk payı tutarı.
+function maliyetTierInfo(templateName, tierIdx) {
+  const tpl = getTemplate(templateName);
+  if (!tpl) return null;
+  const base = tpl.baski_nakis_haric_maliyet || 0;
+  const pctList = DATA.costTemplates.maliyet_risk_pct[templateName];
+  const pct = pctList ? (pctList[tierIdx] || 0) : 0;
+  const riskAmount = round2(base * pct / 100);
+  return { base, pct, riskAmount, total: round2(base + riskAmount) };
+}
+function maliyetForQty(templateName, qty) {
+  const tiers = DATA.costTemplates.price_tiers;
+  const idx = tiers.findIndex(t => qty >= t.min && qty <= t.max);
+  if (idx === -1) return null;
+  return maliyetTierInfo(templateName, idx);
 }
 
 // ---------------- flash messages ----------------
@@ -5066,7 +5108,7 @@ function renderMaliyetSablonlari() {
     return `<div class="panel-box" style="margin-bottom:16px;">
       <div class="page-header" style="margin-bottom:10px;"><h3 style="margin:0;">${esc(p.name)}</h3><button class="btn secondary small" data-action="edit-tpl" data-name="${esc(p.name)}">Düzenle</button></div>
       <table class="data-table"><thead><tr><th>Maliyet Kalemi</th><th>Adet Başı</th></tr></thead><tbody>${itemRows}${extraRows}</tbody></table>
-      <div style="margin-top:8px;"><b>Baskı-Nakış Hariç Adet Başı Maliyet:</b> ${fmtCurrency(p.baski_nakis_haric_maliyet)}</div>
+      <div style="margin-top:8px;"><b>Risk Payı ve Baskı-Nakış Hariç Adet Başı Maliyet:</b> ${fmtCurrency(p.baski_nakis_haric_maliyet)}</div>
       <div><b>Koli Adedi:</b> ${fmtNum(p.box_qty)} — <b>Ağırlık:</b> ${fmtNum(p.weight_g)}g</div>
     </div>`;
   }).join('');
@@ -5076,6 +5118,17 @@ function renderMaliyetSablonlari() {
 
   document.getElementById('baskiList').innerHTML = Object.keys(ct.baski||{}).map(k=>`<li><span>${esc(k)}</span><b>${fmtCurrency(ct.baski[k])}</b></li>`).join('');
   document.getElementById('nakisList').innerHTML = Object.keys(ct.nakis||{}).map(k=>`<li><span>${esc(k)}</span><b>${fmtCurrency(ct.nakis[k])}</b></li>`).join('');
+
+  const riskTiers = ct.price_tiers || [];
+  const riskTierLabels = riskTiers.map(t => t.label || (t.min + '-' + t.max));
+  document.getElementById('riskPctTable').innerHTML =
+    '<thead><tr><th>Ürün</th>' + riskTierLabels.map(l=>'<th>'+esc(l)+'</th>').join('') + '</tr></thead><tbody>' +
+    products.map(p => '<tr><td>'+esc(p.name)+'</td>' + riskTierLabels.map((_,idx) => {
+      const info = maliyetTierInfo(p.name, idx);
+      if (!info) return '<td>-</td>';
+      return '<td>' + fmtRiskPct(info.pct) + ' / ' + fmtMoney2(info.riskAmount) + ' / <b>' + fmtMoney2(info.total) + '</b></td>';
+    }).join('') + '</tr>').join('') +
+    '</tbody>';
 
   const tiers = ct.price_tiers || [];
   const priceList = ct.price_list || {};
@@ -5262,6 +5315,49 @@ document.getElementById('btnSavePriceList').addEventListener('click', () => {
   renderMaliyetSablonlari();
 });
 
+// ---- Risk payı yüzdeleri (tier) inline düzenleme ----
+let RISK_EDIT_LIST = null;
+function renderRiskPctEditTable() {
+  const tiers = DATA.costTemplates.price_tiers || [];
+  const tierLabels = tiers.map(t => t.label || (t.min + '-' + t.max));
+  const table = document.getElementById('riskPctTable');
+  const products = DATA.costTemplates.products || [];
+  table.innerHTML =
+    '<thead><tr><th>Ürün</th>' + tierLabels.map(l=>'<th>'+esc(l)+' (%)</th>').join('') + '</tr></thead><tbody>' +
+    products.map(p => '<tr><td>'+esc(p.name)+'</td>' +
+      tierLabels.map((_,idx)=>'<td><input type="number" step="0.1" class="riskPctEdit" data-name="'+esc(p.name)+'" data-idx="'+idx+'" value="'+((RISK_EDIT_LIST[p.name]||[])[idx]||0)+'" style="width:70px;"></td>').join('') +
+      '</tr>').join('') +
+    '</tbody>';
+  table.querySelectorAll('.riskPctEdit').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const name = inp.dataset.name;
+      if (!RISK_EDIT_LIST[name]) RISK_EDIT_LIST[name] = new Array(tierLabels.length).fill(0);
+      RISK_EDIT_LIST[name][parseInt(inp.dataset.idx,10)] = parseFloat(inp.value)||0;
+    });
+  });
+}
+document.getElementById('btnEditRiskPct').addEventListener('click', () => {
+  RISK_EDIT_LIST = JSON.parse(JSON.stringify(DATA.costTemplates.maliyet_risk_pct || {}));
+  renderRiskPctEditTable();
+  document.getElementById('riskPctEditActions').style.display = 'flex';
+  document.getElementById('btnEditRiskPct').style.display = 'none';
+});
+document.getElementById('btnCancelRiskPct').addEventListener('click', () => {
+  RISK_EDIT_LIST = null;
+  document.getElementById('riskPctEditActions').style.display = 'none';
+  document.getElementById('btnEditRiskPct').style.display = 'inline-block';
+  renderMaliyetSablonlari();
+});
+document.getElementById('btnSaveRiskPct').addEventListener('click', () => {
+  DATA.costTemplates.maliyet_risk_pct = RISK_EDIT_LIST;
+  RISK_EDIT_LIST = null;
+  saveData();
+  document.getElementById('riskPctEditActions').style.display = 'none';
+  document.getElementById('btnEditRiskPct').style.display = 'inline-block';
+  flash('Risk payı yüzdeleri güncellendi.');
+  renderMaliyetSablonlari();
+});
+
 // ---------------- YÖNETİCİLER ----------------
 function renderYoneticiler() {
   renderTable('yoneticilerTable', null, null, AUTH.managers, [
@@ -5362,6 +5458,7 @@ async function restoreYedek(filename) {
     // Buluttan/eski bir yedekten gelen veri henüz en güncel şema göçlerini içermeyebilir.
     migrateTasksSchema();
     migratePriceTiersV2();
+    migrateMaliyetRiskPct();
     migrateHedeflerAylik();
     migrateSupplierCategories();
     try {
