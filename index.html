@@ -931,6 +931,10 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
           <div class="field"><label>Durum</label><select name="status" id="uretimStatusSelect"></select></div>
           <div class="field"><label>Takip Tarihi</label><input type="date" name="follow_up_date"></div>
         </div>
+        <div class="form-row">
+          <div class="field"><label>Sorumlu Kişi</label><select name="assigned_to" id="uretimAssignedSelect"></select></div>
+          <div></div>
+        </div>
         <div class="field"><label>Not</label><textarea name="note"></textarea></div>
         <div class="field"><label>Problem Durumu</label><textarea name="problem_note"></textarea></div>
         <button type="submit" class="btn">Kaydet</button>
@@ -1503,6 +1507,10 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
       <div class="form-row">
         <div class="field"><label>Üretim Durumu</label><select name="status" id="convertStatusSelect"></select></div>
         <div class="field"><label>Takip Tarihi</label><input type="date" name="follow_up_date"></div>
+      </div>
+      <div class="form-row">
+        <div class="field"><label>Sorumlu Kişi</label><select name="assigned_to" id="convertAssignedSelect"></select></div>
+        <div></div>
       </div>
       <div class="field"><label>Not</label><textarea name="note"></textarea></div>
       <div class="inline-form">
@@ -2775,6 +2783,9 @@ const ENTITY_CONFIGS = {
     {name:'quantity', label:'Adet', type:'number'},
     {name:'status', label:'Durum', type:'select', options: () => URETIM_STATUSES},
     {name:'follow_up_date', label:'Takip Tarihi', type:'date'},
+    {name:'assigned_to', label:'Sorumlu Kişi', type:'select',
+      options: () => ['— Atanmadı —', ...AUTH.managers.map(m=>m.name)],
+      transformOut: v => v || '— Atanmadı —', transformIn: v => v === '— Atanmadı —' ? '' : v},
     {name:'note', label:'Not', type:'textarea'},
     {name:'problem_note', label:'Problem Durumu', type:'textarea'},
   ]},
@@ -4486,6 +4497,11 @@ function renderUretimTakip() {
   if (uretimStatusSelectEl && !uretimStatusSelectEl.options.length) {
     uretimStatusSelectEl.innerHTML = URETIM_STATUSES.map(s=>'<option value="'+esc(s)+'">'+esc(s)+'</option>').join('');
   }
+  const uretimAssignSelectEl = document.getElementById('uretimAssignedSelect');
+  if (uretimAssignSelectEl && uretimAssignSelectEl.options.length !== AUTH.managers.length) {
+    uretimAssignSelectEl.innerHTML = AUTH.managers.map(m=>'<option value="'+esc(m.name)+'">'+esc(m.name)+'</option>').join('');
+  }
+  if (uretimAssignSelectEl && AUTH.managers.some(m=>m.name===CURRENT_USER)) uretimAssignSelectEl.value = CURRENT_USER;
 
   const filterText = (document.getElementById('uretimSearch') && document.getElementById('uretimSearch').value || '').toLowerCase();
   const filtered = DATA.uretimTakip.filter(u => !filterText || (u.customer_name||'').toLowerCase().includes(filterText) || (u.status||'').toLowerCase().includes(filterText));
@@ -4499,7 +4515,7 @@ function renderUretimTakip() {
       const lateDays = uretimLateDays(u);
       return `
       <div class="kanban-card${lateDays ? ' kc-late' : ''}" data-id="${u.id}" title="Sürükleyerek durumunu değiştirebilirsiniz">
-        <div class="kc-title">${esc(u.customer_name)}</div>
+        <div class="kc-title">${esc(u.customer_name)}${u.assigned_to ? ' <span class="task-person-badge" style="background:'+managerColor(u.assigned_to)+';">'+esc(u.assigned_to)+'</span>' : ''}</div>
         ${lateDays ? '<div class="kc-row neg-text"><span>⚠ Teslimat ' + lateDays + ' gün gecikti</span></div>' : ''}
         <div class="kc-row"><span>Adet: ${fmtNum(u.quantity)}</span><span>Teslimat: ${fmtDate(u.est_delivery)}</span></div>
         <div class="kc-row"><span>Takip: ${fmtDate(u.follow_up_date)}</span></div>
@@ -4542,7 +4558,7 @@ if (document.getElementById('uretimSearch')) document.getElementById('uretimSear
 document.getElementById('formUretim').addEventListener('submit', (e) => {
   e.preventDefault();
   const fd = new FormData(e.target);
-  DATA.uretimTakip.push({ id: nextId(DATA.uretimTakip), date: fd.get('date'), customer_name: fd.get('customer_name'), est_delivery: fd.get('est_delivery')||null, quantity: parseFloat(fd.get('quantity'))||0, status: fd.get('status')||URETIM_STATUSES[0], follow_up_date: fd.get('follow_up_date')||null, note: fd.get('note')||'', problem_note: fd.get('problem_note')||'' });
+  DATA.uretimTakip.push({ id: nextId(DATA.uretimTakip), date: fd.get('date'), customer_name: fd.get('customer_name'), est_delivery: fd.get('est_delivery')||null, quantity: parseFloat(fd.get('quantity'))||0, status: fd.get('status')||URETIM_STATUSES[0], follow_up_date: fd.get('follow_up_date')||null, assigned_to: fd.get('assigned_to')||'', note: fd.get('note')||'', problem_note: fd.get('problem_note')||'' });
   saveData(); e.target.reset(); document.querySelector('#formUretim [name="date"]').value = todayISO();
   flash('Üretim kaydı eklendi.'); renderUretimTakip();
 });
@@ -4560,6 +4576,9 @@ function openConvertModal(pipelineItem, jobForPrefill) {
   const sel = document.getElementById('convertStatusSelect');
   if (!sel.options.length) sel.innerHTML = URETIM_STATUSES.map(s=>'<option value="'+esc(s)+'">'+esc(s)+'</option>').join('');
   sel.value = URETIM_STATUSES[0];
+  const assignSel = document.getElementById('convertAssignedSelect');
+  if (!assignSel.options.length) assignSel.innerHTML = AUTH.managers.map(m=>'<option value="'+esc(m.name)+'">'+esc(m.name)+'</option>').join('');
+  if (AUTH.managers.some(m=>m.name===CURRENT_USER)) assignSel.value = CURRENT_USER;
   document.getElementById('convertModalOverlay').classList.add('active');
 }
 function closeConvertModal() { document.getElementById('convertModalOverlay').classList.remove('active'); }
@@ -4571,7 +4590,7 @@ document.getElementById('formConvertToUretim').addEventListener('submit', (e) =>
     id: nextId(DATA.uretimTakip), date: fd.get('date'), customer_name: fd.get('customer_name'),
     est_delivery: fd.get('est_delivery')||null, quantity: parseFloat(fd.get('quantity'))||0,
     status: fd.get('status')||URETIM_STATUSES[0], follow_up_date: fd.get('follow_up_date')||null,
-    note: fd.get('note')||'', problem_note: '', from_pipeline_id: parseInt(fd.get('pipeline_id'),10)||null,
+    assigned_to: fd.get('assigned_to')||'', note: fd.get('note')||'', problem_note: '', from_pipeline_id: parseInt(fd.get('pipeline_id'),10)||null,
   });
   saveData();
   closeConvertModal();
