@@ -1217,30 +1217,32 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
     <div class="panel-box">
       <p style="font-size:13px;color:var(--muted);margin-top:0;">
         Bu şablonlar "Üretim Maliyetleri Detaylı" belgenizden alınmıştır (<b id="fiyatTarihiLabel"></b> tarihli fiyatlar).
-        İş formunda ürün türü ve adet seçtiğinizde bu şablonlar otomatik olarak maliyet kalemlerini hesaplar; her zaman elle düzenleyebilirsiniz.
-        Her ürünün <b>risk payı hariç sabit bir adet başı maliyeti</b> vardır; adet arttıkça yalnızca <b>risk payı yüzdesi</b> düşer —
-        aşağıdaki "Risk Payı Dahil Maliyet Tablosu" bunu adet aralığına göre otomatik hesaplar.
+        İş formunda ve belge yüklemede ürün türü + adet seçildiğinde bu kalemler, <b>baskı/nakış</b> ve aşağıdaki
+        <b>risk payı</b> otomatik toplanıp maliyet olarak önerilir; her zaman elle düzenleyebilirsiniz.
+        Genel gider artık ayrı bir kalem değildir — yerini, adet arttıkça düşen <b>risk payı yüzdesi</b> almıştır
+        (bkz. aşağıdaki <a href="#maliyetTablosuBox" style="color:var(--accent2);">Maliyet Tablosu</a>).
       </p>
       <div class="page-header" style="margin-bottom:10px;"><span></span><button type="button" class="btn small" id="btnNewTplUrun">+ Yeni Ürün Ekle</button></div>
       <div id="templateCards"></div>
+    </div>
+    <div class="page-header" style="margin-top:26px;" id="maliyetTablosuBox"><h3 style="margin:0;font-size:15px;color:var(--navy);">💰 Maliyet Tablosu — Baz Maliyet + Risk Payı Dahil (Adete Göre)</h3><button class="btn secondary small" id="btnEditRiskPct">Risk Payı Yüzdelerini Düzenle</button></div>
+    <div class="panel-box">
+      <p style="font-size:12.5px;color:var(--muted);margin-top:-4px;">
+        <b>Baz Maliyet</b>: risk payı hariç, adetten bağımsız sabit maliyet (ürünün kendi "Düzenle" formundan girilir).
+        Sağdaki adet aralığı hücreleri: <b>risk payı yüzdesi / risk payı tutarı (₺) / risk payı dahil maliyet (₺)</b> —
+        tutar ve toplam, baz maliyetten otomatik hesaplanır; burada yalnızca yüzdeler düzenlenir.
+      </p>
+      <div class="table-wrap"><table class="data-table" id="riskPctTable"></table></div>
+      <div class="inline-form" id="riskPctEditActions" style="display:none;margin-top:12px;">
+        <button class="btn small" id="btnSaveRiskPct">Kaydet</button>
+        <button type="button" class="btn small secondary" id="btnCancelRiskPct">İptal</button>
+      </div>
     </div>
     <div class="page-header" style="margin-top:26px;"><h3 style="margin:0;font-size:15px;color:var(--navy);">Baskı / Nakış Fiyatlandırma</h3><button class="btn secondary small" id="btnEditBaskiNakis">Fiyatları Düzenle</button></div>
     <div class="panel-box">
       <div class="grid-2">
         <div><h3>Baskı Maliyeti (birim)</h3><ul class="stat-list" id="baskiList"></ul></div>
         <div><h3>Nakış Maliyeti (birim)</h3><ul class="stat-list" id="nakisList"></ul></div>
-      </div>
-    </div>
-    <div class="page-header" style="margin-top:26px;"><h3 style="margin:0;font-size:15px;color:var(--navy);">🎯 Risk Payı Dahil Maliyet Tablosu (Adete Göre)</h3><button class="btn secondary small" id="btnEditRiskPct">Yüzdeleri Düzenle</button></div>
-    <div class="panel-box">
-      <p style="font-size:12.5px;color:var(--muted);margin-top:-4px;">
-        Her hücre: <b>risk payı yüzdesi / risk payı tutarı (₺) / risk payı dahil maliyet (₺)</b>.
-        Risk payı tutarı ve dahil maliyet, ürünün "Risk Payı Hariç Adet Başı Maliyet" değerinden otomatik hesaplanır — burada yalnızca yüzdeler düzenlenir.
-      </p>
-      <div class="table-wrap"><table class="data-table" id="riskPctTable"></table></div>
-      <div class="inline-form" id="riskPctEditActions" style="display:none;margin-top:12px;">
-        <button class="btn small" id="btnSaveRiskPct">Kaydet</button>
-        <button type="button" class="btn small secondary" id="btnCancelRiskPct">İptal</button>
       </div>
     </div>
     <div class="page-header" style="margin-top:26px;"><h3 style="margin:0;font-size:15px;color:var(--navy);">Adete Göre Önerilen Satış Fiyatı (Baskı/Nakış Hariç)</h3><button class="btn secondary small" id="btnEditPriceList">Fiyatları Düzenle</button></div>
@@ -2565,6 +2567,10 @@ function calcTemplateCostItems(templateName, qty, extraNames, baskiNakisItems) {
     (tpl.extras||[]).forEach(ex => {
       if ((extraNames||[]).includes(ex.name) && ex.amount) items.push({ category: ex.name, amount: round2(ex.amount * qty) });
     });
+    const risk = maliyetForQty(templateName, qty);
+    if (risk && risk.riskAmount) {
+      items.push({ category: 'Risk Payı (' + fmtRiskPct(risk.pct) + ')', amount: round2(risk.riskAmount * qty) });
+    }
   }
   (baskiNakisItems||[]).forEach(it => {
     const dict = it.type === 'baski' ? DATA.costTemplates.baski : DATA.costTemplates.nakis;
@@ -5105,11 +5111,18 @@ function renderMaliyetSablonlari() {
   document.getElementById('templateCards').innerHTML = products.map(p => {
     const itemRows = p.items.map(i=>`<tr><td>${esc(i.category)}</td><td>${fmtCurrency(i.amount)}</td></tr>`).join('');
     const extraRows = (p.extras||[]).map(x=>`<tr><td>+ ${esc(x.name)}</td><td>${fmtCurrency(x.amount)}</td></tr>`).join('');
-    return `<div class="panel-box" style="margin-bottom:16px;">
-      <div class="page-header" style="margin-bottom:10px;"><h3 style="margin:0;">${esc(p.name)}</h3><button class="btn secondary small" data-action="edit-tpl" data-name="${esc(p.name)}">Düzenle</button></div>
-      <table class="data-table"><thead><tr><th>Maliyet Kalemi</th><th>Adet Başı</th></tr></thead><tbody>${itemRows}${extraRows}</tbody></table>
-      <div style="margin-top:8px;"><b>Risk Payı ve Baskı-Nakış Hariç Adet Başı Maliyet:</b> ${fmtCurrency(p.baski_nakis_haric_maliyet)}</div>
-      <div><b>Koli Adedi:</b> ${fmtNum(p.box_qty)} — <b>Ağırlık:</b> ${fmtNum(p.weight_g)}g</div>
+    const itemCount = (p.items||[]).length + (p.extras||[]).length;
+    return `<div class="panel-box" style="margin-bottom:12px;">
+      <div class="page-header" style="margin-bottom:6px;"><h3 style="margin:0;">${esc(p.name)}</h3><button class="btn secondary small" data-action="edit-tpl" data-name="${esc(p.name)}">Düzenle</button></div>
+      <div style="font-size:12.5px;color:var(--muted);margin-bottom:8px;">
+        Baz Maliyet (risk payı hariç): <b style="color:var(--text);">${fmtCurrency(p.baski_nakis_haric_maliyet)}</b>
+        · Koli: ${fmtNum(p.box_qty)} · ${fmtNum(p.weight_g)}g
+        · Risk payı dahil maliyet: <a href="#maliyetTablosuBox" style="color:var(--accent2);">aşağıdaki tabloda ↓</a>
+      </div>
+      <details>
+        <summary style="cursor:pointer;font-size:12.5px;color:var(--navy);font-weight:600;">Maliyet Kalemlerini Göster (${itemCount})</summary>
+        <table class="data-table" style="margin-top:8px;"><thead><tr><th>Maliyet Kalemi</th><th>Adet Başı</th></tr></thead><tbody>${itemRows}${extraRows}</tbody></table>
+      </details>
     </div>`;
   }).join('');
   document.getElementById('templateCards').querySelectorAll('[data-action="edit-tpl"]').forEach(btn => {
@@ -5122,8 +5135,8 @@ function renderMaliyetSablonlari() {
   const riskTiers = ct.price_tiers || [];
   const riskTierLabels = riskTiers.map(t => t.label || (t.min + '-' + t.max));
   document.getElementById('riskPctTable').innerHTML =
-    '<thead><tr><th>Ürün</th>' + riskTierLabels.map(l=>'<th>'+esc(l)+'</th>').join('') + '</tr></thead><tbody>' +
-    products.map(p => '<tr><td>'+esc(p.name)+'</td>' + riskTierLabels.map((_,idx) => {
+    '<thead><tr><th>Ürün</th><th>Baz Maliyet<br>(Risk Payı Hariç)</th>' + riskTierLabels.map(l=>'<th>'+esc(l)+'</th>').join('') + '</tr></thead><tbody>' +
+    products.map(p => '<tr><td>'+esc(p.name)+'</td><td><b>'+fmtCurrency(p.baski_nakis_haric_maliyet)+'</b></td>' + riskTierLabels.map((_,idx) => {
       const info = maliyetTierInfo(p.name, idx);
       if (!info) return '<td>-</td>';
       return '<td>' + fmtRiskPct(info.pct) + ' / ' + fmtMoney2(info.riskAmount) + ' / <b>' + fmtMoney2(info.total) + '</b></td>';
@@ -5323,8 +5336,8 @@ function renderRiskPctEditTable() {
   const table = document.getElementById('riskPctTable');
   const products = DATA.costTemplates.products || [];
   table.innerHTML =
-    '<thead><tr><th>Ürün</th>' + tierLabels.map(l=>'<th>'+esc(l)+' (%)</th>').join('') + '</tr></thead><tbody>' +
-    products.map(p => '<tr><td>'+esc(p.name)+'</td>' +
+    '<thead><tr><th>Ürün</th><th>Baz Maliyet</th>' + tierLabels.map(l=>'<th>'+esc(l)+' (%)</th>').join('') + '</tr></thead><tbody>' +
+    products.map(p => '<tr><td>'+esc(p.name)+'</td><td style="color:var(--muted);">'+fmtCurrency(p.baski_nakis_haric_maliyet)+'</td>' +
       tierLabels.map((_,idx)=>'<td><input type="number" step="0.1" class="riskPctEdit" data-name="'+esc(p.name)+'" data-idx="'+idx+'" value="'+((RISK_EDIT_LIST[p.name]||[])[idx]||0)+'" style="width:70px;"></td>').join('') +
       '</tr>').join('') +
     '</tbody>';
