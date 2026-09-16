@@ -5406,26 +5406,25 @@ const BELGE_LABELS = {
   'Gelen Ödeme Dekontu': 'incoming/payment_receipt', 'Yapılan Ödeme Dekontu': 'outgoing/payment_receipt',
   'Gelen / Alış Faturası': 'incoming/invoice', 'Kesilen / Satış Faturası': 'outgoing/invoice',
 };
-let BELGE_SHOW_HIDDEN = false; // 'Gizle' Sil değildir — kayıt/dosya duruyor, sadece listeden düşüyor.
+// Liste uzayabiliyor (özellikle çoklu sürükle-bırak yüklemeden sonra) — bu yüzden tamamı
+// katlanabilir: varsayılan kapalı, başlığa tıklayınca açılır/kapanır. Oturum boyunca hatırlanır
+// (URETIM_COLLAPSED ile aynı desen). Belge SİLİNMEZ/gizlenmez — sadece görünüm katlanır.
+let BELGE_LIST_COLLAPSED = true;
 async function renderBelgeIsleme() {
   const box = document.getElementById('belgeListe');
   if (!box || !matBackendReady()) { if (box) box.innerHTML = ''; return; }
   try {
-    const all = (await (await matApi('/api/agent/documents?limit=60')).json()).filter(d => d.status !== 'discarded');
-    const visible = all.filter(d => !d.hidden);
-    const hidden = all.filter(d => d.hidden);
-    const list = BELGE_SHOW_HIDDEN ? hidden : visible;
-    const toggleHtml = '<button class="btn small secondary" id="belgeToggleHidden">' +
-      (BELGE_SHOW_HIDDEN ? '◀ Listeye Dön (' + visible.length + ')' : '🙈 Gizlenenler (' + hidden.length + ')') + '</button>';
-    const headerHtml = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:6px;">' + toggleHtml
-      + (!BELGE_SHOW_HIDDEN && list.length ? '<button class="btn small danger" id="belgeBulkDel">Tüm belge kayıtlarını sil</button>' : '') + '</div>';
-    if (!list.length) {
-      box.innerHTML = headerHtml + '<div style="color:var(--muted);font-size:12.5px;">' + (BELGE_SHOW_HIDDEN ? 'Gizlenmiş belge yok.' : 'Henüz belge yok.') + '</div>';
-      const toggle0 = document.getElementById('belgeToggleHidden');
-      if (toggle0) toggle0.addEventListener('click', () => { BELGE_SHOW_HIDDEN = !BELGE_SHOW_HIDDEN; renderBelgeIsleme(); });
-      return;
-    }
+    const list = (await (await matApi('/api/agent/documents?limit=60')).json()).filter(d => d.status !== 'discarded');
+    const headerHtml = '<div class="page-header" id="belgeListToggle" style="cursor:pointer;margin-bottom:' + (BELGE_LIST_COLLAPSED ? '0' : '10px') + ';">'
+      + '<h3 style="margin:0;font-size:13.5px;color:var(--navy);">📋 Belge Listesi <span style="font-weight:400;color:var(--muted);">(' + list.length + ')</span></h3>'
+      + '<span style="color:var(--muted);font-size:12.5px;">' + (BELGE_LIST_COLLAPSED ? '▸ Göster' : '▾ Gizle') + '</span></div>';
+    const wireToggle = () => document.getElementById('belgeListToggle').addEventListener('click', () => {
+      BELGE_LIST_COLLAPSED = !BELGE_LIST_COLLAPSED; renderBelgeIsleme();
+    });
+    if (BELGE_LIST_COLLAPSED) { box.innerHTML = headerHtml; wireToggle(); return; }
+    if (!list.length) { box.innerHTML = headerHtml + '<div style="color:var(--muted);font-size:12.5px;">Henüz belge yok.</div>'; wireToggle(); return; }
     box.innerHTML = headerHtml
+      + '<div style="display:flex;justify-content:flex-end;margin-bottom:6px;"><button class="btn small danger" id="belgeBulkDel">Tüm belge kayıtlarını sil</button></div>'
       + '<div class="table-wrap"><table class="data-table"><thead><tr><th>Dosya</th><th>Tür</th><th>Tutar / Sipariş</th><th>Durum</th><th></th></tr></thead><tbody>'
       + list.map(d => {
         const st = { pending: 'Yüklendi', extracted: 'Okundu — onay bekliyor', committed: 'İşlendi' }[d.status] || d.status;
@@ -5433,27 +5432,16 @@ async function renderBelgeIsleme() {
         const amt = d.documentType === 'production_form'
           ? (d.orderNo ? esc(d.orderNo) : '—')
           : (d.amount != null ? fmtCurrency(d.amount) : '—');
-        return '<tr data-id="' + esc(d.id) + '" data-committed="' + (d.status === 'committed' ? '1' : '') + '" data-kind="' + esc(d.committedKind || '') + '" data-hidden="' + (d.hidden ? '1' : '') + '"><td>' + esc(d.originalName) + '</td>'
+        return '<tr data-id="' + esc(d.id) + '" data-committed="' + (d.status === 'committed' ? '1' : '') + '" data-kind="' + esc(d.committedKind || '') + '"><td>' + esc(d.originalName) + '</td>'
           + '<td>' + esc(label) + '</td>'
           + '<td>' + amt + '</td>'
           + '<td>' + esc(st) + '</td>'
           + '<td style="white-space:nowrap;"><button class="btn small secondary" data-act="open">' + (d.status === 'committed' ? 'Gör' : 'İncele') + '</button> '
-          + '<button class="btn small secondary" data-act="hide">' + (d.hidden ? 'Göster' : 'Gizle') + '</button> '
           + '<button class="btn small danger" data-act="del">Sil</button></td></tr>';
       }).join('') + '</tbody></table></div>';
+    wireToggle();
     box.querySelectorAll('tr[data-id]').forEach(tr => {
       tr.querySelector('[data-act="open"]').addEventListener('click', () => belgeOpenPreview(tr.dataset.id));
-      tr.querySelector('[data-act="hide"]').addEventListener('click', async (ev) => {
-        ev.stopPropagation();
-        const nextHidden = tr.dataset.hidden !== '1';
-        try {
-          await matApi('/api/agent/documents/' + tr.dataset.id + '/hide', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hidden: nextHidden }),
-          });
-          flash(nextHidden ? 'Belge gizlendi.' : 'Belge tekrar listede.', 'success');
-          renderBelgeIsleme();
-        } catch (e) { flash('İşlem başarısız: ' + e.message, 'error'); }
-      });
       tr.querySelector('[data-act="del"]').addEventListener('click', async (ev) => {
         ev.stopPropagation();
         const committed = tr.dataset.committed === '1';
@@ -5469,12 +5457,10 @@ async function renderBelgeIsleme() {
         } catch (e) { flash('Silinemedi: ' + e.message, 'error'); }
       });
     });
-    const toggle = document.getElementById('belgeToggleHidden');
-    if (toggle) toggle.addEventListener('click', () => { BELGE_SHOW_HIDDEN = !BELGE_SHOW_HIDDEN; renderBelgeIsleme(); });
     const bulk = document.getElementById('belgeBulkDel');
     if (bulk) bulk.addEventListener('click', async () => {
       const committedCount = list.filter(d => d.status === 'committed').length;
-      const msg = 'Görünen listedeki TÜM belge kayıtları ve dosyaları silinsin mi? (' + list.length + ' kayıt'
+      const msg = 'Belge İşleme listesindeki TÜM belge kayıtları ve dosyaları silinsin mi? (' + list.length + ' kayıt'
         + (committedCount ? ', ' + committedCount + ' tanesi işlenmiş — oluşan finans/iş kayıtları PANELDE KALIR' : '') + ')\n\nGeri alınamaz.';
       if (!confirm(msg)) return;
       bulk.disabled = true;
