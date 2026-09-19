@@ -521,6 +521,7 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
 
   <div class="nav-group-label">Ajanlar</div>
   <button data-view="ajan">🤖 Yönetim Ajanı</button>
+  <button data-view="uretim-ajan">📋 Üretim Takip Ajanı</button>
   <button data-view="sdr">🎯 Satış Ajanı</button>
 
   <div class="nav-group-label">Satış &amp; Üretim</div>
@@ -640,6 +641,32 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
       <button type="button" class="btn small secondary" id="ajanUsageRefresh">Yenile</button>
     </div>
     <div class="panel-box"><ul class="stat-list" id="ajanUsageList"><li style="color:var(--muted);">—</li></ul></div>
+  </section>
+
+  <!-- ÜRETİM TAKİP AJANI -->
+  <section class="view" id="view-uretim-ajan">
+    <div class="agent-hero">
+      <div class="ah-left">
+        <h2>📋 Üretim Takip Ajanı</h2>
+        <div class="ah-sub" id="uretimAjanStatusMsg">Her sabah üretimdeki işleri okur, o gün yapılacak operasyonları listeler.</div>
+      </div>
+      <div class="ah-right">
+        <span class="agent-status-pill idle" id="uretimAjanStatusPill"><span class="dot"></span><span class="lbl">Hazır</span></span>
+        <button class="btn" id="uretimAjanRunBtn">🔄 Şimdi çalıştır</button>
+      </div>
+    </div>
+
+    <div class="md-body panel-box agent-card" id="uretimAjanContent" style="margin-top:16px;">
+      <div class="agent-skel"><div class="l title"></div><div class="l"></div><div class="l w70"></div><div class="l"></div><div class="l w45"></div></div>
+    </div>
+
+    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
+      <span>Geçmiş Planlar</span>
+      <button type="button" class="btn danger small" id="uretimAjanBulkDel">Tümünü sil</button>
+    </div>
+    <div class="panel-box">
+      <div class="table-wrap"><table class="data-table" id="uretimAjanHistoryTable"></table></div>
+    </div>
   </section>
 
   <!-- SATIŞ AJANI (SDR) -->
@@ -5075,6 +5102,7 @@ function renderAll() {
 const AJAN_TYPE_LABELS = {
   'gunluk-brifing': 'Günlük Brifing', 'uretim-risk': 'Üretim Risk', 'satis-takip': 'Satış Takip',
   'finans': 'Finans / Nakit', 'haftalik-review': 'Haftalık Review', 'aylik-rapor': 'Aylık Rapor',
+  'gunluk-uretim-plani': 'Üretim Takip Planı',
 };
 let AJAN_POLL_TIMER = null;
 
@@ -5136,8 +5164,8 @@ function ajanFmtStamp(iso) {
   return isNaN(d) ? iso : d.toLocaleString('tr-TR');
 }
 
-async function ajanShowOutput(rec) {
-  const box = document.getElementById('ajanContent');
+async function ajanShowOutput(rec, targetId) {
+  const box = document.getElementById(targetId || 'ajanContent');
   if (!rec || !rec.markdown) { box.innerHTML = '<div class="agent-empty"><span class="ico">📄</span><div class="msg">Çıktı bulunamadı.</div></div>'; return; }
   const conf = rec.meta && rec.meta.panelUpdatedAt ? ' · panel verisi: ' + ajanFmtStamp(rec.meta.panelUpdatedAt) : '';
   box.innerHTML = '<div class="agent-output-meta">'
@@ -5416,6 +5444,140 @@ async function ajanRunAct() {
 }
 document.getElementById('ajanActBtn').addEventListener('click', ajanRunAct);
 document.getElementById('ajanActInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') ajanRunAct(); });
+
+// ================= ÜRETİM TAKİP AJANI =================
+// Yonetim Ajani'nin ayni deseni, ama SABIT tip (gunluk-uretim-plani) ve kendi
+// DOM id'leri ile - ayri bir ajan sekmesi olarak. Yonetim Ajani'nin kodunu
+// degistirmez, ayni API uclarini (agent/run, /status, /latest, /outputs) kullanir.
+const URETIM_AJAN_TYPE = 'gunluk-uretim-plani';
+let URETIM_AJAN_POLL_TIMER = null;
+const URETIM_AJAN_DEFAULT_SUB = 'Her sabah üretimdeki işleri okur, o gün yapılacak operasyonları listeler.';
+
+async function renderUretimTakipAjani() {
+  const box = document.getElementById('uretimAjanContent');
+  const histTable = document.getElementById('uretimAjanHistoryTable');
+  if (!matBackendReady()) {
+    box.innerHTML = '<div style="color:var(--muted);">Ajan sunucusu bağlı değil.</div>';
+    histTable.innerHTML = ''; return;
+  }
+  box.innerHTML = '<div class="agent-skel"><div class="l title"></div><div class="l"></div><div class="l w70"></div><div class="l"></div><div class="l w45"></div></div>';
+  try {
+    const latest = await (await matApi('/api/agent/latest?type=' + URETIM_AJAN_TYPE)).json();
+    ajanShowOutput(latest, 'uretimAjanContent');
+  } catch (e) {
+    box.innerHTML = '<div class="agent-empty"><span class="ico">📄</span>'
+      + '<div class="msg">Henüz üretim planı üretilmedi.<br>Ajanı çalıştırınca ilk plan burada görünür.</div>'
+      + '<button class="btn" onclick="document.getElementById(\'uretimAjanRunBtn\').click()">🔄 Şimdi çalıştır</button></div>';
+  }
+  try {
+    const list = await (await matApi('/api/agent/outputs?type=' + URETIM_AJAN_TYPE + '&limit=30')).json();
+    if (!list.length) { histTable.innerHTML = '<tbody><tr><td style="color:var(--muted);">Kayıt yok.</td></tr></tbody>'; }
+    else {
+      histTable.innerHTML = '<thead><tr><th>Tarih</th><th>Başlık</th><th>Üretildi</th><th></th></tr></thead><tbody>'
+        + list.map((r) => '<tr data-id="' + esc(r.id) + '">'
+          + '<td class="ua-hist-open" style="cursor:pointer;">' + esc(r.date) + '</td>'
+          + '<td class="ua-hist-open" style="cursor:pointer;">' + esc(r.title) + '</td>'
+          + '<td class="ua-hist-open" style="cursor:pointer;">' + esc(ajanFmtStamp(r.createdAt)) + '</td>'
+          + '<td><button type="button" class="btn danger small ua-hist-del">Sil</button></td></tr>').join('')
+        + '</tbody>';
+      histTable.querySelectorAll('tr[data-id]').forEach((tr) => {
+        tr.querySelectorAll('.ua-hist-open').forEach((td) => td.addEventListener('click', async () => {
+          try {
+            const rec = await (await matApi('/api/agent/outputs/' + tr.dataset.id)).json();
+            ajanShowOutput(rec, 'uretimAjanContent');
+            window.scrollTo({ top: document.getElementById('uretimAjanContent').offsetTop - 20, behavior: 'smooth' });
+          } catch (e) { flash('Çıktı açılamadı: ' + e.message, 'error'); }
+        }));
+        const del = tr.querySelector('.ua-hist-del');
+        if (del) del.addEventListener('click', async (ev) => {
+          ev.stopPropagation();
+          if (!confirm('Bu plan silinsin mi? (Geri alınamaz — yalnız ajan çıktısı, panel/üretim verisi etkilenmez.)')) return;
+          del.disabled = true;
+          try {
+            await matApi('/api/agent/outputs/' + tr.dataset.id, { method: 'DELETE' });
+            flash('Plan silindi.', 'success');
+            renderUretimTakipAjani();
+          } catch (e) { del.disabled = false; flash('Silinemedi: ' + e.message, 'error'); }
+        });
+      });
+    }
+  } catch (e) {
+    histTable.innerHTML = '<tbody><tr><td style="color:var(--muted);">Geçmiş okunamadı.</td></tr></tbody>';
+  }
+  uretimAjanRefreshStatus();
+}
+
+async function uretimAjanRefreshStatus() {
+  const el = document.getElementById('uretimAjanStatusMsg');
+  const btn = document.getElementById('uretimAjanRunBtn');
+  try {
+    const st = await (await matApi('/api/agent/status')).json();
+    if (st.running) {
+      agentSetPill('uretimAjanStatusPill', 'running', 'Çalışıyor');
+      el.textContent = '⏳ Ajan çalışıyor…';
+      btn.disabled = true;
+      if (!URETIM_AJAN_POLL_TIMER) URETIM_AJAN_POLL_TIMER = setInterval(uretimAjanPollTick, 5000);
+    } else {
+      btn.disabled = false;
+      if (URETIM_AJAN_POLL_TIMER) { clearInterval(URETIM_AJAN_POLL_TIMER); URETIM_AJAN_POLL_TIMER = null; }
+      if (st.lastError) {
+        agentSetPill('uretimAjanStatusPill', 'warn', 'Son çalışma hatalı');
+        el.textContent = '⚠️ Son hata: ' + st.lastError;
+      } else {
+        agentSetPill('uretimAjanStatusPill', 'idle', 'Hazır');
+        el.textContent = st.finishedAt ? ('Son çalışma: ' + ajanFmtStamp(st.finishedAt)) : URETIM_AJAN_DEFAULT_SUB;
+      }
+    }
+  } catch (e) { agentSetPill('uretimAjanStatusPill', 'idle', 'Hazır'); el.textContent = URETIM_AJAN_DEFAULT_SUB; }
+}
+
+async function uretimAjanPollTick() {
+  try {
+    const st = await (await matApi('/api/agent/status')).json();
+    if (!st.running) {
+      clearInterval(URETIM_AJAN_POLL_TIMER); URETIM_AJAN_POLL_TIMER = null;
+      renderUretimTakipAjani();
+      flash(st.lastError ? ('Ajan çalışması hata verdi: ' + st.lastError) : 'Ajan yeni planı hazırladı.',
+        st.lastError ? 'error' : 'success');
+    }
+  } catch (e) { /* Render uykuda olabilir, bir sonraki tick'te dene */ }
+}
+
+document.getElementById('uretimAjanRunBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('uretimAjanRunBtn');
+  btn.disabled = true;
+  agentSetPill('uretimAjanStatusPill', 'running', 'Başlatılıyor');
+  document.getElementById('uretimAjanStatusMsg').textContent = '⏳ Başlatılıyor… (sunucu uykudaysa 1 dk sürebilir)';
+  try {
+    const r = await (await matApi('/api/agent/run?type=' + URETIM_AJAN_TYPE, { method: 'POST' })).json();
+    if (r.started) {
+      agentSetPill('uretimAjanStatusPill', 'running', 'Çalışıyor');
+      document.getElementById('uretimAjanStatusMsg').textContent = '⏳ Ajan çalışıyor…';
+      if (!URETIM_AJAN_POLL_TIMER) URETIM_AJAN_POLL_TIMER = setInterval(uretimAjanPollTick, 5000);
+    }
+  } catch (e) {
+    btn.disabled = false;
+    flash('Ajan başlatılamadı: ' + e.message, 'error');
+    agentSetPill('uretimAjanStatusPill', 'warn', 'Başlatılamadı');
+    document.getElementById('uretimAjanStatusMsg').textContent = URETIM_AJAN_DEFAULT_SUB;
+  }
+});
+(function () {
+  const b = document.getElementById('uretimAjanBulkDel');
+  if (!b) return;
+  b.addEventListener('click', async () => {
+    if (!confirm('Üretim planı geçmişindeki TÜM çıktılar silinsin mi? Geri alınamaz (üretim verisi etkilenmez).')) return;
+    b.disabled = true;
+    try {
+      const r = await (await matApi('/api/agent/outputs/delete', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: URETIM_AJAN_TYPE }),
+      })).json();
+      flash((r.deleted || 0) + ' çıktı silindi.', 'success');
+      renderUretimTakipAjani();
+    } catch (e) { flash('Silinemedi: ' + e.message, 'error'); }
+    finally { b.disabled = false; }
+  });
+})();
 
 // ================= FATURALAR =================
 function invoiceStatus(iv) {
@@ -6410,6 +6572,7 @@ const VIEW_RENDER_MAP = {
   belgeler: () => renderBelgeIsleme(),
   yoneticiler: renderYoneticiler,
   materyaller: renderMateryaller, ajan: renderYonetimAjani, sdr: renderSatisAjani,
+  'uretim-ajan': renderUretimTakipAjani,
   faturalar: renderFaturalar,
 };
 
