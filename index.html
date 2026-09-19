@@ -935,7 +935,7 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
         </div>
         <div class="form-row">
           <div class="field"><label>Sorumlu Kişi</label><select name="assigned_to" id="uretimAssignedSelect"></select></div>
-          <div></div>
+          <div class="field"><label>Bağlı İş <span style="font-weight:400;color:var(--muted);font-size:11.5px;">(üretim planı için)</span></label><select name="job_id" id="uretimJobSelect"></select></div>
         </div>
         <div class="field"><label>Not</label><textarea name="note"></textarea></div>
         <div class="field"><label>Problem Durumu</label><textarea name="problem_note"></textarea></div>
@@ -2684,6 +2684,10 @@ const ENTITY_CONFIGS = {
     {name:'assigned_to', label:'Sorumlu Kişi', type:'select',
       options: () => ['— Atanmadı —', ...AUTH.managers.map(m=>m.name)],
       transformOut: v => v || '— Atanmadı —', transformIn: v => v === '— Atanmadı —' ? '' : v},
+    {name:'job_id', label:'Bağlı İş (üretim planı için)', type:'select',
+      options: () => ['— Bağlı değil —', ...uretimJobOptions().map(o => o.label)],
+      transformOut: v => uretimJobLabel(v) || '— Bağlı değil —',
+      transformIn: v => { const m = /^#(\d+)/.exec(v || ''); return m ? parseInt(m[1], 10) : null; }},
     {name:'note', label:'Not', type:'textarea'},
     {name:'problem_note', label:'Problem Durumu', type:'textarea'},
   ]},
@@ -3718,7 +3722,31 @@ function setUretimStatus(id, newStatus) {
   flash('Durum güncellendi: ' + u.status);
 }
 
+// Uretim kaydini bir ise baglamak icin secenek listesi. Uretim planlayicisi bu
+// baglantiyi kullanir; yoksa kaydin hangi urune ait oldugunu bilemez.
+function uretimJobOptions() {
+  return (DATA.jobs || [])
+    .filter(j => j.status === 'Onaylandı' || j.status === 'Üretimde')
+    .map(j => ({
+      id: j.id,
+      label: '#' + j.id + ' · ' + (j.job_no || '-') + ' · ' + jobCustomerDisplay(j) +
+             ' · ' + (j.quantity || 0) + ' ' + (j.product_type || ''),
+    }));
+}
+function uretimJobLabel(jobId) {
+  const hit = uretimJobOptions().find(o => o.id === jobId);
+  return hit ? hit.label : '';
+}
+
 function renderUretimTakip() {
+  const uretimJobSelectEl = document.getElementById('uretimJobSelect');
+  if (uretimJobSelectEl) {
+    const opts = uretimJobOptions();
+    const keep = uretimJobSelectEl.value;
+    uretimJobSelectEl.innerHTML = '<option value="">— Bağlı değil —</option>' +
+      opts.map(o => '<option value="' + o.id + '">' + esc(o.label) + '</option>').join('');
+    if (keep) uretimJobSelectEl.value = keep;
+  }
   const uretimStatusSelectEl = document.getElementById('uretimStatusSelect');
   if (uretimStatusSelectEl && !uretimStatusSelectEl.options.length) {
     uretimStatusSelectEl.innerHTML = URETIM_STATUSES.map(s=>'<option value="'+esc(s)+'">'+esc(s)+'</option>').join('');
@@ -3784,7 +3812,7 @@ if (document.getElementById('uretimSearch')) document.getElementById('uretimSear
 document.getElementById('formUretim').addEventListener('submit', (e) => {
   e.preventDefault();
   const fd = new FormData(e.target);
-  DATA.uretimTakip.push({ id: nextId(DATA.uretimTakip), date: fd.get('date'), customer_name: fd.get('customer_name'), est_delivery: fd.get('est_delivery')||null, quantity: parseFloat(fd.get('quantity'))||0, status: fd.get('status')||URETIM_STATUSES[0], follow_up_date: fd.get('follow_up_date')||null, assigned_to: fd.get('assigned_to')||'', note: fd.get('note')||'', problem_note: fd.get('problem_note')||'' });
+  DATA.uretimTakip.push({ id: nextId(DATA.uretimTakip), date: fd.get('date'), customer_name: fd.get('customer_name'), est_delivery: fd.get('est_delivery')||null, quantity: parseFloat(fd.get('quantity'))||0, status: fd.get('status')||URETIM_STATUSES[0], follow_up_date: fd.get('follow_up_date')||null, assigned_to: fd.get('assigned_to')||'', note: fd.get('note')||'', problem_note: fd.get('problem_note')||'', job_id: parseInt(fd.get('job_id'),10) || null });
   saveData(); e.target.reset(); document.querySelector('#formUretim [name="date"]').value = todayISO();
   flash('Üretim kaydı eklendi.'); renderUretimTakip();
 });
