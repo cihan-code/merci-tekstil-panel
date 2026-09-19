@@ -2760,6 +2760,15 @@ function openGenericEditModal(configKey, itemId) {
     </div>
   `;
   document.getElementById('genericModalCancel').addEventListener('click', closeGenericModal);
+  if (configKey === 'uretim') {
+    const jobSel = form.elements['job_id'];
+    // Modaldaki select degeri etiket metnidir ("#101 · ..."), sayisal id degil -
+    // ayni ayristirmayi job_id alaninin transformIn'i kullaniyor.
+    if (jobSel) jobSel.addEventListener('change', (e) => {
+      const m = /^#(\d+)/.exec(e.target.value || '');
+      if (m) applyUretimJobAutofill(form, parseInt(m[1], 10));
+    });
+  }
   document.getElementById('genericModalOverlay').classList.add('active');
 }
 function closeGenericModal() { document.getElementById('genericModalOverlay').classList.remove('active'); }
@@ -3735,6 +3744,19 @@ function uretimJobLabel(jobId) {
   const hit = uretimJobOptions().find(o => o.id === jobId);
   return hit ? hit.label : '';
 }
+// Bagli Is secilince musteri/adet/tahmini teslimati isten doldurur - ama SADECE
+// bos olan alanlari. Kullanicinin elle girdigi bir deger varsa dokunmaz.
+function applyUretimJobAutofill(form, jobId) {
+  const job = (DATA.jobs || []).find(j => j.id === jobId);
+  if (!job) return;
+  const setIfEmpty = (name, value) => {
+    const el = form.elements[name];
+    if (el && !el.value && value != null && value !== '') el.value = value;
+  };
+  setIfEmpty('customer_name', jobCustomerDisplay(job));
+  setIfEmpty('quantity', job.quantity);
+  setIfEmpty('est_delivery', job.delivery_date);
+}
 
 function renderUretimTakip() {
   const uretimJobSelectEl = document.getElementById('uretimJobSelect');
@@ -3807,6 +3829,10 @@ function renderUretimTakip() {
 }
 if (document.getElementById('uretimSearch')) document.getElementById('uretimSearch').addEventListener('input', renderUretimTakip);
 
+document.getElementById('uretimJobSelect').addEventListener('change', (e) => {
+  const jobId = parseInt(e.target.value, 10);
+  if (jobId) applyUretimJobAutofill(e.target.form, jobId);
+});
 document.getElementById('formUretim').addEventListener('submit', (e) => {
   e.preventDefault();
   const fd = new FormData(e.target);
