@@ -1,0 +1,490 @@
+{
+  "version": 2,
+  "note": "DRAFT - remaining nulls are unconfirmed. Nothing is invented.",
+  "calendar": {
+    "working_days": {
+      "monday": 1,
+      "tuesday": 1,
+      "wednesday": 1,
+      "thursday": 1,
+      "friday": 1,
+      "saturday": 0.5,
+      "sunday": 0
+    },
+    "overrides": {
+      "sewing": {
+        "saturday": 1
+      }
+    },
+    "note": "Fraction of a full working day. Saturday is a half day, EXCEPT the sewing workshop which works a full Saturday."
+  },
+  "base_route": [
+    {
+      "id": "fabric_order",
+      "label": "Kumaş siparişi",
+      "kind": "work",
+      "location": "internal",
+      "depends_on": [],
+      "duration_days": 0,
+      "panel_status": "Kumaş Bekleniyor"
+    },
+    {
+      "id": "fabric_arrival",
+      "label": "Kumaşın atölyeye ulaşması",
+      "kind": "transfer",
+      "location": "supplier",
+      "depends_on": [
+        "fabric_order"
+      ],
+      "duration_rule": {
+        "type": "order_cutoff",
+        "cutoff_time": "09:00",
+        "before_cutoff_arrival_day_offset": 0,
+        "after_cutoff_arrival_day_offset": 1,
+        "arrival_time": "17:00-18:00"
+      },
+      "duration_note": "09:00 öncesi sipariş → aynı gün akşam. Sonrası → ertesi gün akşam.",
+      "panel_status": "Kumaş Geldi"
+    },
+    {
+      "id": "cut_main",
+      "label": "Kumaşın kesimi",
+      "kind": "work",
+      "location": "internal",
+      "depends_on": [
+        "fabric_arrival"
+      ],
+      "duration_days": 1,
+      "starts_next_day_after_arrival": true,
+      "duration_note": "Kumaş akşam geldiği için kesim ertesi gün başlar (acele işlerde aynı gün olabilir).",
+      "panel_status": "Kesimde",
+      "location_note": "Kesim kendi atölyemizde yapılıyor, fason değil."
+    },
+    {
+      "id": "cut_extra_parts",
+      "label": "Ek parça kesimi",
+      "kind": "work",
+      "location": "internal",
+      "depends_on": [
+        "fabric_arrival"
+      ],
+      "duration_days": 1,
+      "parallel_with": [
+        "cut_main"
+      ],
+      "parts_from_product": true,
+      "duration_note": "Ürüne göre değişen ek parçalar (ribana / kaşkorse / tela / astar). Ana kesimle paralel.",
+      "panel_status": "Kesimde",
+      "location_note": "Kesim kendi atölyemizde yapılıyor, fason değil."
+    },
+    {
+      "id": "print_dropoff",
+      "label": "Baskı pastasının baskıya bırakılması",
+      "kind": "transfer",
+      "location": "subcontractor",
+      "depends_on": [
+        "cut_main",
+        "cut_extra_parts"
+      ],
+      "duration_days": 0,
+      "optional": true,
+      "piece_group": null,
+      "piece_group_note": "İşe göre değişir (ör. göğüs pastası) - onay sorusuyla belirlenir.",
+      "panel_status": "Baskı/Nakışta",
+      "handoff_rule": {
+        "type": "same_day_if_early",
+        "cutoff_time": null,
+        "default": "next_morning",
+        "note": "Kesim gün içinde ERKEN bittiyse aynı gün teslim edilir, GEÇ bittiyse ertesi sabah. Saat sınırı tanımsız - günlük ilerleme girdisiyle belirlenir."
+      }
+    },
+    {
+      "id": "print_work",
+      "label": "Baskı işleminin uygulanması",
+      "kind": "work",
+      "location": "subcontractor",
+      "depends_on": [
+        "print_dropoff"
+      ],
+      "duration_business_days_min": 1,
+      "duration_business_days_max": 3,
+      "duration_note": "Baskı atölyesinin yoğunluğuna bağlı.",
+      "optional": true,
+      "panel_status": "Baskı/Nakışta"
+    },
+    {
+      "id": "embroidery_dropoff",
+      "label": "Nakış pastasının nakışa bırakılması",
+      "kind": "transfer",
+      "location": "subcontractor",
+      "depends_on": [
+        "cut_main",
+        "cut_extra_parts"
+      ],
+      "duration_days": 0,
+      "optional": true,
+      "piece_group": null,
+      "piece_group_note": "İşe göre değişir (ör. kol pastası) - onay sorusuyla belirlenir.",
+      "panel_status": "Baskı/Nakışta",
+      "handoff_rule": {
+        "type": "same_day_if_early",
+        "cutoff_time": null,
+        "default": "next_morning",
+        "note": "Kesim gün içinde ERKEN bittiyse aynı gün teslim edilir, GEÇ bittiyse ertesi sabah. Saat sınırı tanımsız - günlük ilerleme girdisiyle belirlenir."
+      }
+    },
+    {
+      "id": "embroidery_work",
+      "label": "Nakış işleminin uygulanması",
+      "kind": "work",
+      "location": "subcontractor",
+      "depends_on": [
+        "embroidery_dropoff"
+      ],
+      "duration_business_days_min": 1,
+      "duration_business_days_max": 2,
+      "duration_note": "Nakış atölyesinin yoğunluğuna bağlı.",
+      "optional": true,
+      "panel_status": "Baskı/Nakışta"
+    },
+    {
+      "id": "sewing_dropoff",
+      "label": "Dikime bırakılması",
+      "kind": "transfer",
+      "location": "subcontractor",
+      "depends_on": [
+        "print_work",
+        "embroidery_work"
+      ],
+      "join": "all_applicable",
+      "join_note": "Baskı ve nakış PARALEL yürür (farklı pastalar farklı atölyeye gider). Süre toplanmaz - ikisinin GEÇ biteni beklenir.",
+      "duration_days": 0,
+      "panel_status": "Dikimde",
+      "immediate": true,
+      "duration_note": "Bırakma kayda değer vakit almıyor - ayrı bir gün tüketmiyor. Baskı/nakışın bittiği gün bırakılır, dikim ertesi iş günü başlar."
+    },
+    {
+      "id": "sewing",
+      "label": "Dikim",
+      "kind": "work",
+      "location": "subcontractor",
+      "depends_on": [
+        "sewing_dropoff"
+      ],
+      "capacity_from_product": true,
+      "capacity_unit": "adet",
+      "capacity_shared": true,
+      "capacity_variance_pct": 20,
+      "capacity_note": "Atölyenin TOPLAM günlük kapasitesi - eşzamanlı işler paylaşır. Ürüne göre değişir, ±%20 dalgalanır. YALNIZ dikim - ilik/düğme bu rakama dahil DEĞİL.",
+      "panel_status": "Dikimde"
+    },
+    {
+      "id": "buttonhole_button",
+      "label": "İlik ve düğme",
+      "kind": "work",
+      "location": "subcontractor",
+      "depends_on": [
+        "sewing"
+      ],
+      "duration_business_days_min": 1,
+      "duration_business_days_max": 2,
+      "duration_note": "Dikimden BAĞIMSIZ ayrı işlem - dikim kapasitesine dahil değil.",
+      "optional": true,
+      "applies_if_product_has": "buttonhole",
+      "panel_status": null,
+      "note": "Dikimden AYRI bir yerde ama gidiş-geliş 15-20 dk - transfer plana yansıtılmıyor. Sıra: dikim -> ilik -> ütü-paket.",
+      "separate_location": true,
+      "transfer_days": 0
+    },
+    {
+      "id": "iron_pack",
+      "label": "Ütü ve paketleme",
+      "kind": "work",
+      "location": "subcontractor",
+      "same_location_as": "sewing",
+      "depends_on": [
+        "sewing",
+        "buttonhole_button"
+      ],
+      "join": "all_applicable",
+      "duration_days": 0,
+      "high_quantity_extra_days": 0.5,
+      "high_quantity_threshold": 150,
+      "duration_note": "Normalde dikimle eş zamanlı akar (ek süre yok). Yüksek adetli işlerde yarım gün ekler - eşik adet doğrulanmalı.",
+      "panel_status": "Ütü-Paket-Teslimat Bekliyor",
+      "high_quantity_threshold_note": "Ortalama 150-200 adet. Teslim sözünde güvenli tarafta kalmak için alt uç (150) kullanılıyor."
+    },
+    {
+      "id": "delivery",
+      "label": "Teslimat",
+      "kind": "transfer",
+      "location": null,
+      "depends_on": [
+        "iron_pack"
+      ],
+      "duration_days": 0,
+      "panel_status": "Teslim Edildi",
+      "handoff_rule": {
+        "type": "same_day_if_early",
+        "cutoff_time": "17:00",
+        "default": "next_morning",
+        "note": "Ütü-paketten 17:00'den ÖNCE çıktıysa aynı gün kargoya verilir, sonra çıktıysa ertesi sabah."
+      }
+    }
+  ],
+  "products": {
+    "tisort": {
+      "label": "Tişört",
+      "fits": [
+        "Normal Kalıp",
+        "Oversize Kalıp"
+      ],
+      "extra_cut_parts": [
+        {
+          "id": "neck_rib",
+          "label": "Yaka ribanası",
+          "optional": false
+        }
+      ],
+      "extra_operations": [],
+      "accessories": [],
+      "sewing_capacity_per_day": 125,
+      "aliases": [
+        "tisort",
+        "t shirt",
+        "tshirt",
+        "t-shirt",
+        "oversize tisort",
+        "bisiklet yaka",
+        "basic tisort"
+      ]
+    },
+    "polo": {
+      "label": "Polo",
+      "extra_cut_parts": [
+        {
+          "id": "interlining",
+          "label": "Tela",
+          "optional": false
+        }
+      ],
+      "has_buttonhole": true,
+      "extra_operations": [],
+      "accessories": [],
+      "sewing_capacity_per_day": 100,
+      "note": "Düğme işlemi YALNIZ poloda var. Dikim kapasitesine dahil değil.",
+      "buttonhole_label": "İlik ve düğme",
+      "aliases": [
+        "polo",
+        "polo yaka",
+        "polo yaka tisort",
+        "poloyaka"
+      ]
+    },
+    "sweat": {
+      "label": "Sweatshirt",
+      "extra_cut_parts": [
+        {
+          "id": "ribbing_hem_cuff",
+          "label": "Kaşkorse (etek ve kol)",
+          "optional": false
+        },
+        {
+          "id": "hood_lining",
+          "label": "Kapüşon astarı",
+          "optional": true,
+          "requires_confirmation": "Kapüşonda astar olacak mı?"
+        }
+      ],
+      "has_buttonhole": "optional",
+      "buttonhole_label": "Kapüşonda ilik açılması (kordon için)",
+      "buttonhole_confirmation": "Kapüşonda kordon olacak mı?",
+      "extra_operations": [],
+      "accessories": [
+        {
+          "id": "cord",
+          "label": "Kordon",
+          "condition": "buttonhole",
+          "ask_user": true,
+          "blocks": "sewing",
+          "order_lead_days_min": 1,
+          "order_lead_days_max": 2
+        }
+      ],
+      "sewing_capacity_per_day": 80,
+      "aliases": [
+        "sweat",
+        "sweatshirt",
+        "sweat shirt",
+        "kapusonlu sweat",
+        "hoodie",
+        "kapusonlu"
+      ]
+    },
+    "polar": {
+      "label": "Polar",
+      "extra_cut_parts": [],
+      "extra_operations": [],
+      "accessories": [
+        {
+          "id": "zipper",
+          "label": "Fermuar",
+          "ask_user": true,
+          "blocks": "sewing",
+          "note": "Elimizde yoksa ÖNCEDEN sipariş geçilmeli.",
+          "order_lead_days_min": 1,
+          "order_lead_days_max": 2
+        }
+      ],
+      "sewing_capacity_per_day": 80,
+      "note": "Kesimde sadece ana kumaş kesimi var, ek parça yok.",
+      "aliases": [
+        "polar",
+        "polar ceket",
+        "fermuarli polar"
+      ]
+    },
+    "esofman_alti": {
+      "label": "Eşofman altı",
+      "extra_cut_parts": [
+        {
+          "id": "ankle_ribbing",
+          "label": "Ayak bileği kaşkorsesi",
+          "optional": true,
+          "requires_confirmation": "Ayak bileğinde lastik (kaşkorse) olacak mı?"
+        }
+      ],
+      "has_buttonhole": true,
+      "buttonhole_label": "İlik açılması",
+      "extra_operations": [
+        {
+          "id": "waistband",
+          "label": "Kemer lastiği yapılması",
+          "stage": "sewing",
+          "duration_days": 0,
+          "note": "Dikim kapasitesine DAHİL - ayrı süre eklemiyor.",
+          "included_in_sewing_capacity": true
+        }
+      ],
+      "accessories": [],
+      "sewing_capacity_per_day": 100,
+      "note": "İlik açılıyor, düğme YOK.",
+      "aliases": [
+        "esofman alti",
+        "esofman",
+        "alt esofman",
+        "jogger",
+        "esofman altligi"
+      ]
+    },
+    "yarim_fermuar_sweat": {
+      "label": "Yarım fermuar sweatshirt",
+      "extra_cut_parts": [
+        {
+          "id": "ribbing_hem_cuff",
+          "label": "Kaşkorse",
+          "optional": false
+        }
+      ],
+      "extra_operations": [],
+      "accessories": [
+        {
+          "id": "collar_zipper",
+          "label": "Yaka fermuarı",
+          "ask_user": true,
+          "blocks": "sewing",
+          "order_lead_days_min": 1,
+          "order_lead_days_max": 2
+        }
+      ],
+      "sewing_capacity_per_day": 80,
+      "aliases": [
+        "yarim fermuar sweat",
+        "yarim fermuarli sweat",
+        "yarim fermuar",
+        "half zip"
+      ]
+    },
+    "tam_fermuar_sweat": {
+      "label": "Tam fermuar sweatshirt",
+      "extra_cut_parts": [
+        {
+          "id": "ribbing_hem_cuff",
+          "label": "Kaşkorse",
+          "optional": false
+        },
+        {
+          "id": "hood_lining",
+          "label": "Kapüşon astarı",
+          "optional": true,
+          "requires_confirmation": "Kapüşonda astar olacak mı?"
+        }
+      ],
+      "has_buttonhole": "optional",
+      "buttonhole_label": "Kapüşonda ilik açılması (kordon için)",
+      "buttonhole_confirmation": "Kapüşonda kordon olacak mı?",
+      "extra_operations": [],
+      "accessories": [
+        {
+          "id": "zipper",
+          "label": "Fermuar",
+          "ask_user": true,
+          "blocks": "sewing",
+          "order_lead_days_min": 1,
+          "order_lead_days_max": 2
+        },
+        {
+          "id": "cord",
+          "label": "Kordon",
+          "condition": "buttonhole",
+          "ask_user": true,
+          "blocks": "sewing",
+          "note": "Uygun RENK kordon yoksa sipariş geçilmeli.",
+          "order_lead_days_min": 1,
+          "order_lead_days_max": 2
+        }
+      ],
+      "sewing_capacity_per_day": 70,
+      "aliases": [
+        "tam fermuar sweat",
+        "tam fermuarli sweat",
+        "fermuarli sweat",
+        "full zip",
+        "tam fermuar"
+      ]
+    },
+    "sort": {
+      "label": "Şort",
+      "extra_cut_parts": [],
+      "extra_operations": [
+        {
+          "id": "waistband",
+          "label": "Kemer (bel lastiği) işlemi",
+          "stage": "sewing",
+          "duration_days": 0,
+          "included_in_sewing_capacity": true,
+          "note": "Dikim kapasitesine DAHİL - ayrı süre eklemiyor."
+        }
+      ],
+      "accessories": [],
+      "sewing_capacity_per_day": 90,
+      "note": "Kesimde ribana tarzı ek parça yok. İlik açılıyor, düğme YOK.",
+      "has_buttonhole": true,
+      "buttonhole_label": "İlik açılması",
+      "aliases": [
+        "sort",
+        "short",
+        "sorts"
+      ]
+    }
+  },
+  "decoration_note": "Her işte baskı veya nakıştan en az biri vardır - düz (süslemesiz) ürün üretilmiyor.",
+  "product_match_note": "jobs.product_type serbest metin - aliases ile eşleştirilir. Eşleşme bulunamazsa ürün SORULUR, tahmin edilmez.",
+  "excluded_products": {
+    "note": "Bu ürünler üretim planlamasına DAHİL DEĞİL. Panelde işleri olabilir; planlayıcı onları atlar ve bunu bir veri hatası olarak raporlamaz.",
+    "list": [
+      "Şapka",
+      "Rozet"
+    ]
+  }
+}
