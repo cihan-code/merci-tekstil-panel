@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Merci Tekstil — Canlı Yönetim Paneli</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="js/uretim-planlayici.js"></script>
 <style>
 :root {
   --navy: #12213b; --navy2: #1a2f52; --accent: #d97b3f; --accent2: #2e8f7c;
@@ -195,6 +196,32 @@ table.data-table tr:hover td { background:#fbfbfe; }
 table.data-table tbody tr.row-alert td:first-child { box-shadow: inset 3px 0 0 var(--red); }
 table.data-table tbody tr.row-warn td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 .table-wrap { overflow-x:auto; }
+
+/* ---- Üretim Takip Ajanı: günlük pano ---- */
+.ua-header { display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px; margin-bottom:14px; }
+.ua-header h2 { margin:0 0 4px; }
+.ua-header-meta { font-size:12.5px; color:var(--muted); }
+.ua-warning { background:#fbeae8; color:var(--red); border:1px solid #f3c9c3; border-radius:10px; padding:10px 14px; font-size:13px; font-weight:600; margin-bottom:14px; }
+.ua-today-table td.ua-job-cell { font-weight:600; color:var(--navy); }
+.ua-today-table .ua-blocker-flag { color:var(--red); font-size:11px; font-weight:600; display:block; margin-top:2px; }
+.ua-today-table .ua-note { color:var(--accent2); font-size:11.5px; display:block; margin-top:3px; }
+.ua-today-table tr.ua-row { cursor:pointer; }
+.ua-today-table tr.ua-row:hover td { background:#f8f9fc; }
+.ua-today-table tr.ua-detail-row { display:none; background:#f8f9fc; }
+.ua-today-table tr.ua-detail-row.open { display:table-row; }
+.ua-today-table tr.ua-detail-row td { white-space:normal; padding:12px 14px; font-size:12.5px; color:var(--text); line-height:1.6; }
+.ua-confirm-item { padding:7px 0; border-bottom:1px solid var(--border); font-size:13px; }
+.ua-confirm-item:last-child { border-bottom:none; }
+.ua-confirm-item.ua-confirm-q { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+.ua-confirm-actions { display:flex; gap:6px; flex-shrink:0; }
+.ua-confirm-item b { color:var(--navy); }
+details.ua-details { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:2px 18px; margin-bottom:12px; }
+details.ua-details summary { cursor:pointer; padding:12px 0; font-weight:700; color:var(--navy); font-size:13.5px; list-style:none; }
+details.ua-details summary::-webkit-details-marker { display:none; }
+details.ua-details summary::before { content:'▸ '; color:var(--muted); }
+details.ua-details[open] summary::before { content:'▾ '; }
+details.ua-details .ua-details-body { padding-bottom:16px; font-size:13px; color:var(--text); }
+details.ua-details .ua-details-body ul { margin:6px 0; padding-left:20px; }
 .badge { display:inline-block; padding:2px 9px; border-radius:20px; font-size:11px; font-weight:600; }
 .badge.green { background:#e5f6ed; color:var(--green); }
 .badge.red { background:#fbeae8; color:var(--red); }
@@ -645,28 +672,63 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
 
   <!-- ÜRETİM TAKİP AJANI -->
   <section class="view" id="view-uretim-ajan">
-    <div class="agent-hero">
-      <div class="ah-left">
+    <div class="ua-header">
+      <div>
         <h2>📋 Üretim Takip Ajanı</h2>
-        <div class="ah-sub" id="uretimAjanStatusMsg">Her sabah üretimdeki işleri okur, o gün yapılacak operasyonları listeler.</div>
+        <div class="ua-header-meta" id="uaHeaderMeta">Plan tarihi hesaplanıyor…</div>
       </div>
-      <div class="ah-right">
-        <span class="agent-status-pill idle" id="uretimAjanStatusPill"><span class="dot"></span><span class="lbl">Hazır</span></span>
-        <button class="btn" id="uretimAjanRunBtn">🔄 Şimdi çalıştır</button>
+      <button class="btn" id="uaRefreshBtn">🔄 Yenile</button>
+    </div>
+
+    <div class="ua-warning" id="uaWarningLine" hidden></div>
+
+    <div class="panel-box agent-card" id="uaTodayBox">
+      <h3 style="margin-top:0;">Bugün yapılacaklar</h3>
+      <div class="table-wrap">
+        <table class="data-table ua-today-table" id="uaTodayTable">
+          <thead><tr><th>İş</th><th>Ürün · Adet</th><th>Bugünkü işlem</th><th>Durum</th></tr></thead>
+          <tbody><tr><td colspan="4" style="color:var(--muted);">Hesaplanıyor…</td></tr></tbody>
+        </table>
       </div>
     </div>
 
-    <div class="md-body panel-box agent-card" id="uretimAjanContent" style="margin-top:16px;">
-      <div class="agent-skel"><div class="l title"></div><div class="l"></div><div class="l w70"></div><div class="l"></div><div class="l w45"></div></div>
-    </div>
+    <div class="section-title">Teyit gerekenler</div>
+    <div class="panel-box" id="uaConfirmBox"><div style="color:var(--muted);">Hesaplanıyor…</div></div>
 
-    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
-      <span>Geçmiş Planlar</span>
-      <button type="button" class="btn danger small" id="uretimAjanBulkDel">Tümünü sil</button>
-    </div>
-    <div class="panel-box">
-      <div class="table-wrap"><table class="data-table" id="uretimAjanHistoryTable"></table></div>
-    </div>
+    <details class="ua-details">
+      <summary>Dikim atölyesi yükü ve hesap varsayımları</summary>
+      <div class="ua-details-body" id="uaCapacityBox"></div>
+    </details>
+
+    <details class="ua-details">
+      <summary>Sonraki 3 gün</summary>
+      <div class="ua-details-body" id="uaNext3Box"></div>
+    </details>
+
+    <details class="ua-details" id="uaAiDetails">
+      <summary>AI Brifing (Türkçe özet metin) ve geçmiş planlar</summary>
+      <div class="ua-details-body">
+        <div class="agent-hero" style="margin-top:4px;">
+          <div class="ah-left">
+            <div class="ah-sub" id="uretimAjanStatusMsg">Her sabah üretimdeki işleri okur, o gün yapılacak operasyonları Türkçe özetler.</div>
+          </div>
+          <div class="ah-right">
+            <span class="agent-status-pill idle" id="uretimAjanStatusPill"><span class="dot"></span><span class="lbl">Hazır</span></span>
+            <button class="btn" id="uretimAjanRunBtn">🔄 Şimdi çalıştır</button>
+          </div>
+        </div>
+        <div class="md-body panel-box agent-card" id="uretimAjanContent" style="margin-top:16px;">
+          <div style="color:var(--muted);">Açıldığında yüklenir.</div>
+        </div>
+        <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
+          <span>Geçmiş Planlar</span>
+          <button type="button" class="btn danger small" id="uretimAjanBulkDel">Tümünü sil</button>
+        </div>
+        <div class="panel-box">
+          <div class="table-wrap"><table class="data-table" id="uretimAjanHistoryTable"></table></div>
+        </div>
+      </div>
+    </details>
   </section>
 
   <!-- SATIŞ AJANI (SDR) -->
@@ -5446,14 +5508,371 @@ document.getElementById('ajanActBtn').addEventListener('click', ajanRunAct);
 document.getElementById('ajanActInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') ajanRunAct(); });
 
 // ================= ÜRETİM TAKİP AJANI =================
-// Yonetim Ajani'nin ayni deseni, ama SABIT tip (gunluk-uretim-plani) ve kendi
-// DOM id'leri ile - ayri bir ajan sekmesi olarak. Yonetim Ajani'nin kodunu
-// degistirmez, ayni API uclarini (agent/run, /status, /latest, /outputs) kullanir.
+// Ana pano DETERMİNİSTİKTİR: js/uretim-planlayici.js (agent/uretim/ ile ayni kod,
+// bagimliliksiz JS'e tasindi) DATA.jobs + DATA.uretimTakip uzerinde dogrudan
+// tarayicida calisir. Hicbir sayi AI'dan gelmez, ag istegi gerekmez. AI brifing
+// (Turkce ozet metin) ayri, acilinca yuklenen bir bolumde - ikincil, ustyazi.
+
+const OP_GROUP_TR = {
+  fabric_order: 'Kumaş', fabric_arrival: 'Kumaş',
+  cut_main: 'Kesim', cut_extra_parts: 'Kesim',
+  print_dropoff: 'Baskı/Nakış', print_work: 'Baskı/Nakış',
+  embroidery_dropoff: 'Baskı/Nakış', embroidery_work: 'Baskı/Nakış',
+  sewing_dropoff: 'Dikim', sewing: 'Dikim',
+  buttonhole_button: 'İlik/Düğme',
+  iron_pack: 'Ütü-Paket/Sevkiyat', delivery: 'Ütü-Paket/Sevkiyat',
+};
+const GUN_ADI_TR = { Monday: 'Pazartesi', Tuesday: 'Salı', Wednesday: 'Çarşamba', Thursday: 'Perşembe', Friday: 'Cuma', Saturday: 'Cumartesi', Sunday: 'Pazar' };
+
+let URETIM_ROTA_CACHE = null;
+async function uaLoadRota() {
+  if (URETIM_ROTA_CACHE) return URETIM_ROTA_CACHE;
+  const res = await fetch('uretim-rota.json');
+  URETIM_ROTA_CACHE = await res.json();
+  return URETIM_ROTA_CACHE;
+}
+// Tarayicinin yerel saati her zaman Turkiye olmayabilir - plan tarihi ve
+// damgalar acikca Europe/Istanbul'a sabitlenir.
+function uaIstanbulToday() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul' }).format(new Date());
+}
+function uaIstanbulDayName(isoDate) {
+  const d = new Date(isoDate + 'T12:00:00Z'); // ogleni kullan, gun sinirinda TZ kaymasi olmasin
+  const en = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Istanbul', weekday: 'long' }).format(d);
+  return GUN_ADI_TR[en] || en;
+}
+function uaIstanbulStamp(iso) {
+  if (!iso) return 'bilinmiyor';
+  const d = new Date(iso);
+  if (isNaN(d)) return String(iso);
+  return d.toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+// Ayni isin ayni gundeki birden fazla operasyonunu TEK ifadede birlestirir -
+// "Kumaşın kesimi" + "Yaka ribanası kesimi" -> "Kumaş ve yaka ribanası kesimi".
+// Ozel durumu yoksa etiketleri " + " ile birlestirir (uydurma cumle kurmaz).
+function uaCombineToday(ops) {
+  const ids = ops.map((o) => o.op_id);
+  const extra = ops.find((o) => o.op_id === 'cut_extra_parts');
+  // Sadece SORULUP "evet" denmis opsiyonel parca (orn. kapüşon astarı) ayri bir
+  // nota cikar - satir etiketi sismez, bilgi de kaybolmaz. Standart parcalar
+  // (yaka ribanası, kaşkorse) zaten her zaman kesildigi icin not olmaz.
+  const confirmed = (extra && extra.confirmed_parts) || [];
+  const note = confirmed.length ? confirmed.join(' ve ') + ' kesilecek' : null;
+  const extraLabel = extra
+    ? ((extra.parts || []).filter((x) => confirmed.indexOf(x) === -1).join(' ve ') || 'ek parça') + ' kesimi'
+    : null;
+  if (ids.includes('cut_main') && extra) {
+    return { label: 'Kumaş ve ' + extraLabel.toLowerCase(), group: 'Kesim', note: note };
+  }
+  const labels = [...new Set(ops.map((o) => (o.op_id === 'cut_extra_parts' ? extraLabel : o.label)))];
+  return { label: labels.join(' + '), group: OP_GROUP_TR[ops[0].op_id] || '—', note: note };
+}
+
+// Durum rozeti: GERÇEK gecikme (teslim tarihi bugünden önce - panel verisi, kesin
+// olgu) ile TAHMİNİ gecikme riski (bizim hesabımız yetişmeyebilir diyor) kesinlikle
+// ayrı tutulur. Aşaması bilinmeyen iş asla "akışta" veya kesin bir tarih göstermez.
+// UZAK tarihli tahminler (haftalar sonrasi icin "X gun gec" gibi) paylasimli
+// kapasite/kuyruk belirsizligi yuzunden GUVENILMEZ - gosterilmez. Tahmini risk
+// SADECE teslim tarihine az kalmisken (asagidaki esik) uyari olarak cikar.
+const UA_RISK_HORIZON_DAYS = 5;
+function uaDurum(j, src, todayISO) {
+  if (j.est_delivery && todayISO > j.est_delivery) {
+    const days = UretimPlanlayici.diffDays(j.est_delivery, todayISO);
+    return { cls: 'red', text: days + ' gün gecikmiş' };
+  }
+  if (!src || !src.panel_stage) {
+    return { cls: 'gray', text: 'Aşama teyidi gerekli' };
+  }
+  if (j.at_risk && j.est_delivery) {
+    const daysToDeadline = UretimPlanlayici.diffDays(todayISO, j.est_delivery);
+    if (daysToDeadline <= UA_RISK_HORIZON_DAYS) {
+      return { cls: 'orange', text: 'Teslime ' + daysToDeadline + ' gün — risk var' };
+    }
+  }
+  return { cls: 'green', text: 'Akışta' };
+}
+const UA_DURUM_ORDER = { red: 0, gray: 1, orange: 2, green: 3 };
+
+function uaFmtQty(j) { return (j.quantity || 0) + ' ' + (j.product_label || j.product || ''); }
+
+// ---- Onay durumu (fermuar/kordon vb. aksesuar sorulari) ----
+// EVET: sadece bu tarayicida hatirlanir (localStorage), panele YAZILMAZ, plani
+// duzeltir. HAYIR: onayla panelin GERCEK problem_note alanina not dusulur
+// (paylasilir) + kesin blokaj olarak hatirlanir. Ikisi de AI cagrisi icermez.
+const UA_CONFIRM_KEY = 'ua_confirmations_v1';
+function uaLoadConfirmState() {
+  try { return JSON.parse(localStorage.getItem(UA_CONFIRM_KEY) || '{}'); } catch (e) { return {}; }
+}
+function uaSaveConfirmState(state) {
+  try { localStorage.setItem(UA_CONFIRM_KEY, JSON.stringify(state)); } catch (e) { /* localStorage yoksa sessiz gec */ }
+}
+function uaAccessoryConfirmHtml(j, src, b) {
+  const key = j.job_id + '::' + b.accessory;
+  return '<div class="ua-confirm-item ua-confirm-q">'
+    + '<span>' + esc('[' + (j.job_no || j.job_id) + '] ' + j.customer_name + ': ' + b.message) + '</span>'
+    + '<span class="ua-confirm-actions">'
+    + '<button type="button" class="btn small" data-ua-yes="' + esc(key) + '">Evet, var</button>'
+    + '<button type="button" class="btn small danger" data-ua-no="' + esc(key) + '">Hayır, yok</button>'
+    + '</span></div>';
+}
+// Kesim icin SORULUP cevaplanmasi gereken opsiyonel parca sorusu (orn. "Kapüşonda
+// astar olacak mi?"). Is basina BIR KERE sorulur; cevap kesime aittir.
+// Evet  -> parca kesime eklenir, kesimin yanina "Kapüşon astarı kesilecek" notu duser.
+// Hayır -> parca kesilmez. Iki durumda da panele YAZILMAZ: bu bir satin alma
+// problemi degil, kesim talimati. (Aksesuar sorusu tam tersi - orada eksik malzeme
+// panele problem notu olarak dusuyor.)
+function uaPartConfirmHtml(j, q) {
+  const key = j.job_id + '::part::' + q.part;
+  return '<div class="ua-confirm-item ua-confirm-q">'
+    + '<span>' + esc('[' + (j.job_no || j.job_id) + '] ' + j.customer_name + ': ' + q.message) + '</span>'
+    + '<span class="ua-confirm-actions">'
+    + '<button type="button" class="btn small" data-ua-part-yes="' + esc(key) + '">Evet, olacak</button>'
+    + '<button type="button" class="btn small" data-ua-part-no="' + esc(key) + '">Hayır, olmayacak</button>'
+    + '</span></div>';
+}
+function uaAnswerPart(key, isYes) {
+  const bits = key.split('::');
+  const jobId = parseInt(bits[0], 10);
+  const partId = bits[2];
+  const state = uaLoadConfirmState();
+  state[jobId] = state[jobId] || {};
+  state[jobId].parts = state[jobId].parts || {};
+  state[jobId].parts[partId] = isYes;
+  uaSaveConfirmState(state);
+  renderUretimTakipDashboard();
+}
+
+async function uaAnswerAccessory(key, isYes) {
+  const [jobIdStr, accessoryId] = key.split('::');
+  const jobId = parseInt(jobIdStr, 10);
+  const state = uaLoadConfirmState();
+  state[jobId] = state[jobId] || {};
+  state[jobId].accessories_in_stock = state[jobId].accessories_in_stock || {};
+
+  if (!isYes) {
+    const rota = await uaLoadRota();
+    const { jobs: srcJobs } = UretimPlanlayici.buildJobsFromPanel(rota, DATA, { confirmations: state });
+    const src = srcJobs.find((x) => x.id === jobId);
+    const product = src && rota.products[src.product];
+    const accDef = product && (product.accessories || []).find((a) => a.id === accessoryId);
+    const label = accDef ? accDef.label : accessoryId;
+    if (src && src.production_record_id != null) {
+      const rec = (DATA.uretimTakip || []).find((u) => u.id === src.production_record_id);
+      if (rec) {
+        const msg = label + ' stokta yok olarak işaretlenecek ve üretim kaydına '
+          + '"' + label + ' alınması gerekiyor" notu eklenecek. Panel verisine yazılır. Onaylıyor musunuz?';
+        if (!confirm(msg)) return; // vazgecildi - state'e dokunma
+        const stamp = new Date().toISOString().slice(0, 10);
+        rec.problem_note = (rec.problem_note ? rec.problem_note + '\n' : '') + '[' + stamp + ' Üretim Takip Ajanı] ' + label + ' alınması gerekiyor.';
+        saveData();
+        flash(label + ' notu üretim kaydına eklendi.', 'success');
+      }
+    } else {
+      flash('Bu iş henüz bir üretim kaydına bağlı değil - not eklenemedi, sadece plan güncellendi.', 'error');
+    }
+  }
+  state[jobId].accessories_in_stock[accessoryId] = isYes;
+  uaSaveConfirmState(state);
+  renderUretimTakipDashboard();
+}
+
+async function renderUretimTakipDashboard() {
+  const meta = document.getElementById('uaHeaderMeta');
+  const warnBox = document.getElementById('uaWarningLine');
+  const todayTable = document.getElementById('uaTodayTable');
+  const confirmBox = document.getElementById('uaConfirmBox');
+  const capBox = document.getElementById('uaCapacityBox');
+  const next3Box = document.getElementById('uaNext3Box');
+
+  if (typeof UretimPlanlayici === 'undefined') {
+    todayTable.querySelector('tbody').innerHTML = '<tr><td colspan="4" style="color:var(--red);">Planlayıcı modülü yüklenemedi (js/uretim-planlayici.js).</td></tr>';
+    return;
+  }
+
+  let rota;
+  try { rota = await uaLoadRota(); }
+  catch (e) {
+    todayTable.querySelector('tbody').innerHTML = '<tr><td colspan="4" style="color:var(--red);">Rota dosyası okunamadı (uretim-rota.json).</td></tr>';
+    return;
+  }
+
+  const today = uaIstanbulToday();
+  meta.textContent = 'Plan tarihi: ' + today + ' (' + uaIstanbulDayName(today) + ') · Panel verisi: ' + uaIstanbulStamp(CLOUD_LAST_KNOWN_UPDATED_AT) + ' (TR saati)';
+
+  const { jobs: sourceJobs, needs_attention } = UretimPlanlayici.buildJobsFromPanel(rota, DATA, { confirmations: uaLoadConfirmState() });
+  const plan = UretimPlanlayici.buildPlan(rota, sourceJobs, today);
+  const bySourceId = {};
+  sourceJobs.forEach((j) => { bySourceId[j.id] = j; });
+
+  const byJobToday = new Map();
+  plan.today_plan.forEach((op) => {
+    if (!byJobToday.has(op.job_id)) byJobToday.set(op.job_id, []);
+    byJobToday.get(op.job_id).push(op);
+  });
+
+  // Tabloya giren isler: bugun gercek bir islemi olan + asamasi bilinmeyen +
+  // gercekten gecikmis olanlar (bunlar bugun mutlaka bakilmali, planda gorunmese de).
+  // Once HER isin durumunu hesapla, sonra "tabloda gorunmeyi hak ediyor mu" diye
+  // filtrele - boylece "teslime yakin, riskli" bir is bugun somut bir islemi
+  // olmasa bile (kuyrukta bekliyor olsa bile) tabloda gorunur.
+  const rows = plan.jobs.map((j) => {
+    const src = bySourceId[j.job_id] || {};
+    const stageKnown = !!src.panel_stage;
+    const ops = byJobToday.get(j.job_id) || [];
+    let action;
+    let actionNote = null;
+    if (!stageKnown) {
+      // Bilinmeyen asamada, sifirdan kurulan plan spekulatif olur - "kumas siparisi"
+      // gibi uydurma bir eylem GOSTERMEYIZ, durumu oldugu gibi soyleriz.
+      action = 'Aşama teyidi gerekli';
+    } else if (ops.length) {
+      const combined = uaCombineToday(ops);
+      action = combined.label;
+      actionNote = combined.note;
+    } else {
+      action = 'Bekliyor (bugün planlı işlem yok)';
+    }
+    return { j, src, action, actionNote: actionNote, durum: uaDurum(j, src, today) };
+  }).filter((r) => {
+    const hasCriticalBlocker = r.j.blockers.some((b) => b.kind === 'accessory_missing' || b.kind === 'no_decoration');
+    return byJobToday.has(r.j.job_id) || !r.src.panel_stage || r.durum.cls === 'red' || r.durum.cls === 'orange' || hasCriticalBlocker;
+  }).sort((a, b) => UA_DURUM_ORDER[a.durum.cls] - UA_DURUM_ORDER[b.durum.cls]);
+
+  const overdueCount = rows.filter((r) => r.durum.cls === 'red').length;
+  const unknownCount = rows.filter((r) => r.durum.cls === 'gray').length;
+  const blockerCount = plan.jobs.filter((j) => j.blockers.some((b) => b.kind === 'accessory_missing' || b.kind === 'no_decoration')).length;
+  const warnParts = [];
+  if (overdueCount) warnParts.push(overdueCount + ' iş GERÇEKTEN gecikmiş');
+  if (blockerCount) warnParts.push(blockerCount + ' iş blokajlı');
+  if (unknownCount) warnParts.push(unknownCount + ' işin aşaması teyit bekliyor');
+  if (warnParts.length) { warnBox.hidden = false; warnBox.textContent = '⚠️ ' + warnParts.join(' · '); }
+  else { warnBox.hidden = true; }
+
+  if (!rows.length) {
+    todayTable.querySelector('tbody').innerHTML = '<tr><td colspan="4" style="color:var(--muted);">Bugün dikkat gerektiren iş yok.</td></tr>';
+  } else {
+    todayTable.querySelector('tbody').innerHTML = rows.map((r, idx) => {
+      // Satirda SADECE gercek/kesin engelleri goster (stokta yok -> siparis
+      // gerekli, ya da baski/nakis ikisi de acikca "yok" - veri celiskisi).
+      // "sorulmadi" (henuz cevaplanmamis) bir engel DEGIL, sadece Teyit gerekenler'e
+      // gider - eksik bilgiyi hata gibi sunmamak icin.
+      const critical = r.j.blockers.filter((b) => b.kind === 'accessory_missing' || b.kind === 'no_decoration');
+      // Satir sade: blokaj varsa kisa bir isaret, tam metin detay satirinda.
+      // Grup etiketi (Kesim/Dikim/vb.) kaldirildi - islem adi zaten onu tasiyor.
+      const blockerFlag = critical.length ? ' <span class="ua-blocker-flag" title="' + esc(critical[0].message) + '">⛔ blokaj</span>' : '';
+      return '<tr class="ua-row" data-idx="' + idx + '">'
+        + '<td class="ua-job-cell">' + esc(r.j.job_no || ('#' + r.j.job_id)) + ' · ' + esc(r.j.customer_name) + blockerFlag + '</td>'
+        + '<td>' + esc(uaFmtQty(r.j)) + '</td>'
+        + '<td>' + esc(r.action)
+        + (r.actionNote ? '<span class="ua-note">+ ' + esc(r.actionNote) + '</span>' : '') + '</td>'
+        + '<td><span class="badge ' + r.durum.cls + '">' + esc(r.durum.text) + '</span></td>'
+        + '</tr>'
+        + '<tr class="ua-detail-row" data-idx="' + idx + '"><td colspan="4"></td></tr>';
+    }).join('');
+    todayTable.querySelectorAll('tr.ua-row').forEach((tr) => {
+      tr.addEventListener('click', () => {
+        const idx = tr.dataset.idx;
+        const detailTr = todayTable.querySelector('tr.ua-detail-row[data-idx="' + idx + '"]');
+        const willOpen = !detailTr.classList.contains('open');
+        todayTable.querySelectorAll('tr.ua-detail-row.open').forEach((o) => o.classList.remove('open'));
+        if (willOpen) {
+          detailTr.classList.add('open');
+          const r = rows[idx];
+          detailTr.querySelector('td').innerHTML = uaJobDetailHtml(r, today);
+        }
+      });
+    });
+  }
+
+  // ---- Teyit gerekenler: eslesmeyen kayitlar + blokajlar + cevaplanmamis sorular ----
+  // Aksesuar sorulari (fermuar/kordon var mi?) TIKLANABILIR: Evet/Hayir. Evet ->
+  // sadece bu tarayicida hatirlanir (localStorage), plan yeniden hesaplanir, panele
+  // YAZILMAZ. Hayir -> onayla panelin gercek problem_note alanina not dusulur
+  // (paylasilir, herkes gorur) + ayni zamanda "kesin blokaj" olarak hatirlanir.
+  // Diger sorular (parca/baski-nakis vb.) henuz duz metin - onlar icin de ayni
+  // etkilesim istenirse sonraki adim olarak eklenir.
+  const confirmParts = [];
+  needs_attention.forEach((n) => confirmParts.push('<div class="ua-confirm-item">' + esc((n.job_no ? '[' + n.job_no + '] ' : '') + n.customer_name + ': ' + n.message) + '</div>'));
+  plan.jobs.forEach((j) => {
+    const src = bySourceId[j.job_id] || {};
+    j.blockers.forEach((b) => {
+      if (b.kind === 'accessory_unknown') {
+        confirmParts.push(uaAccessoryConfirmHtml(j, src, b));
+      } else {
+        confirmParts.push('<div class="ua-confirm-item">' + esc('[' + (j.job_no || j.job_id) + '] ' + j.customer_name + ': ' + b.message) + '</div>');
+      }
+    });
+    // Kesim parcasi sorulari (kapüşon astarı gibi) TIKLANABILIR - cevabi plan
+    // hesabini dogrudan degistirir. Kalan sorular simdilik duz metin kalir; ayni
+    // metin iki kez gorunmesin diye tiklanabilir olanlar listeden cikarilir.
+    (j.part_questions || []).forEach((q) => confirmParts.push(uaPartConfirmHtml(j, q)));
+    const askedTexts = (j.part_questions || []).map((q) => q.message);
+    const restQuestions = j.open_questions.filter((q) => askedTexts.indexOf(q) === -1);
+    if (restQuestions.length) confirmParts.push('<div class="ua-confirm-item">' + esc('[' + (j.job_no || j.job_id) + '] ' + j.customer_name + ': ' + restQuestions.join(' / ')) + '</div>');
+  });
+  confirmBox.innerHTML = confirmParts.length ? confirmParts.join('') : '<div style="color:var(--muted);">Şu an teyit bekleyen bir şey yok.</div>';
+  confirmBox.querySelectorAll('[data-ua-yes]').forEach((btn) => btn.addEventListener('click', () => uaAnswerAccessory(btn.dataset.uaYes, true)));
+  confirmBox.querySelectorAll('[data-ua-no]').forEach((btn) => btn.addEventListener('click', () => uaAnswerAccessory(btn.dataset.uaNo, false)));
+  confirmBox.querySelectorAll('[data-ua-part-yes]').forEach((btn) => btn.addEventListener('click', () => uaAnswerPart(btn.dataset.uaPartYes, true)));
+  confirmBox.querySelectorAll('[data-ua-part-no]').forEach((btn) => btn.addEventListener('click', () => uaAnswerPart(btn.dataset.uaPartNo, false)));
+
+  // ---- Dikim yuku / kapasite varsayimlari (toplu, sabit metin + gercek rakamlar) ----
+  const capLines = [...new Set(plan.jobs.map((j) => j.product_label + ' ' + (rota.products[j.product].sewing_capacity_per_day) + '/gün'))];
+  capBox.innerHTML = '<ul><li>Dikim kapasitesi atölyenin TOPLAMIDIR - eşzamanlı işler paylaşır, birbirini bekletir.</li>'
+    + '<li>Rakamlar ortalamadır, ±%20 dalgalanır - tahminler her zaman yaklaşıktır.</li>'
+    + (capLines.length ? '<li>Bugün aktif ürünlerin kapasitesi: ' + esc(capLines.join(' · ')) + '</li>' : '')
+    + '<li>Baskı 1-3, nakış 1-2 iş günü aralığıdır; iki uç iyi/kötü senaryoyu verir, kesin tarih değildir.</li></ul>';
+
+  // ---- Sonraki 3 gun onizlemesi ----
+  const in3 = new Date(new Date(today + 'T12:00:00Z').getTime() + 3 * 86400000).toISOString().slice(0, 10);
+  const byDay = {};
+  plan.jobs.forEach((j) => j.timeline.forEach((op) => {
+    if (op.start <= today || op.start > in3) return;
+    (byDay[op.start] = byDay[op.start] || []).push(j.customer_name + ' → ' + op.label);
+  }));
+  const days = Object.keys(byDay).sort();
+  next3Box.innerHTML = days.length
+    ? days.map((d) => '<div style="margin-bottom:8px;"><b>' + esc(d) + ' (' + esc(uaIstanbulDayName(d)) + ')</b><ul>'
+        + byDay[d].map((l) => '<li>' + esc(l) + '</li>').join('') + '</ul></div>').join('')
+    : '<div style="color:var(--muted);">Sonraki 3 günde planlı bir şey yok.</div>';
+}
+
+function uaJobDetailHtml(r, today) {
+  const j = r.j, src = r.src;
+  const lines = [];
+  lines.push('<b>Kaynak:</b> ' + esc(src.stage_source || 'bilinmiyor') + (src.panel_stage ? ' — paneldeki aşama: ' + esc(src.panel_stage) : ''));
+  lines.push('<b>Teslim sözü:</b> ' + esc(j.est_delivery || '—'));
+  lines.push('<b>Tahmini bitiş:</b> ≈ ' + esc(j.finish_earliest) + ' … ' + esc(j.finish_latest) + (j.provisional ? ' (ön tahmin — cevaplanmamış soru var)' : ''));
+  if (src.problem_note) lines.push('<b>Paneldeki problem notu:</b> "' + esc(src.problem_note) + '"');
+  if (j.blockers.length) lines.push('<b>Blokaj/uyarılar:</b><ul>' + j.blockers.map((b) => '<li>' + esc(b.message) + '</li>').join('') + '</ul>');
+  if (j.open_questions.length) lines.push('<b>Cevaplanmamış sorular:</b> ' + esc(j.open_questions.join(' / ')));
+  const upcoming = j.timeline.filter((o) => o.start > today).slice(0, 5);
+  if (upcoming.length) {
+    lines.push('<b>Sıradaki adımlar:</b><ul>' + upcoming.map((o) => '<li>' + esc(o.start === o.end ? o.start : o.start + '→' + o.end) + ' — ' + esc(o.label) + '</li>').join('') + '</ul>');
+  }
+  if (j.unknowns.length) lines.push('<b>Tanımsız süreler:</b> ' + esc(j.unknowns.join(' | ')));
+  return lines.map((l) => '<div style="margin-bottom:5px;">' + l + '</div>').join('');
+}
+
+document.getElementById('uaRefreshBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('uaRefreshBtn');
+  btn.disabled = true; btn.textContent = '⏳ Yükleniyor…';
+  try {
+    const cloud = await pullCloudPanelData(15000);
+    if (cloud) adoptCloudSnapshot(cloud);
+  } catch (e) { /* pullCloudPanelData zaten sessiz hata basar */ }
+  await renderUretimTakipDashboard();
+  btn.disabled = false; btn.textContent = '🔄 Yenile';
+});
+
+// ---- İkincil: AI Brifing (Türkçe özet metin) - yalnız açılınca yüklenir ----
+let URETIM_AJAN_AI_LOADED = false;
 const URETIM_AJAN_TYPE = 'gunluk-uretim-plani';
 let URETIM_AJAN_POLL_TIMER = null;
-const URETIM_AJAN_DEFAULT_SUB = 'Her sabah üretimdeki işleri okur, o gün yapılacak operasyonları listeler.';
+const URETIM_AJAN_DEFAULT_SUB = 'Her sabah üretimdeki işleri okur, o gün yapılacak operasyonları Türkçe özetler.';
 
-async function renderUretimTakipAjani() {
+async function renderUretimTakipAiBrifing() {
   const box = document.getElementById('uretimAjanContent');
   const histTable = document.getElementById('uretimAjanHistoryTable');
   if (!matBackendReady()) {
@@ -5485,7 +5904,6 @@ async function renderUretimTakipAjani() {
           try {
             const rec = await (await matApi('/api/agent/outputs/' + tr.dataset.id)).json();
             ajanShowOutput(rec, 'uretimAjanContent');
-            window.scrollTo({ top: document.getElementById('uretimAjanContent').offsetTop - 20, behavior: 'smooth' });
           } catch (e) { flash('Çıktı açılamadı: ' + e.message, 'error'); }
         }));
         const del = tr.querySelector('.ua-hist-del');
@@ -5496,7 +5914,7 @@ async function renderUretimTakipAjani() {
           try {
             await matApi('/api/agent/outputs/' + tr.dataset.id, { method: 'DELETE' });
             flash('Plan silindi.', 'success');
-            renderUretimTakipAjani();
+            renderUretimTakipAiBrifing();
           } catch (e) { del.disabled = false; flash('Silinemedi: ' + e.message, 'error'); }
         });
       });
@@ -5536,7 +5954,7 @@ async function uretimAjanPollTick() {
     const st = await (await matApi('/api/agent/status')).json();
     if (!st.running) {
       clearInterval(URETIM_AJAN_POLL_TIMER); URETIM_AJAN_POLL_TIMER = null;
-      renderUretimTakipAjani();
+      renderUretimTakipAiBrifing();
       flash(st.lastError ? ('Ajan çalışması hata verdi: ' + st.lastError) : 'Ajan yeni planı hazırladı.',
         st.lastError ? 'error' : 'success');
     }
@@ -5573,13 +5991,20 @@ document.getElementById('uretimAjanRunBtn').addEventListener('click', async () =
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: URETIM_AJAN_TYPE }),
       })).json();
       flash((r.deleted || 0) + ' çıktı silindi.', 'success');
-      renderUretimTakipAjani();
+      renderUretimTakipAiBrifing();
     } catch (e) { flash('Silinemedi: ' + e.message, 'error'); }
     finally { b.disabled = false; }
   });
 })();
+document.getElementById('uaAiDetails').addEventListener('toggle', function () {
+  if (this.open && !URETIM_AJAN_AI_LOADED) { URETIM_AJAN_AI_LOADED = true; renderUretimTakipAiBrifing(); }
+});
 
-// ================= FATURALAR =================
+// Sekmenin giris noktasi (VIEW_RENDER_MAP): once deterministik panoyu goster.
+async function renderUretimTakipAjani() {
+  try { await renderUretimTakipDashboard(); }
+  catch (e) { document.getElementById('uaTodayTable').querySelector('tbody').innerHTML = '<tr><td colspan="4" style="color:var(--red);">Hesaplama hatası: ' + esc(e.message) + '</td></tr>'; }
+}
 function invoiceStatus(iv) {
   const total = Math.round((iv.total_amount || 0) * 100) / 100;
   const paid = Math.round((iv.paid_amount || 0) * 100) / 100;
