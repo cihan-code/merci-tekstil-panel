@@ -838,6 +838,7 @@ function buildJobsFromPanel(rota, panelData, opts) {
 
 
 return {
+  calendar: cal,
   buildPlan: buildPlan,
   diffDays: diffDays,
   dayName: dayName,

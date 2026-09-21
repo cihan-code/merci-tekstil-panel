@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Merci Tekstil — Canlı Yönetim Paneli</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="js/uretim-planlayici.js"></script>
+<script src="js/uretim-planlayici.js?v=progress2"></script>
+<script src="js/uretim-ilerleme.js?v=progress2"></script>
 <style>
 :root {
   --navy: #12213b; --navy2: #1a2f52; --accent: #d97b3f; --accent2: #2e8f7c;
@@ -5480,7 +5481,7 @@ function ajanRenderActResult(out) {
     box2.appendChild(pend);
   }
 
-  if (out.applied && out.applied.length) ajanReloadNote(box2);
+  if (out.applied && out.applied.some((a) => a.type !== 'record_production_progress')) ajanReloadNote(box2);
   ajanRenderUsage();
 }
 
@@ -5498,6 +5499,7 @@ async function ajanRunAct() {
     })).json();
     ajanRenderActResult(out);
     input.value = '';
+    if (out.applied && out.applied.some((a) => a.type === 'record_production_progress')) await renderUretimTakipDashboard();
   } catch (e) {
     document.getElementById('ajanActResult').innerHTML = '<div style="color:var(--red);">Hata: ' + esc(e.message) + '</div>';
   } finally {
@@ -5685,15 +5687,23 @@ async function renderUretimTakipDashboard() {
   const capBox = document.getElementById('uaCapacityBox');
   const next3Box = document.getElementById('uaNext3Box');
 
-  if (typeof UretimPlanlayici === 'undefined') {
+  if (typeof UretimPlanlayici === 'undefined' || typeof UretimIlerleme === 'undefined') {
     todayTable.querySelector('tbody').innerHTML = '<tr><td colspan="4" style="color:var(--red);">Planlayıcı modülü yüklenemedi (js/uretim-planlayici.js).</td></tr>';
     return;
   }
 
-  let rota;
-  try { rota = await uaLoadRota(); }
+  let rota, reports;
+  try {
+    rota = await uaLoadRota();
+    const ledger = await (await matApi('/api/agent/production-progress', { cache: 'no-store' })).json();
+    if (ledger.version !== 2 || !Array.isArray(ledger.reports)) throw new Error('Aşama kayıtlarının biçimi geçersiz.');
+    reports = ledger.reports;
+  }
   catch (e) {
-    todayTable.querySelector('tbody').innerHTML = '<tr><td colspan="4" style="color:var(--red);">Rota dosyası okunamadı (uretim-rota.json).</td></tr>';
+    todayTable.querySelector('tbody').innerHTML = '<tr><td colspan="4" style="color:var(--red);">Plan yenilenemedi: ' + esc(e.message) + ' Yenile düğmesiyle tekrar deneyin.</td></tr>';
+    meta.textContent = 'Güncel plan alınamadı';
+    warnBox.hidden = true;
+    [confirmBox, capBox, next3Box].forEach((box) => { box.textContent = 'Güncel aşama kayıtları bekleniyor.'; });
     return;
   }
 
@@ -5701,7 +5711,7 @@ async function renderUretimTakipDashboard() {
   meta.textContent = 'Plan tarihi: ' + today + ' (' + uaIstanbulDayName(today) + ') · Panel verisi: ' + uaIstanbulStamp(CLOUD_LAST_KNOWN_UPDATED_AT) + ' (TR saati)';
 
   const { jobs: sourceJobs, needs_attention } = UretimPlanlayici.buildJobsFromPanel(rota, DATA, { confirmations: uaLoadConfirmState() });
-  const plan = UretimPlanlayici.buildPlan(rota, sourceJobs, today);
+  const plan = UretimIlerleme.buildProgressPlan(rota, sourceJobs, reports, today);
   const bySourceId = {};
   sourceJobs.forEach((j) => { bySourceId[j.id] = j; });
 
@@ -5727,13 +5737,23 @@ async function renderUretimTakipDashboard() {
       // gibi uydurma bir eylem GOSTERMEYIZ, durumu oldugu gibi soyleriz.
       action = 'Aşama teyidi gerekli';
     } else if (ops.length) {
-      const combined = uaCombineToday(ops);
-      action = combined.label;
-      actionNote = combined.note;
+      const ready = ops.filter((op) => op.actionable !== false);
+      const waiting = ops.filter((op) => op.actionable === false);
+      const combined = ready.length ? uaCombineToday(ready) : null;
+      action = combined ? combined.label : 'Hazırlık teyidi / eksik giderilmesi bekleniyor';
+      actionNote = [combined && combined.note,
+        waiting.length && ('Teyit veya eksik giderilmeden başlanmayacak: ' + uaCombineToday(waiting).label),
+        ops.some((op) => op.carried_over) && 'Önceki günden devreden işlem var.',
+        ...ops.filter((op) => op.progress_note).map((op) => op.label + ': ' + op.progress_note)
+      ].filter(Boolean).join(' · ');
     } else {
       action = 'Bekliyor (bugün planlı işlem yok)';
     }
-    return { j, src, action, actionNote: actionNote, durum: uaDurum(j, src, today) };
+    const durum = uaDurum(j, src, today);
+    if (stageKnown && ops.some((op) => op.actionable === false) && durum.cls !== 'red') {
+      durum.cls = 'orange'; durum.text = 'Hazırlık teyidi / eksik var';
+    }
+    return { j, src, action, actionNote: actionNote, durum };
   }).filter((r) => {
     const hasCriticalBlocker = r.j.blockers.some((b) => b.kind === 'accessory_missing' || b.kind === 'no_decoration');
     return byJobToday.has(r.j.job_id) || !r.src.panel_stage || r.durum.cls === 'red' || r.durum.cls === 'orange' || hasCriticalBlocker;
@@ -5793,6 +5813,10 @@ async function renderUretimTakipDashboard() {
   // Diger sorular (parca/baski-nakis vb.) henuz duz metin - onlar icin de ayni
   // etkilesim istenirse sonraki adim olarak eklenir.
   const confirmParts = [];
+  (plan.needs_attention || []).forEach((n) => {
+    const src = bySourceId[n.job_id] || {};
+    confirmParts.push('<div class="ua-confirm-item">' + esc('[' + (n.job_no || src.job_no || n.job_id) + '] ' + (n.customer_name || src.customer_name || '') + ': ' + n.message) + '</div>');
+  });
   needs_attention.forEach((n) => confirmParts.push('<div class="ua-confirm-item">' + esc((n.job_no ? '[' + n.job_no + '] ' : '') + n.customer_name + ': ' + n.message) + '</div>'));
   plan.jobs.forEach((j) => {
     const src = bySourceId[j.job_id] || {};
@@ -5829,7 +5853,7 @@ async function renderUretimTakipDashboard() {
   const byDay = {};
   plan.jobs.forEach((j) => j.timeline.forEach((op) => {
     if (op.start <= today || op.start > in3) return;
-    (byDay[op.start] = byDay[op.start] || []).push(j.customer_name + ' → ' + op.label);
+    (byDay[op.start] = byDay[op.start] || []).push(j.customer_name + ' → ' + op.label + (j.provisional ? ' (teyitlere bağlı ön plan)' : ''));
   }));
   const days = Object.keys(byDay).sort();
   next3Box.innerHTML = days.length
