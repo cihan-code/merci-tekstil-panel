@@ -206,6 +206,14 @@ table.data-table tbody tr.row-warn td:first-child { box-shadow: inset 3px 0 0 va
 .ua-today-table td.ua-job-cell { font-weight:600; color:var(--navy); }
 .ua-today-table .ua-blocker-flag { color:var(--red); font-size:11px; font-weight:600; display:block; margin-top:2px; }
 .ua-today-table .ua-note { color:var(--accent2); font-size:11.5px; display:block; margin-top:3px; }
+.ua-today-table .ua-note.ua-assume { color:var(--accent); font-style:italic; }
+.ua-today-table .ua-note.ua-wait { color:var(--red); }
+.ua-today-table td.ua-action b { font-weight:600; color:var(--text); }
+.ua-today-table td.ua-action b.ua-unsure { font-weight:500; color:var(--muted); }
+.ua-station { margin-bottom:18px; }
+.ua-station:last-child { margin-bottom:0; }
+.ua-station-head { font-weight:700; color:var(--navy); font-size:13.5px; margin:0 0 7px; display:flex; align-items:baseline; gap:8px; }
+.ua-station-head span { font-weight:400; color:var(--muted); font-size:11.5px; }
 .ua-today-table tr.ua-row { cursor:pointer; }
 .ua-today-table tr.ua-row:hover td { background:#f8f9fc; }
 .ua-today-table tr.ua-detail-row { display:none; background:#f8f9fc; }
@@ -685,12 +693,7 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
 
     <div class="panel-box agent-card" id="uaTodayBox">
       <h3 style="margin-top:0;">Bugün yapılacaklar</h3>
-      <div class="table-wrap">
-        <table class="data-table ua-today-table" id="uaTodayTable">
-          <thead><tr><th>İş</th><th>Ürün · Adet</th><th>Bugünkü işlem</th><th>Durum</th></tr></thead>
-          <tbody><tr><td colspan="4" style="color:var(--muted);">Hesaplanıyor…</td></tr></tbody>
-        </table>
-      </div>
+      <div id="uaTodayStations"><div style="color:var(--muted);">Hesaplanıyor…</div></div>
     </div>
 
     <div class="section-title">Teyit gerekenler</div>
@@ -5550,26 +5553,80 @@ function uaIstanbulStamp(iso) {
   return d.toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
-// Ayni isin ayni gundeki birden fazla operasyonunu TEK ifadede birlestirir -
-// "Kumaşın kesimi" + "Yaka ribanası kesimi" -> "Kumaş ve yaka ribanası kesimi".
-// Ozel durumu yoksa etiketleri " + " ile birlestirir (uydurma cumle kurmaz).
-function uaCombineToday(ops) {
-  const ids = ops.map((o) => o.op_id);
-  const extra = ops.find((o) => o.op_id === 'cut_extra_parts');
-  // Sadece SORULUP "evet" denmis opsiyonel parca (orn. kapüşon astarı) ayri bir
-  // nota cikar - satir etiketi sismez, bilgi de kaybolmaz. Standart parcalar
-  // (yaka ribanası, kaşkorse) zaten her zaman kesildigi icin not olmaz.
-  const confirmed = (extra && extra.confirmed_parts) || [];
-  const note = confirmed.length ? confirmed.join(' ve ') + ' kesilecek' : null;
-  const extraLabel = extra
-    ? ((extra.parts || []).filter((x) => confirmed.indexOf(x) === -1).join(' ve ') || 'ek parça') + ' kesimi'
-    : null;
-  if (ids.includes('cut_main') && extra) {
-    return { label: 'Kumaş ve ' + extraLabel.toLowerCase(), group: 'Kesim', note: note };
-  }
-  const labels = [...new Set(ops.map((o) => (o.op_id === 'cut_extra_parts' ? extraLabel : o.label)))];
-  return { label: labels.join(' + '), group: OP_GROUP_TR[ops[0].op_id] || '—', note: note };
+// uretim/lib/isMetni.js'in tarayici portu. Rota etiketleri ("Kumaşın kesimi")
+// bir adimin ADIDIR; gunluk listede ayni adim YAPILACAK IS olarak okunmali.
+// PDF ile ayni kelimeleri kullanir - iki cikti ayni gunu farkli anlatmasin.
+const UA_EYLEM = {
+  fabric_order: 'Kumaş siparişi geçilecek',
+  fabric_arrival: 'Kumaş atölyeye gelecek',
+  cut_main: 'Kumaş kesilecek',
+  print_dropoff: 'Baskıya bırakılacak',
+  print_work: 'Baskı yapılacak',
+  embroidery_dropoff: 'Nakışa bırakılacak',
+  embroidery_work: 'Nakış yapılacak',
+  sewing_dropoff: 'Dikime bırakılacak',
+  sewing: 'Dikilecek',
+  buttonhole_button: 'İlik ve düğme yapılacak',
+  iron_pack: 'Ütü ve paketleme yapılacak',
+  delivery: 'Teslim edilecek',
+};
+// Birden fazla gun surebilen isler zamanini da soyler.
+const UA_SUREKLI = {
+  print_work: ['Baskı başlayacak', 'Baskı sürüyor', 'Baskı bugün bitiyor'],
+  embroidery_work: ['Nakış başlayacak', 'Nakış sürüyor', 'Nakış bugün bitiyor'],
+  sewing: ['Dikim başlayacak', 'Dikim sürüyor', 'Dikim bugün bitiyor'],
+};
+function uaKucult(t) { return t ? t.charAt(0).toLocaleLowerCase('tr-TR') + t.slice(1) : t; }
+function uaParcaListesi(parts) {
+  const list = (parts || []).map(uaKucult);
+  if (!list.length) return null;
+  if (list.length === 1) return list[0];
+  return list.slice(0, -1).join(', ') + ' ve ' + list[list.length - 1];
 }
+function uaOpEylemi(op, todayISO) {
+  if (op.op_id === 'cut_extra_parts') {
+    const p = uaParcaListesi(op.parts);
+    return p ? p.charAt(0).toLocaleUpperCase('tr-TR') + p.slice(1) + ' kesilecek' : 'Ek parça kesilecek';
+  }
+  const asama = UA_SUREKLI[op.op_id];
+  if (asama && op.start && op.end && op.start !== op.end) {
+    if (op.start === todayISO) return asama[0];
+    if (op.end === todayISO) return asama[2];
+    return asama[1];
+  }
+  if (op.op_id === 'buttonhole_button' && op.label && op.label !== 'İlik ve düğme') {
+    return op.label.replace('açılması', 'açılacak');
+  }
+  return UA_EYLEM[op.op_id] || op.label || op.op_id;
+}
+// Bir isin bir istasyondaki bugunku operasyonlari TEK cumle olur.
+// Kesimde ana kumas ve ek parca birlikte kesildigi icin tek talimat olarak okunur.
+function uaGunlukIs(ops, todayISO) {
+  const ids = ops.map((o) => o.op_id);
+  const extras = ops.filter((o) => o.op_id === 'cut_extra_parts');
+  const confirmed = [];
+  extras.forEach((o) => (o.confirmed_parts || []).forEach((c) => {
+    if (confirmed.indexOf(c) === -1) confirmed.push(c);
+  }));
+  // Sadece SORULUP "evet" denmis opsiyonel parca ayri nota cikar.
+  const note = confirmed.length ? confirmed.join(' ve ') + ' kesilecek' : null;
+
+  if (ids.indexOf('cut_main') !== -1 && extras.length) {
+    const all = [];
+    extras.forEach((o) => (o.parts || []).forEach((x) => { if (all.indexOf(x) === -1) all.push(x); }));
+    const p = uaParcaListesi(all.filter((x) => confirmed.indexOf(x) === -1));
+    return { label: p ? 'Kumaş ve ' + p + ' kesilecek' : 'Kumaş kesilecek', note: note };
+  }
+  const seen = [];
+  ops.forEach((o) => {
+    const t = uaOpEylemi(o, todayISO);
+    if (seen.indexOf(t) === -1) seen.push(t);
+  });
+  return { label: seen.join(' · '), note: note };
+}
+
+// Istasyonlarin sabit sirasi - atolyedeki akisla ayni (PDF ile de ayni).
+const UA_ISTASYON_SIRASI = ['Kumaş', 'Kesim', 'Baskı/Nakış', 'Dikim', 'İlik/Düğme', 'Ütü-Paket/Sevkiyat', 'Diğer'];
 
 // Durum rozeti: GERÇEK gecikme (teslim tarihi bugünden önce - panel verisi, kesin
 // olgu) ile TAHMİNİ gecikme riski (bizim hesabımız yetişmeyebilir diyor) kesinlikle
@@ -5682,13 +5739,13 @@ async function uaAnswerAccessory(key, isYes) {
 async function renderUretimTakipDashboard() {
   const meta = document.getElementById('uaHeaderMeta');
   const warnBox = document.getElementById('uaWarningLine');
-  const todayTable = document.getElementById('uaTodayTable');
+  const todayBox = document.getElementById('uaTodayStations');
   const confirmBox = document.getElementById('uaConfirmBox');
   const capBox = document.getElementById('uaCapacityBox');
   const next3Box = document.getElementById('uaNext3Box');
 
   if (typeof UretimPlanlayici === 'undefined' || typeof UretimIlerleme === 'undefined') {
-    todayTable.querySelector('tbody').innerHTML = '<tr><td colspan="4" style="color:var(--red);">Planlayıcı modülü yüklenemedi (js/uretim-planlayici.js).</td></tr>';
+    todayBox.innerHTML = '<div style="color:var(--red);">Planlayıcı modülü yüklenemedi (js/uretim-planlayici.js veya js/uretim-ilerleme.js).</div>';
     return;
   }
 
@@ -5700,7 +5757,7 @@ async function renderUretimTakipDashboard() {
     reports = ledger.reports;
   }
   catch (e) {
-    todayTable.querySelector('tbody').innerHTML = '<tr><td colspan="4" style="color:var(--red);">Plan yenilenemedi: ' + esc(e.message) + ' Yenile düğmesiyle tekrar deneyin.</td></tr>';
+    todayBox.innerHTML = '<div style="color:var(--red);">Plan yenilenemedi: ' + esc(e.message) + ' Yenile düğmesiyle tekrar deneyin.</div>';
     meta.textContent = 'Güncel plan alınamadı';
     warnBox.hidden = true;
     [confirmBox, capBox, next3Box].forEach((box) => { box.textContent = 'Güncel aşama kayıtları bekleniyor.'; });
@@ -5721,46 +5778,71 @@ async function renderUretimTakipDashboard() {
     byJobToday.get(op.job_id).push(op);
   });
 
-  // Tabloya giren isler: bugun gercek bir islemi olan + asamasi bilinmeyen +
-  // gercekten gecikmis olanlar (bunlar bugun mutlaka bakilmali, planda gorunmese de).
-  // Once HER isin durumunu hesapla, sonra "tabloda gorunmeyi hak ediyor mu" diye
-  // filtrele - boylece "teslime yakin, riskli" bir is bugun somut bir islemi
-  // olmasa bile (kuyrukta bekliyor olsa bile) tabloda gorunur.
-  const rows = plan.jobs.map((j) => {
+  // Satir = (is x istasyon). Kesim ustasi sadece Kesim tablosuna bakar; ayni isin
+  // iki farkli istasyondaki isi ayri satirdir, ayni istasyondaki iki operasyonu
+  // ise tek talimattir. Bugun somut islemi olmayan ama takip edilmesi gereken
+  // isler (asamasi bilinmeyen, gecikmis, teslime yakin, blokajli) en altta ayri
+  // bir tabloda kalir - kaybolmazlar.
+  //
+  // Hazirlik teyidi bekleyen operasyon (actionable === false) YAPILACAK IS olarak
+  // yazilmaz; ayri bir uyari satiri olur - usta teyit edilmemis bir isi
+  // baslatmasin diye.
+  const flat = [];
+  plan.jobs.forEach((j) => {
     const src = bySourceId[j.job_id] || {};
     const stageKnown = !!src.panel_stage;
     const ops = byJobToday.get(j.job_id) || [];
-    let action;
-    let actionNote = null;
-    if (!stageKnown) {
-      // Bilinmeyen asamada, sifirdan kurulan plan spekulatif olur - "kumas siparisi"
-      // gibi uydurma bir eylem GOSTERMEYIZ, durumu oldugu gibi soyleriz.
-      action = 'Aşama teyidi gerekli';
-    } else if (ops.length) {
-      const ready = ops.filter((op) => op.actionable !== false);
-      const waiting = ops.filter((op) => op.actionable === false);
-      const combined = ready.length ? uaCombineToday(ready) : null;
-      action = combined ? combined.label : 'Hazırlık teyidi / eksik giderilmesi bekleniyor';
-      actionNote = [combined && combined.note,
-        waiting.length && ('Teyit veya eksik giderilmeden başlanmayacak: ' + uaCombineToday(waiting).label),
-        ops.some((op) => op.carried_over) && 'Önceki günden devreden işlem var.',
-        ...ops.filter((op) => op.progress_note).map((op) => op.label + ': ' + op.progress_note)
-      ].filter(Boolean).join(' · ');
-    } else {
-      action = 'Bekliyor (bugün planlı işlem yok)';
-    }
-    const durum = uaDurum(j, src, today);
-    if (stageKnown && ops.some((op) => op.actionable === false) && durum.cls !== 'red') {
-      durum.cls = 'orange'; durum.text = 'Hazırlık teyidi / eksik var';
-    }
-    return { j, src, action, actionNote: actionNote, durum };
-  }).filter((r) => {
-    const hasCriticalBlocker = r.j.blockers.some((b) => b.kind === 'accessory_missing' || b.kind === 'no_decoration');
-    return byJobToday.has(r.j.job_id) || !r.src.panel_stage || r.durum.cls === 'red' || r.durum.cls === 'orange' || hasCriticalBlocker;
-  }).sort((a, b) => UA_DURUM_ORDER[a.durum.cls] - UA_DURUM_ORDER[b.durum.cls]);
 
-  const overdueCount = rows.filter((r) => r.durum.cls === 'red').length;
-  const unknownCount = rows.filter((r) => r.durum.cls === 'gray').length;
+    const byStation = new Map();
+    ops.forEach((op) => {
+      const st = OP_GROUP_TR[op.op_id] || 'Diğer';
+      if (!byStation.has(st)) byStation.set(st, []);
+      byStation.get(st).push(op);
+    });
+
+    if (byStation.size) {
+      byStation.forEach((stOps, st) => {
+        const ready = stOps.filter((op) => op.actionable !== false);
+        const waiting = stOps.filter((op) => op.actionable === false);
+        const combined = ready.length ? uaGunlukIs(ready, today) : null;
+        const notes = [];
+        if (combined && combined.note) notes.push({ cls: '', text: '+ ' + combined.note });
+        if (waiting.length) {
+          notes.push({ cls: ' ua-wait',
+            text: 'Teyit edilmeden başlanmayacak: ' + uaGunlukIs(waiting, today).label });
+        }
+        if (stOps.some((op) => op.carried_over)) {
+          notes.push({ cls: '', text: 'Önceki günden devreden işlem var.' });
+        }
+        stOps.filter((op) => op.progress_note).forEach((op) => {
+          notes.push({ cls: '', text: op.label + ': ' + op.progress_note });
+        });
+
+        const durum = uaDurum(j, src, today);
+        if (stageKnown && waiting.length && durum.cls !== 'red') {
+          durum.cls = 'orange'; durum.text = 'Hazırlık teyidi / eksik var';
+        }
+        flat.push({
+          j: j, src: src, station: st,
+          action: combined ? combined.label : 'Hazırlık teyidi bekleniyor',
+          notes: notes, stageKnown: stageKnown, durum: durum,
+        });
+      });
+      return;
+    }
+
+    const durum = uaDurum(j, src, today);
+    const hasCriticalBlocker = j.blockers.some((b) => b.kind === 'accessory_missing' || b.kind === 'no_decoration');
+    if (!stageKnown || durum.cls === 'red' || durum.cls === 'orange' || hasCriticalBlocker) {
+      flat.push({
+        j: j, src: src, station: null, action: 'Bugün planlı işlem yok',
+        notes: [], stageKnown: stageKnown, durum: durum,
+      });
+    }
+  });
+
+  const overdueCount = flat.filter((r) => r.durum.cls === 'red').length;
+  const unknownCount = plan.jobs.filter((j) => !(bySourceId[j.job_id] || {}).panel_stage).length;
   const blockerCount = plan.jobs.filter((j) => j.blockers.some((b) => b.kind === 'accessory_missing' || b.kind === 'no_decoration')).length;
   const warnParts = [];
   if (overdueCount) warnParts.push(overdueCount + ' iş GERÇEKTEN gecikmiş');
@@ -5769,41 +5851,71 @@ async function renderUretimTakipDashboard() {
   if (warnParts.length) { warnBox.hidden = false; warnBox.textContent = '⚠️ ' + warnParts.join(' · '); }
   else { warnBox.hidden = true; }
 
-  if (!rows.length) {
-    todayTable.querySelector('tbody').innerHTML = '<tr><td colspan="4" style="color:var(--muted);">Bugün dikkat gerektiren iş yok.</td></tr>';
-  } else {
-    todayTable.querySelector('tbody').innerHTML = rows.map((r, idx) => {
-      // Satirda SADECE gercek/kesin engelleri goster (stokta yok -> siparis
-      // gerekli, ya da baski/nakis ikisi de acikca "yok" - veri celiskisi).
-      // "sorulmadi" (henuz cevaplanmamis) bir engel DEGIL, sadece Teyit gerekenler'e
-      // gider - eksik bilgiyi hata gibi sunmamak icin.
-      const critical = r.j.blockers.filter((b) => b.kind === 'accessory_missing' || b.kind === 'no_decoration');
-      // Satir sade: blokaj varsa kisa bir isaret, tam metin detay satirinda.
-      // Grup etiketi (Kesim/Dikim/vb.) kaldirildi - islem adi zaten onu tasiyor.
-      const blockerFlag = critical.length ? ' <span class="ua-blocker-flag" title="' + esc(critical[0].message) + '">⛔ blokaj</span>' : '';
-      return '<tr class="ua-row" data-idx="' + idx + '">'
-        + '<td class="ua-job-cell">' + esc(r.j.job_no || ('#' + r.j.job_id)) + ' · ' + esc(r.j.customer_name) + blockerFlag + '</td>'
-        + '<td>' + esc(uaFmtQty(r.j)) + '</td>'
-        + '<td>' + esc(r.action)
-        + (r.actionNote ? '<span class="ua-note">+ ' + esc(r.actionNote) + '</span>' : '') + '</td>'
-        + '<td><span class="badge ' + r.durum.cls + '">' + esc(r.durum.text) + '</span></td>'
-        + '</tr>'
-        + '<tr class="ua-detail-row" data-idx="' + idx + '"><td colspan="4"></td></tr>';
-    }).join('');
-    todayTable.querySelectorAll('tr.ua-row').forEach((tr) => {
-      tr.addEventListener('click', () => {
-        const idx = tr.dataset.idx;
-        const detailTr = todayTable.querySelector('tr.ua-detail-row[data-idx="' + idx + '"]');
-        const willOpen = !detailTr.classList.contains('open');
-        todayTable.querySelectorAll('tr.ua-detail-row.open').forEach((o) => o.classList.remove('open'));
-        if (willOpen) {
-          detailTr.classList.add('open');
-          const r = rows[idx];
-          detailTr.querySelector('td').innerHTML = uaJobDetailHtml(r, today);
-        }
-      });
-    });
+  let rowIndex = 0;
+  function uaRowHtml(r) {
+    const idx = rowIndex++;
+    // Satirda SADECE gercek/kesin engel gosterilir. "sorulmadi" bir engel degil,
+    // sadece Teyit gerekenler'e gider - eksik bilgiyi hata gibi sunmamak icin.
+    const critical = r.j.blockers.filter((b) => b.kind === 'accessory_missing' || b.kind === 'no_decoration');
+    const blockerFlag = critical.length
+      ? ' <span class="ua-blocker-flag" title="' + esc(critical[0].message) + '">⛔ blokaj</span>' : '';
+    // Asamasi bilinmeyen isin plani sifirdan kuruldu; adimi KESIN talimat gibi
+    // yazmak atolyeyi tahminin pesinden gonderir. Satir kalir, kesinlik kalmaz.
+    const assumeNote = r.stageKnown ? ''
+      : '<span class="ua-note ua-assume">aşama teyit edilmeli — bu adım varsayım</span>';
+    const noteHtml = r.notes.map((n) => '<span class="ua-note' + n.cls + '">' + esc(n.text) + '</span>').join('');
+    return '<tr class="ua-row" data-idx="' + idx + '">'
+      + '<td class="ua-job-cell">' + esc(r.j.job_no || ('#' + r.j.job_id)) + ' · ' + esc(r.j.customer_name) + blockerFlag + '</td>'
+      + '<td>' + esc(uaFmtQty(r.j)) + '</td>'
+      + '<td class="ua-action"><b' + (r.stageKnown ? '' : ' class="ua-unsure"') + '>' + esc(r.action) + '</b>'
+        + noteHtml + assumeNote + '</td>'
+      + '<td><span class="badge ' + r.durum.cls + '">' + esc(r.durum.text) + '</span></td>'
+      + '</tr>'
+      + '<tr class="ua-detail-row" data-idx="' + idx + '"><td colspan="4"></td></tr>';
   }
+
+  function uaTableHtml(title, sub, list) {
+    return '<div class="ua-station"><div class="ua-station-head">' + esc(title)
+      + '<span>' + esc(sub) + '</span></div>'
+      + '<div class="table-wrap"><table class="data-table ua-today-table">'
+      + '<thead><tr><th>İş</th><th>Ürün · Adet</th><th>Bugün yapılacak</th><th>Durum</th></tr></thead>'
+      + '<tbody>' + list.map(uaRowHtml).join('') + '</tbody></table></div></div>';
+  }
+
+  const ordered = [];
+  UA_ISTASYON_SIRASI.forEach((st) => {
+    const list = flat.filter((r) => r.station === st)
+      .sort((a, b) => UA_DURUM_ORDER[a.durum.cls] - UA_DURUM_ORDER[b.durum.cls]);
+    if (!list.length) return;
+    const qty = list.reduce((a, r) => a + (r.j.quantity || 0), 0);
+    ordered.push({ title: st, sub: list.length + ' iş · ' + qty + ' adet', list: list });
+  });
+  const takip = flat.filter((r) => r.station === null)
+    .sort((a, b) => UA_DURUM_ORDER[a.durum.cls] - UA_DURUM_ORDER[b.durum.cls]);
+  if (takip.length) {
+    ordered.push({ title: 'Takip edilmesi gerekenler', sub: 'bugün planlı işlem yok', list: takip });
+  }
+
+  // Detay acilimi tum tablolarda ortak indeks kullanir.
+  const flatOrdered = [];
+  ordered.forEach((g) => g.list.forEach((r) => flatOrdered.push(r)));
+
+  todayBox.innerHTML = ordered.length
+    ? ordered.map((g) => uaTableHtml(g.title, g.sub, g.list)).join('')
+    : '<div style="color:var(--muted);">Bugün dikkat gerektiren iş yok.</div>';
+
+  todayBox.querySelectorAll('tr.ua-row').forEach((tr) => {
+    tr.addEventListener('click', () => {
+      const idx = tr.dataset.idx;
+      const detailTr = todayBox.querySelector('tr.ua-detail-row[data-idx="' + idx + '"]');
+      const willOpen = !detailTr.classList.contains('open');
+      todayBox.querySelectorAll('tr.ua-detail-row.open').forEach((o) => o.classList.remove('open'));
+      if (willOpen) {
+        detailTr.classList.add('open');
+        detailTr.querySelector('td').innerHTML = uaJobDetailHtml(flatOrdered[idx], today);
+      }
+    });
+  });
 
   // ---- Teyit gerekenler: eslesmeyen kayitlar + blokajlar + cevaplanmamis sorular ----
   // Aksesuar sorulari (fermuar/kordon var mi?) TIKLANABILIR: Evet/Hayir. Evet ->
@@ -6027,7 +6139,7 @@ document.getElementById('uaAiDetails').addEventListener('toggle', function () {
 // Sekmenin giris noktasi (VIEW_RENDER_MAP): once deterministik panoyu goster.
 async function renderUretimTakipAjani() {
   try { await renderUretimTakipDashboard(); }
-  catch (e) { document.getElementById('uaTodayTable').querySelector('tbody').innerHTML = '<tr><td colspan="4" style="color:var(--red);">Hesaplama hatası: ' + esc(e.message) + '</td></tr>'; }
+  catch (e) { document.getElementById('uaTodayStations').innerHTML = '<div style="color:var(--red);">Hesaplama hatası: ' + esc(e.message) + '</div>'; }
 }
 function invoiceStatus(iv) {
   const total = Math.round((iv.total_amount || 0) * 100) / 100;
