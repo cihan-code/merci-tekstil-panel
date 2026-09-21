@@ -214,6 +214,39 @@ table.data-table tbody tr.row-warn td:first-child { box-shadow: inset 3px 0 0 va
 .ua-station:last-child { margin-bottom:0; }
 .ua-station-head { font-weight:700; color:var(--navy); font-size:13.5px; margin:0 0 7px; display:flex; align-items:baseline; gap:8px; }
 .ua-station-head span { font-weight:400; color:var(--muted); font-size:11.5px; }
+
+/* ---- Yazdirma sayfasi (PDF) ---- */
+#uaPrintSheet { display:none; }
+.ups-head h1 { font-size:20px; margin:0 0 4px; color:var(--navy); }
+.ups-head .ups-meta { font-size:11px; color:var(--muted); margin:0 0 3px; }
+.ups-legend { font-size:10.5px; color:var(--muted); border-left:3px solid var(--accent); padding:6px 9px; margin:10px 0 14px; }
+.ups-sec { font-size:13px; font-weight:700; color:var(--navy); margin:16px 0 6px; border-bottom:1.5px solid var(--border); padding-bottom:3px; }
+#uaPrintSheet table { width:100%; border-collapse:collapse; margin-bottom:8px; font-size:10.5px; }
+#uaPrintSheet th { background:#1f2937; color:#fff; text-align:left; padding:4px 6px; font-weight:600; }
+#uaPrintSheet td { border:1px solid #d8dce3; padding:4px 6px; vertical-align:top; }
+#uaPrintSheet tbody tr:nth-child(even) td { background:#f5f7fa; }
+#uaPrintSheet td.num, #uaPrintSheet th.num { text-align:right; }
+#uaPrintSheet tr.ups-late td { background:#fdecec; }
+#uaPrintSheet tr.ups-warn td { background:#fff7e6; }
+#uaPrintSheet tr.ups-unknown td { background:#fdf3e0; }
+#uaPrintSheet .ups-tag { display:inline-block; font-size:9px; font-weight:700; padding:1px 5px; border-radius:3px; color:#fff; white-space:nowrap; }
+#uaPrintSheet .ups-tag.late { background:#c0392b; }
+#uaPrintSheet .ups-tag.warn { background:#b06d1f; }
+#uaPrintSheet .ups-tag.unk { background:#b8860b; }
+#uaPrintSheet .ups-note { display:block; font-size:9.5px; color:#1d6f5c; margin-top:1px; }
+#uaPrintSheet .ups-note.ups-wait { color:#c0392b; }
+#uaPrintSheet .ups-note.ups-assume { color:#b06d1f; font-style:italic; }
+#uaPrintSheet .ups-foot { margin-top:16px; padding-top:6px; border-top:1px solid var(--border); font-size:9px; color:var(--muted); }
+@media print {
+  /* Yazdirmada SADECE plan sayfasi cikar - menu, sekmeler, dugmeler cikmaz. */
+  body > *:not(.app-body), header.top, .sidebar, nav.tabs, footer, .sync-bar { display:none !important; }
+  .app-body, main { display:block !important; padding:0 !important; margin:0 !important; }
+  main > .view:not(#view-uretim-ajan) { display:none !important; }
+  #view-uretim-ajan > *:not(#uaPrintSheet) { display:none !important; }
+  #uaPrintSheet { display:block !important; }
+  #uaPrintSheet tr, #uaPrintSheet .ups-block { break-inside:avoid; }
+  @page { margin:12mm 10mm; }
+}
 .ua-today-table tr.ua-row { cursor:pointer; }
 .ua-today-table tr.ua-row:hover td { background:#f8f9fc; }
 .ua-today-table tr.ua-detail-row { display:none; background:#f8f9fc; }
@@ -686,7 +719,10 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
         <h2>📋 Üretim Takip Ajanı</h2>
         <div class="ua-header-meta" id="uaHeaderMeta">Plan tarihi hesaplanıyor…</div>
       </div>
-      <button class="btn" id="uaRefreshBtn">🔄 Yenile</button>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn secondary" id="uaPrintBtn">🖨️ PDF / Yazdır</button>
+        <button class="btn" id="uaRefreshBtn">🔄 Yenile</button>
+      </div>
     </div>
 
     <div class="ua-warning" id="uaWarningLine" hidden></div>
@@ -695,6 +731,10 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
       <h3 style="margin-top:0;">Bugün yapılacaklar</h3>
       <div id="uaTodayStations"><div style="color:var(--muted);">Hesaplanıyor…</div></div>
     </div>
+
+    <!-- Yazdirma sayfasi: ekranda gizli, Yazdir'da sayfanin TEK icerigi olur.
+         Tarayicinin "PDF olarak kaydet" secenegi gercek PDF uretir - ek kutuphane yok. -->
+    <div id="uaPrintSheet" aria-hidden="true"></div>
 
     <div class="section-title">Teyit gerekenler</div>
     <div class="panel-box" id="uaConfirmBox"><div style="color:var(--muted);">Hesaplanıyor…</div></div>
@@ -5948,6 +5988,50 @@ async function renderUretimTakipDashboard() {
     if (restQuestions.length) confirmParts.push('<div class="ua-confirm-item">' + esc('[' + (j.job_no || j.job_id) + '] ' + j.customer_name + ': ' + restQuestions.join(' / ')) + '</div>');
   });
   confirmBox.innerHTML = confirmParts.length ? confirmParts.join('') : '<div style="color:var(--muted);">Şu an teyit bekleyen bir şey yok.</div>';
+
+  // ---- Yazdirma sayfasi (PDF) ----
+  // Alinacak malzeme ile verilecek karar ayri tutulur: "fermuar siparis et" bir
+  // satin alma isi, "kapusonda astar olacak mi" bir karar. Ayni listede olunca
+  // ikisi de kayboluyordu. uretim/report.js'teki buildOrderRows ile ayni kural.
+  const uaOrderRows = [];
+  plan.jobs.forEach((j) => {
+    const base = { job_no: j.job_no || j.job_id, customer_name: j.customer_name };
+    (j.material_questions || []).forEach((m) => {
+      uaOrderRows.push(Object.assign({}, base, {
+        item: m.label, need: m.need, message: m.message,
+        condition_note: (m.conditional && !m.condition_answered) ? 'kapüşon kararına bağlı' : null,
+        lead_days: (m.order_lead_days_min != null && m.order_lead_days_max != null)
+          ? m.order_lead_days_min + '-' + m.order_lead_days_max + ' gün' : null,
+      }));
+    });
+    (j.part_questions || []).forEach((q) => {
+      uaOrderRows.push(Object.assign({}, base, {
+        item: q.label, need: 'Teyit', message: q.message, condition_note: null, lead_days: null,
+      }));
+    });
+  });
+  // Siparis tablosunda zaten olan bir sey "dikkat" listesinde tekrar etmesin.
+  const uaCoveredItems = uaOrderRows.map((o) => o.job_no + '::' + o.item);
+  const uaConfirmTexts = [];
+  needs_attention.forEach((n) => uaConfirmTexts.push((n.job_no ? '[' + n.job_no + '] ' : '') + n.customer_name + ': ' + n.message));
+  (plan.needs_attention || []).forEach((n) => {
+    const src = bySourceId[n.job_id] || {};
+    uaConfirmTexts.push('[' + (n.job_no || src.job_no || n.job_id) + '] ' + (n.customer_name || src.customer_name || '') + ': ' + n.message);
+  });
+  plan.jobs.forEach((j) => {
+    const tag = '[' + (j.job_no || j.job_id) + '] ' + j.customer_name + ': ';
+    j.blockers.forEach((b) => {
+      if (uaCoveredItems.some((c) => c.indexOf((j.job_no || j.job_id) + '::') === 0 && b.message.indexOf(c.split('::')[1]) === 0)) return;
+      uaConfirmTexts.push(tag + b.message);
+    });
+    (j.open_questions || []).forEach((q) => {
+      if (uaCoveredItems.some((c) => c.indexOf((j.job_no || j.job_id) + '::') === 0 && q.indexOf(c.split('::')[1]) === 0)) return;
+      uaConfirmTexts.push(tag + q);
+    });
+  });
+
+  document.getElementById('uaPrintSheet').innerHTML =
+    uaBuildPrintSheet(ordered, uaOrderRows, uaConfirmTexts, today);
   confirmBox.querySelectorAll('[data-ua-yes]').forEach((btn) => btn.addEventListener('click', () => uaAnswerAccessory(btn.dataset.uaYes, true)));
   confirmBox.querySelectorAll('[data-ua-no]').forEach((btn) => btn.addEventListener('click', () => uaAnswerAccessory(btn.dataset.uaNo, false)));
   confirmBox.querySelectorAll('[data-ua-part-yes]').forEach((btn) => btn.addEventListener('click', () => uaAnswerPart(btn.dataset.uaPartYes, true)));
@@ -5974,6 +6058,105 @@ async function renderUretimTakipDashboard() {
     : '<div style="color:var(--muted);">Sonraki 3 günde planlı bir şey yok.</div>';
 }
 
+// Yazdirma sayfasi: ekrandaki AYNI veriden, baskiya uygun duzende. Ayri bir
+// hesap yapmaz - ordered/flat zaten hesaplanmis satirlardir, burada yalnizca
+// kagida gore diziliyor. Tarayicinin "PDF olarak kaydet" secenegi gercek PDF
+// uretir; ek kutuphane veya sunucu gerekmez.
+const UA_AY_TR = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
+  'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+function uaTarihTR(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+  return m ? parseInt(m[3], 10) + ' ' + UA_AY_TR[parseInt(m[2], 10) - 1] : '—';
+}
+function uaPrintRowCls(r) {
+  if (r.durum.cls === 'red') return ' class="ups-late"';
+  if (r.durum.cls === 'orange') return ' class="ups-warn"';
+  if (r.durum.cls === 'gray') return ' class="ups-unknown"';
+  return '';
+}
+function uaPrintTagCls(cls) {
+  return cls === 'red' ? 'late' : (cls === 'orange' ? 'warn' : 'unk');
+}
+function uaBuildPrintSheet(ordered, orderRows, confirmTexts, today) {
+  const H = [];
+  H.push('<div class="ups-head"><h1>Merci Tekstil — Günlük Üretim Planı</h1>');
+  H.push('<p class="ups-meta">' + esc(uaTarihTR(today)) + ' ' + esc(uaIstanbulDayName(today))
+    + ' · panel verisi: ' + esc(uaIstanbulStamp(CLOUD_LAST_KNOWN_UPDATED_AT)) + ' (TR saati)</p></div>');
+  H.push('<div class="ups-legend">Adet, tarih ve işlem adları panel verisinden hesaplandı — elle girilmedi. '
+    + '"Teslim geçti" paneldeki kesin bilgidir; "teslime N gün" bizim tahminimizdir ve yalnız '
+    + 'teslime 5 gün veya daha az kalan işlerde gösterilir.</div>');
+
+  if (!ordered.length) {
+    H.push('<p>Bugün hiçbir istasyonda planlanan operasyon yok.</p>');
+  } else {
+    // Ozet
+    H.push('<div class="ups-sec">Özet</div>');
+    H.push('<table><thead><tr><th>İstasyon</th><th class="num">İş</th><th class="num">Adet</th>'
+      + '<th class="num">Teslim geçti</th><th class="num">Teslime yakın</th><th class="num">Aşama belirsiz</th></tr></thead><tbody>');
+    let tj = 0, tq = 0;
+    ordered.forEach((g) => {
+      const qty = g.list.reduce((a, r) => a + (r.j.quantity || 0), 0);
+      tj += g.list.length; tq += qty;
+      H.push('<tr><td>' + esc(g.title) + '</td><td class="num">' + g.list.length + '</td>'
+        + '<td class="num">' + qty + '</td>'
+        + '<td class="num">' + (g.list.filter((r) => r.durum.cls === 'red').length || '—') + '</td>'
+        + '<td class="num">' + (g.list.filter((r) => r.durum.cls === 'orange').length || '—') + '</td>'
+        + '<td class="num">' + (g.list.filter((r) => !r.stageKnown).length || '—') + '</td></tr>');
+    });
+    H.push('<tr><td><b>Toplam</b></td><td class="num"><b>' + tj + '</b></td><td class="num"><b>' + tq
+      + '</b></td><td colspan="3"></td></tr>');
+    H.push('</tbody></table>');
+
+    // Istasyon tablolari
+    ordered.forEach((g) => {
+      H.push('<div class="ups-block">');
+      H.push('<div class="ups-sec">' + esc(g.title) + ' — ' + esc(g.sub) + '</div>');
+      H.push('<table><thead><tr><th class="num">#</th><th>İş No</th><th>Müşteri</th><th>Ürün</th>'
+        + '<th class="num">Adet</th><th>Bugün yapılacak</th><th>Teslim</th><th>Durum</th></tr></thead><tbody>');
+      g.list.forEach((r, i) => {
+        const notes = r.notes.map((n) => '<span class="ups-note' + (n.cls ? ' ups-wait' : '') + '">'
+          + esc(n.text) + '</span>').join('');
+        const assume = r.stageKnown ? ''
+          : '<span class="ups-note ups-assume">aşama teyit edilmeli — bu adım varsayım</span>';
+        H.push('<tr' + uaPrintRowCls(r) + '><td class="num">' + (i + 1) + '</td>'
+          + '<td>' + esc(r.j.job_no || ('#' + r.j.job_id)) + '</td>'
+          + '<td>' + esc(r.j.customer_name) + '</td>'
+          + '<td>' + esc(r.j.product_label || r.j.product || '') + '</td>'
+          + '<td class="num">' + esc(r.j.quantity) + '</td>'
+          + '<td>' + esc(r.action) + notes + assume + '</td>'
+          + '<td>' + esc(uaTarihTR(r.j.est_delivery)) + '</td>'
+          + '<td><span class="ups-tag ' + uaPrintTagCls(r.durum.cls) + '">' + esc(r.durum.text) + '</span></td></tr>');
+      });
+      H.push('</tbody></table></div>');
+    });
+  }
+
+  if (orderRows.length) {
+    H.push('<div class="ups-block"><div class="ups-sec">Sipariş / Teyit Bekleyenler</div>');
+    H.push('<table><thead><tr><th>İş No</th><th>Müşteri</th><th>Malzeme / Karar</th>'
+      + '<th>Ne gerekiyor</th><th>Açıklama</th></tr></thead><tbody>');
+    orderRows.forEach((o) => {
+      H.push('<tr' + (o.need === 'Sipariş' ? ' class="ups-late"' : '') + '>'
+        + '<td>' + esc(o.job_no) + '</td><td>' + esc(o.customer_name) + '</td>'
+        + '<td>' + esc(o.item) + (o.condition_note ? '<span class="ups-note">' + esc(o.condition_note) + '</span>' : '') + '</td>'
+        + '<td><span class="ups-tag ' + (o.need === 'Sipariş' ? 'late' : 'warn') + '">' + esc(o.need.toLocaleUpperCase('tr-TR')) + '</span></td>'
+        + '<td>' + esc(o.message) + (o.lead_days ? ' (tedarik ' + esc(o.lead_days) + ')' : '') + '</td></tr>');
+    });
+    H.push('</tbody></table></div>');
+  }
+
+  if (confirmTexts.length) {
+    H.push('<div class="ups-block"><div class="ups-sec">Dikkat / Karar Bekleyen</div>');
+    H.push('<table><thead><tr><th>Ne bekleniyor</th></tr></thead><tbody>');
+    confirmTexts.forEach((t) => H.push('<tr><td>' + esc(t) + '</td></tr>'));
+    H.push('</tbody></table></div>');
+  }
+
+  H.push('<div class="ups-foot">Üretim Takip Ajanı · panel verisinden otomatik üretildi. '
+    + 'Hiçbir adet, tarih veya işlem elle girilmemiştir.</div>');
+  return H.join('');
+}
+
 function uaJobDetailHtml(r, today) {
   const j = r.j, src = r.src;
   const lines = [];
@@ -5990,6 +6173,14 @@ function uaJobDetailHtml(r, today) {
   if (j.unknowns.length) lines.push('<b>Tanımsız süreler:</b> ' + esc(j.unknowns.join(' | ')));
   return lines.map((l) => '<div style="margin-bottom:5px;">' + l + '</div>').join('');
 }
+
+document.getElementById('uaPrintBtn').addEventListener('click', () => {
+  // Yazdirma sayfasi her render'da guncelleniyor; burada yalnizca yazdirma
+  // penceresi aciliyor. Tarayicidan "PDF olarak kaydet" gercek PDF verir.
+  const sheet = document.getElementById('uaPrintSheet');
+  if (!sheet || !sheet.innerHTML.trim()) { flash('Plan henüz hesaplanmadı - önce Yenile.', 'error'); return; }
+  window.print();
+});
 
 document.getElementById('uaRefreshBtn').addEventListener('click', async () => {
   const btn = document.getElementById('uaRefreshBtn');

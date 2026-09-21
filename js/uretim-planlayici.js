@@ -260,6 +260,49 @@ function partQuestions(rota, job) {
   return out;
 }
 
+// Every accessory the product uses, with what still has to happen about it:
+// "Sipariş" when we were told it is not in stock, "Teyit" when nobody has checked.
+// Structured (not parsed back out of a sentence) because the daily sheet has a
+// column for exactly this, and because a conditional accessory has to say what it
+// depends on instead of silently disappearing.
+function materialQuestions(rota, job) {
+  const product = rota.products[job.product];
+  const opts = job.options || {};
+  const stock = opts.accessories_in_stock || {};
+  const out = [];
+
+  for (const acc of product.accessories || []) {
+    if (stock[acc.id] === true) continue;
+
+    const conditional = !!acc.condition;
+    const conditionMet = !conditional
+      || !!opts[acc.condition] || !!(opts.parts && opts.parts[acc.condition]);
+    const conditionAnswered = !conditional
+      || (acc.condition in opts) || !!(opts.parts && acc.condition in opts.parts);
+    // A cord for a hood that nobody has decided on yet is still worth listing - it
+    // just carries the condition with it rather than being dropped or asserted.
+    if (conditional && conditionAnswered && !conditionMet) continue;
+
+    out.push({
+      kind: stock[acc.id] === false ? 'accessory_missing' : 'accessory_unknown',
+      accessory: acc.id,
+      label: acc.label,
+      need: stock[acc.id] === false ? 'Sipariş' : 'Teyit',
+      blocks: acc.blocks || null,
+      conditional: conditional,
+      condition_met: conditionMet,
+      condition_answered: conditionAnswered,
+      order_lead_days_min: acc.order_lead_days_min != null ? acc.order_lead_days_min : null,
+      order_lead_days_max: acc.order_lead_days_max != null ? acc.order_lead_days_max : null,
+      note: acc.note || null,
+      message: stock[acc.id] === false
+        ? acc.label + ' stokta yok - sipariş edilmeli.'
+        : acc.label + ' elde var mı?',
+    });
+  }
+  return out;
+}
+
 // Options the job needs answered before it can be planned honestly.
 function openQuestions(rota, job) {
   const product = rota.products[job.product];
@@ -583,6 +626,7 @@ function buildPlan(rota, jobs, today) {
       at_risk: lateLatest != null && lateLatest > 0,
       open_questions: questions,
       part_questions: partQuestions(rota, job),
+      material_questions: materialQuestions(rota, job),
       blockers: accessoryBlockers(rota, job),
       // Unanswered options were treated as "no". The estimate is not trustworthy
       // until a human confirms them.
@@ -846,6 +890,7 @@ return {
   expandRoute: expandRoute,
   openQuestions: openQuestions,
   partQuestions: partQuestions,
+  materialQuestions: materialQuestions,
   accessoryBlockers: accessoryBlockers,
   decorationFromPanel: decorationFromPanel,
   optionsFromPanelJob: optionsFromPanelJob,
