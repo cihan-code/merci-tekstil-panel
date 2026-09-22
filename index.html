@@ -426,7 +426,7 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
   .agent-hero h2 { font-size:16px; }
 }
 
-/* Yönetim Ajanı — markdown çıktısı */
+/* Ajan markdown çıktısı (paylaşılan — Üretim Takip Ajanı'nın AI Brifing bölümü de kullanır) */
 .md-body { font-size:13.5px; line-height:1.6; color:var(--text); overflow-wrap:anywhere; }
 .md-body h1 { font-size:19px; color:var(--navy); margin:0 0 10px; }
 .md-body h2 { font-size:16px; color:var(--navy); margin:20px 0 8px; border-bottom:1px solid var(--border); padding-bottom:4px; }
@@ -589,7 +589,6 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
   <button data-view="dashboard" class="active">📊 Genel Bakış</button>
 
   <div class="nav-group-label">Ajanlar</div>
-  <button data-view="ajan">🤖 Yönetim Ajanı</button>
   <button data-view="uretim-ajan">📋 Üretim Takip Ajanı</button>
   <button data-view="sdr">🎯 Satış Ajanı</button>
 
@@ -658,58 +657,6 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
 
     <div class="section-title">Aylık Gelir / Gider / Net Kâr Trendi</div>
     <div class="panel-box"><div class="chart-wrap"><canvas id="chartMonthly"></canvas></div></div>
-  </section>
-
-  <!-- YÖNETİM AJANI -->
-  <section class="view" id="view-ajan">
-    <div class="agent-hero">
-      <div class="ah-left">
-        <h2>🤖 Yönetim Ajanı</h2>
-        <div class="ah-sub" id="ajanStatusMsg">Şirket panelini her sabah okur, brifing ve aksiyon önerisi üretir.</div>
-      </div>
-      <div class="ah-right">
-        <span class="agent-status-pill idle" id="ajanStatusPill"><span class="dot"></span><span class="lbl">Hazır</span></span>
-        <button class="btn" id="ajanRunBtn">🔄 Şimdi çalıştır</button>
-      </div>
-    </div>
-    <div class="panel-box agent-card" style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;">
-      <label style="font-size:12.5px;color:var(--muted);">Çıktı tipi</label>
-      <select id="ajanTypeSelect" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;">
-        <option value="gunluk-brifing">Günlük Brifing</option>
-        <option value="uretim-risk">Üretim Risk</option>
-        <option value="satis-takip">Satış Takip</option>
-        <option value="finans">Finans / Nakit</option>
-        <option value="haftalik-review">Haftalık Review</option>
-        <option value="aylik-rapor">Aylık Rapor</option>
-      </select>
-    </div>
-
-    <div class="md-body panel-box agent-card" id="ajanContent" style="margin-top:16px;">
-      <div class="agent-skel"><div class="l title"></div><div class="l"></div><div class="l w70"></div><div class="l"></div><div class="l w45"></div></div>
-    </div>
-
-    <div class="section-title">💬 Ajana Söyle <span style="font-weight:400;color:var(--muted);font-size:12px;">— panelde işlem yaptır (görev, üretim durumu, takip tarihi…)</span></div>
-    <div class="panel-box">
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <input type="text" id="ajanActInput" placeholder="Örn: İTÜ Store'a yarın takip görevi ekle, Mert'e ata" style="flex:1;min-width:240px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;">
-        <button class="btn" id="ajanActBtn">Gönder</button>
-      </div>
-      <div id="ajanActResult" style="margin-top:12px;"></div>
-    </div>
-
-    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
-      <span>Geçmiş Çıktılar</span>
-      <button type="button" class="btn danger small" id="ajanBulkDel">Seçili tipin çıktılarını sil</button>
-    </div>
-    <div class="panel-box">
-      <div class="table-wrap"><table class="data-table" id="ajanHistoryTable"></table></div>
-    </div>
-
-    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
-      <span>💵 API Maliyeti</span>
-      <button type="button" class="btn small secondary" id="ajanUsageRefresh">Yenile</button>
-    </div>
-    <div class="panel-box"><ul class="stat-list" id="ajanUsageList"><li style="color:var(--muted);">—</li></ul></div>
   </section>
 
   <!-- ÜRETİM TAKİP AJANI -->
@@ -5202,15 +5149,12 @@ function renderAll() {
   renderNotifications();
 }
 
-// ---------------- YÖNETİM AJANI ----------------
+// ---------------- AJAN ÇIKTI GÖSTERİMİ (paylaşılan — Üretim Takip Ajanı da kullanır) ----------------
 // Ajan çıktıları backend'de ayrı bir kovada (/api/agent/*). Panel bunları salt-okunur gösterir;
 // "Şimdi çalıştır" backend'de Claude API çağrısını tetikler (ANTHROPIC_API_KEY yalnız sunucuda).
 const AJAN_TYPE_LABELS = {
-  'gunluk-brifing': 'Günlük Brifing', 'uretim-risk': 'Üretim Risk', 'satis-takip': 'Satış Takip',
-  'finans': 'Finans / Nakit', 'haftalik-review': 'Haftalık Review', 'aylik-rapor': 'Aylık Rapor',
   'gunluk-uretim-plani': 'Üretim Takip Planı',
 };
-let AJAN_POLL_TIMER = null;
 
 // Küçük markdown -> HTML çevirici (panelde marked.js yok). Başlık, tablo, liste, bold, kod, hr.
 function mdToHtml(md) {
@@ -5280,67 +5224,6 @@ async function ajanShowOutput(rec, targetId) {
     + '</div>' + mdToHtml(rec.markdown);
 }
 
-async function renderYonetimAjani() {
-  const box = document.getElementById('ajanContent');
-  const histTable = document.getElementById('ajanHistoryTable');
-  const type = document.getElementById('ajanTypeSelect').value;
-  if (!matBackendReady()) {
-    box.innerHTML = '<div style="color:var(--muted);">Ajan sunucusu bağlı değil.</div>';
-    histTable.innerHTML = ''; return;
-  }
-  box.innerHTML = '<div class="agent-skel"><div class="l title"></div><div class="l"></div><div class="l w70"></div><div class="l"></div><div class="l w45"></div></div>';
-  // En yeni çıktı
-  try {
-    const latest = await (await matApi('/api/agent/latest?type=' + encodeURIComponent(type))).json();
-    ajanShowOutput(latest);
-  } catch (e) {
-    box.innerHTML = '<div class="agent-empty"><span class="ico">📄</span>'
-      + '<div class="msg">“' + esc(AJAN_TYPE_LABELS[type] || type) + '” tipinde henüz çıktı yok.<br>'
-      + 'Ajanı çalıştırınca ilk brifing burada görünür.</div>'
-      + '<button class="btn" onclick="document.getElementById(\'ajanRunBtn\').click()">🔄 Şimdi çalıştır</button></div>';
-  }
-  // Geçmiş liste
-  try {
-    const list = await (await matApi('/api/agent/outputs?limit=60')).json();
-    if (!list.length) { histTable.innerHTML = '<tbody><tr><td style="color:var(--muted);">Kayıt yok.</td></tr></tbody>'; }
-    else {
-      histTable.innerHTML = '<thead><tr><th>Tarih</th><th>Tip</th><th>Başlık</th><th>Üretildi</th><th></th></tr></thead><tbody>'
-        + list.map((r) => '<tr data-id="' + esc(r.id) + '">'
-          + '<td class="ajan-hist-open" style="cursor:pointer;">' + esc(r.date) + '</td>'
-          + '<td class="ajan-hist-open" style="cursor:pointer;">' + esc(AJAN_TYPE_LABELS[r.type] || r.type) + '</td>'
-          + '<td class="ajan-hist-open" style="cursor:pointer;">' + esc(r.title) + '</td>'
-          + '<td class="ajan-hist-open" style="cursor:pointer;">' + esc(ajanFmtStamp(r.createdAt)) + '</td>'
-          + '<td><button type="button" class="btn danger small ajan-hist-del">Sil</button></td></tr>').join('')
-        + '</tbody>';
-      histTable.querySelectorAll('tr[data-id]').forEach((tr) => {
-        tr.querySelectorAll('.ajan-hist-open').forEach((td) => td.addEventListener('click', async () => {
-          try {
-            const rec = await (await matApi('/api/agent/outputs/' + tr.dataset.id)).json();
-            ajanShowOutput(rec);
-            window.scrollTo({ top: document.getElementById('ajanContent').offsetTop - 20, behavior: 'smooth' });
-          } catch (e) { flash('Çıktı açılamadı: ' + e.message, 'error'); }
-        }));
-        const del = tr.querySelector('.ajan-hist-del');
-        if (del) del.addEventListener('click', async (ev) => {
-          ev.stopPropagation();
-          if (!confirm('Bu çıktı silinsin mi? (Geri alınamaz — yalnız ajan çıktısı, panel verisi etkilenmez.)')) return;
-          del.disabled = true;
-          try {
-            await matApi('/api/agent/outputs/' + tr.dataset.id, { method: 'DELETE' });
-            flash('Çıktı silindi.', 'success');
-            renderYonetimAjani();
-          } catch (e) { del.disabled = false; flash('Silinemedi: ' + e.message, 'error'); }
-        });
-      });
-    }
-  } catch (e) {
-    histTable.innerHTML = '<tbody><tr><td style="color:var(--muted);">Geçmiş okunamadı.</td></tr></tbody>';
-  }
-  ajanRefreshStatus();
-  ajanRenderUsage();
-}
-
-const AJAN_DEFAULT_SUB = 'Şirket panelini her sabah okur, brifing ve aksiyon önerisi üretir.';
 function agentSetPill(id, state, label) {
   const p = document.getElementById(id);
   if (!p) return;
@@ -5348,209 +5231,6 @@ function agentSetPill(id, state, label) {
   const l = p.querySelector('.lbl');
   if (l) l.textContent = label;
 }
-async function ajanRefreshStatus() {
-  const el = document.getElementById('ajanStatusMsg');
-  const btn = document.getElementById('ajanRunBtn');
-  try {
-    const st = await (await matApi('/api/agent/status')).json();
-    if (st.running) {
-      agentSetPill('ajanStatusPill', 'running', 'Çalışıyor');
-      el.textContent = '⏳ Ajan brifingi hazırlıyor…';
-      btn.disabled = true;
-      if (!AJAN_POLL_TIMER) AJAN_POLL_TIMER = setInterval(ajanPollTick, 5000);
-    } else {
-      btn.disabled = false;
-      if (AJAN_POLL_TIMER) { clearInterval(AJAN_POLL_TIMER); AJAN_POLL_TIMER = null; }
-      if (st.lastError) {
-        agentSetPill('ajanStatusPill', 'warn', 'Son çalışma hatalı');
-        el.textContent = '⚠️ Son hata: ' + st.lastError;
-      } else {
-        agentSetPill('ajanStatusPill', 'idle', 'Hazır');
-        el.textContent = st.finishedAt ? ('Son çalışma: ' + ajanFmtStamp(st.finishedAt)) : AJAN_DEFAULT_SUB;
-      }
-    }
-  } catch (e) { agentSetPill('ajanStatusPill', 'idle', 'Hazır'); el.textContent = AJAN_DEFAULT_SUB; }
-}
-
-async function ajanPollTick() {
-  try {
-    const st = await (await matApi('/api/agent/status')).json();
-    if (!st.running) {
-      clearInterval(AJAN_POLL_TIMER); AJAN_POLL_TIMER = null;
-      renderYonetimAjani();
-      flash(st.lastError ? ('Ajan çalışması hata verdi: ' + st.lastError) : 'Ajan yeni çıktıyı hazırladı.',
-        st.lastError ? 'error' : 'success');
-    }
-  } catch (e) { /* Render uykuda olabilir, bir sonraki tick'te dene */ }
-}
-
-document.getElementById('ajanTypeSelect').addEventListener('change', renderYonetimAjani);
-(function () { const b = document.getElementById('ajanUsageRefresh'); if (b) b.addEventListener('click', ajanRenderUsage); })();
-(function () {
-  const b = document.getElementById('ajanBulkDel');
-  if (!b) return;
-  b.addEventListener('click', async () => {
-    const type = document.getElementById('ajanTypeSelect').value;
-    const label = AJAN_TYPE_LABELS[type] || type;
-    if (!confirm('"' + label + '" tipindeki TÜM ajan çıktıları silinsin mi? Geri alınamaz (panel verisi etkilenmez).')) return;
-    b.disabled = true;
-    try {
-      const r = await (await matApi('/api/agent/outputs/delete', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type }),
-      })).json();
-      flash((r.deleted || 0) + ' çıktı silindi.', 'success');
-      renderYonetimAjani();
-    } catch (e) { flash('Silinemedi: ' + e.message, 'error'); }
-    finally { b.disabled = false; }
-  });
-})();
-document.getElementById('ajanRunBtn').addEventListener('click', async () => {
-  const type = document.getElementById('ajanTypeSelect').value;
-  const btn = document.getElementById('ajanRunBtn');
-  btn.disabled = true;
-  agentSetPill('ajanStatusPill', 'running', 'Başlatılıyor');
-  document.getElementById('ajanStatusMsg').textContent = '⏳ Başlatılıyor… (sunucu uykudaysa 1 dk sürebilir)';
-  try {
-    const r = await (await matApi('/api/agent/run?type=' + encodeURIComponent(type), { method: 'POST' })).json();
-    if (r.started) {
-      agentSetPill('ajanStatusPill', 'running', 'Çalışıyor');
-      document.getElementById('ajanStatusMsg').textContent = '⏳ Ajan brifingi hazırlıyor…';
-      if (!AJAN_POLL_TIMER) AJAN_POLL_TIMER = setInterval(ajanPollTick, 5000);
-    }
-  } catch (e) {
-    btn.disabled = false;
-    flash('Ajan başlatılamadı: ' + e.message, 'error');
-    agentSetPill('ajanStatusPill', 'warn', 'Başlatılamadı');
-    document.getElementById('ajanStatusMsg').textContent = AJAN_DEFAULT_SUB;
-  }
-});
-
-// ---- API maliyet özeti ----
-function ajanUsd(v) {
-  const n = Number(v) || 0;
-  if (n === 0) return '$0';
-  if (n < 0.01) return '$' + n.toFixed(5);
-  if (n < 1) return '$' + n.toFixed(4);
-  return '$' + n.toFixed(2);
-}
-async function ajanRenderUsage() {
-  const el = document.getElementById('ajanUsageList');
-  if (!el) return;
-  el.innerHTML = '<li style="color:var(--muted);">Yükleniyor…</li>';
-  try {
-    const u = await (await matApi('/api/agent/usage?limit=25')).json();
-    const s = u.summary || {};
-    const fmt = (w) => w ? (ajanUsd(w.costUsd) + ' · ' + (w.calls || 0) + ' çağrı') : '—';
-    const opLine = (w) => {
-      const ops = Object.entries((w && w.byOp) || {}).sort((a, b) => b[1].costUsd - a[1].costUsd);
-      if (!ops.length) return '';
-      return '<li style="color:var(--muted);font-size:11.5px;padding-left:8px;">'
-        + ops.map(([op, x]) => esc(op) + ' ' + ajanUsd(x.costUsd) + ' (' + x.calls + ')').join(' · ') + '</li>';
-    };
-    let html =
-      '<li><span>Bugün (İstanbul)</span><strong>' + fmt(s.today) + '</strong></li>'
-      + opLine(s.today)
-      + '<li><span>Dün</span><strong>' + fmt(s.yesterday) + '</strong></li>'
-      + '<li><span>Son 7 gün</span><strong>' + fmt(s.d7) + '</strong></li>'
-      + '<li><span>Son 30 gün</span><strong>' + fmt(s.d30) + '</strong></li>'
-      + '<li style="color:var(--muted);font-size:11.5px;"><span>Toplam kayıtlı çağrı</span><span>' + (u.totalCalls || 0) + '</span></li>';
-    if ((u.byDay || []).length) {
-      html += '<li style="margin-top:6px;font-weight:600;font-size:12px;">Son günler</li>'
-        + u.byDay.slice(0, 7).map((d) => '<li style="font-size:11.5px;"><span>' + esc(d.day) + '</span><span>' + ajanUsd(d.costUsd) + ' · ' + d.calls + '</span></li>').join('');
-    }
-    if ((u.entries || []).length) {
-      html += '<li style="margin-top:6px;font-weight:600;font-size:12px;">Son çağrılar</li>'
-        + u.entries.slice(0, 8).map((e) => {
-          const t = (e.ts || '').replace('T', ' ').slice(5, 16);
-          const bad = e.ok === false ? ' style="color:var(--red);"' : '';
-          return '<li' + bad + ' style="font-size:11px;"><span>' + esc(t) + ' ' + esc(e.opType || '?') + (e.mock ? ' (mock)' : '') + (e.ok === false ? ' ✗' : '') + '</span><span>' + ajanUsd(e.costUsd) + '</span></li>';
-        }).join('');
-    }
-    el.innerHTML = html;
-  } catch (e) { el.innerHTML = '<li style="color:var(--muted);">Okunamadı: ' + esc(e.message) + '</li>'; }
-}
-
-// ---- "Ajana Söyle" ----
-function ajanReloadNote(target) {
-  target.insertAdjacentHTML('beforeend',
-    '<div style="margin-top:10px;padding:8px 10px;background:#e5f6ed;border-radius:8px;font-size:12.5px;">'
-    + 'Panel verisi güncellendi. <button class="btn small" onclick="location.reload()" style="margin-left:6px;">Sayfayı yenile</button></div>');
-}
-
-function ajanRenderActResult(out) {
-  const box2 = document.getElementById('ajanActResult');
-  let html = '';
-  if (out.reply) html += '<div style="margin-bottom:10px;">' + esc(out.reply) + '</div>';
-  if (out.applied && out.applied.length) {
-    html += '<div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Uygulandı:</div><ul style="margin:0 0 10px;padding-left:18px;">'
-      + out.applied.map((a) => '<li style="color:var(--green);">✅ ' + esc(a.summary || a.describe || a.type) + '</li>').join('') + '</ul>';
-  }
-  if (out.errors && out.errors.length) {
-    html += '<ul style="margin:0 0 10px;padding-left:18px;">'
-      + out.errors.map((e) => '<li style="color:var(--red);">⚠️ ' + esc(e.describe || e.type) + ' — ' + esc(e.error) + '</li>').join('') + '</ul>';
-  }
-  box2.innerHTML = html || '<div style="color:var(--muted);">İşlem çıkarılmadı.</div>';
-
-  if (out.pending && out.pending.length) {
-    const pend = document.createElement('div');
-    pend.innerHTML = '<div style="font-size:12px;color:var(--muted);margin:6px 0 4px;">Onay bekliyor (finansal / kritik):</div>';
-    out.pending.forEach((a) => {
-      const row = document.createElement('div');
-      row.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;';
-      row.innerHTML = '<span style="flex:1;min-width:200px;">⏳ ' + esc(a.describe || a.type)
-        + (a.reason ? ' <span style="color:var(--muted);">(' + esc(a.reason) + ')</span>' : '') + '</span>';
-      const yes = document.createElement('button');
-      yes.className = 'btn small'; yes.textContent = 'Onayla';
-      const no = document.createElement('button');
-      no.className = 'btn small secondary'; no.textContent = 'İptal';
-      yes.addEventListener('click', async () => {
-        yes.disabled = true; no.disabled = true;
-        try {
-          const r = await (await matApi('/api/agent/act/confirm', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: { type: a.type, params: a.params } }),
-          })).json();
-          row.innerHTML = '<span style="color:var(--green);">✅ ' + esc(r.summary || a.type) + '</span>';
-          ajanReloadNote(document.getElementById('ajanActResult'));
-        } catch (e) {
-          yes.disabled = false; no.disabled = false;
-          flash('Onaylanamadı: ' + e.message, 'error');
-        }
-      });
-      no.addEventListener('click', () => { row.remove(); });
-      row.appendChild(yes); row.appendChild(no);
-      pend.appendChild(row);
-    });
-    box2.appendChild(pend);
-  }
-
-  if (out.applied && out.applied.some((a) => a.type !== 'record_production_progress')) ajanReloadNote(box2);
-  ajanRenderUsage();
-}
-
-async function ajanRunAct() {
-  const input = document.getElementById('ajanActInput');
-  const btn = document.getElementById('ajanActBtn');
-  const instruction = input.value.trim();
-  if (!instruction) return;
-  btn.disabled = true;
-  document.getElementById('ajanActResult').innerHTML = '<div style="color:var(--muted);">⏳ Ajan işliyor…</div>';
-  try {
-    const out = await (await matApi('/api/agent/act', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ instruction }),
-    })).json();
-    ajanRenderActResult(out);
-    input.value = '';
-    if (out.applied && out.applied.some((a) => a.type === 'record_production_progress')) await renderUretimTakipDashboard();
-  } catch (e) {
-    document.getElementById('ajanActResult').innerHTML = '<div style="color:var(--red);">Hata: ' + esc(e.message) + '</div>';
-  } finally {
-    btn.disabled = false;
-  }
-}
-document.getElementById('ajanActBtn').addEventListener('click', ajanRunAct);
-document.getElementById('ajanActInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') ajanRunAct(); });
 
 // ================= ÜRETİM TAKİP AJANI =================
 // Ana pano DETERMİNİSTİKTİR: js/uretim-planlayici.js (agent/uretim/ ile ayni kod,
@@ -6363,7 +6043,7 @@ function renderFaturalar() {
   document.getElementById('faturaAlisTable').innerHTML = tbl(alis, 'incoming');
   document.getElementById('faturaSatisTable').innerHTML = tbl(satis, 'outgoing');
   document.querySelectorAll('#view-faturalar tr[data-doc]').forEach(tr => {
-    tr.addEventListener('click', () => { switchView('ajan'); renderYonetimAjani(); setTimeout(() => belgeOpenPreview(tr.dataset.doc), 400); });
+    tr.addEventListener('click', () => { switchView('belgeler'); setTimeout(() => belgeOpenPreview(tr.dataset.doc), 400); });
   });
 }
 
@@ -7323,7 +7003,7 @@ const VIEW_RENDER_MAP = {
   // Belge İşleme backend'e istek attığı için renderAll() içinde değil, yalnız sekme açılınca çalışır.
   belgeler: () => renderBelgeIsleme(),
   yoneticiler: renderYoneticiler,
-  materyaller: renderMateryaller, ajan: renderYonetimAjani, sdr: renderSatisAjani,
+  materyaller: renderMateryaller, sdr: renderSatisAjani,
   'uretim-ajan': renderUretimTakipAjani,
   faturalar: renderFaturalar,
 };
