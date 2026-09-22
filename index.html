@@ -743,6 +743,14 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
 
     <div class="ua-warning" id="uaWarningLine" hidden></div>
 
+    <div class="panel-box" id="uaProgressBox" style="margin-bottom:16px;">
+      <h3 style="margin-top:0;"><label for="uaProgressInput">Biten işleri ve kalanları bildir</label></h3>
+      <p id="uaProgressHelp" style="color:var(--muted);">İş numarası veya müşteri adıyla hangi işlemin bittiğini, neyin kaldığını ve baskı/nakış hazırlıklarını yaz. Kaydedilen bilgiler bugünkü ve sonraki planlarda dikkate alınır.</p>
+      <textarea id="uaProgressInput" rows="3" aria-describedby="uaProgressHelp" placeholder="Örn: 123 numaralı işin kesimi bitti. Dikime başlanmadı. Baskı dosyaları gönderildi." style="box-sizing:border-box;width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font:inherit;resize:vertical;"></textarea>
+      <button type="button" class="btn" id="uaProgressBtn" style="margin-top:8px;">Ajana bildir</button>
+      <div id="uaProgressResult" role="status" aria-live="polite" style="margin-top:12px;white-space:pre-wrap;"></div>
+    </div>
+
     <div class="panel-box agent-card" id="uaTodayBox">
       <h3 style="margin-top:0;">Bugün yapılacaklar</h3>
       <div id="uaTodayStations"><div style="color:var(--muted);">Hesaplanıyor…</div></div>
@@ -6284,6 +6292,45 @@ async function uaAnswerAccessory(key, isYes) {
   uaSaveConfirmState(state);
   renderUretimTakipDashboard();
 }
+
+async function uaSubmitProgress() {
+  const input = document.getElementById('uaProgressInput');
+  const button = document.getElementById('uaProgressBtn');
+  const result = document.getElementById('uaProgressResult');
+  if (button.disabled) return;
+  const instruction = input.value.trim();
+  if (!instruction) { input.focus(); return; }
+  button.disabled = true;
+  input.disabled = true;
+  result.textContent = 'Bildirimin işleniyor…';
+  try {
+    const out = await (await matApi('/api/agent/act', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ instruction }),
+    })).json();
+    const applied = out.applied || [];
+    const errors = out.errors || [];
+    const pending = out.pending || [];
+    const lines = [];
+    if (out.reply) lines.push(out.reply);
+    applied.forEach((a) => lines.push('Kaydedildi: ' + (a.summary || a.describe || a.type)));
+    errors.forEach((e) => lines.push('Kaydedilemedi: ' + (e.error || e.describe || e.type)));
+    pending.forEach((a) => lines.push('Uygulanmadı, ayrıca onay gerekiyor: ' + (a.describe || a.type)));
+    if (!applied.length) lines.push('Henüz kayıt yapılmadı. Gerekirse iş numarasını ve işlemin son durumunu açıkça yazarak yeniden gönder.');
+    result.textContent = lines.join('\n\n');
+    if (applied.length && !errors.length && !pending.length) input.value = '';
+    if (applied.some((a) => a.type === 'record_production_progress')) {
+      try { await renderUretimTakipDashboard(); }
+      catch (e) { result.textContent += '\n\nBildirimin kaydedildi, ancak tablo yenilenemedi. Planı Yenile düğmesiyle tekrar yükle.'; }
+    }
+  } catch (e) {
+    result.textContent = 'Kayıt doğrulanamadı: ' + e.message + '\nYazdığın bildirim korunuyor; tekrar deneyebilirsin.';
+  } finally {
+    button.disabled = false;
+    input.disabled = false;
+  }
+}
+document.getElementById('uaProgressBtn').addEventListener('click', uaSubmitProgress);
 
 async function renderUretimTakipDashboard() {
   const meta = document.getElementById('uaHeaderMeta');
