@@ -522,6 +522,53 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
 
 @media (prefers-reduced-motion: reduce){ #view-sdr .sdr-radar { display:none; } }
 @media (max-width:600px){ #view-sdr .sdr-radar { display:none; } }
+
+/* ===== Nakit Planlama — "Kasa Kokpiti" görünümü · yalnız #view-nakit ===== */
+#view-nakit {
+  --nakit-teal:#2e8f7c; --nakit-accent:#d97b3f; --nakit-green:#1f9d64; --nakit-red:#c0392b;
+  --nakit-tint:#f4f7fb; --nakit-line:#dbe3ee;
+}
+#view-nakit .agent-hero { background: linear-gradient(135deg, var(--navy), #1d4b43); }
+#view-nakit .nakit-hero-stats { display:flex; gap:22px; flex-wrap:wrap; }
+#view-nakit .nakit-hero-stats .hs { min-width:140px; }
+#view-nakit .nakit-hero-stats .hs .k { font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.4px; opacity:0.7; }
+#view-nakit .nakit-hero-stats .hs .v { font-size:22px; font-weight:800; font-variant-numeric:tabular-nums; margin-top:3px; }
+#view-nakit .nakit-hero-stats .hs .v.neg { color:#ff9c8f; }
+#view-nakit .nakit-chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:12px; }
+#view-nakit .nakit-chip { border:1px solid rgba(255,255,255,0.28); background:rgba(255,255,255,0.1); color:#fff; border-radius:16px; padding:5px 12px; font-size:11.5px; font-weight:600; cursor:pointer; }
+#view-nakit .nakit-chip.on { background:#fff; color:var(--navy); border-color:#fff; }
+#view-nakit .nakit-chip input { display:none; }
+
+#view-nakit .nakit-head { display:flex; align-items:center; gap:10px; margin:22px 0 12px; }
+#view-nakit .nakit-head .ic { width:26px; height:26px; border-radius:8px; flex-shrink:0; display:grid; place-items:center; font-size:14px; background:var(--nakit-teal); color:#fff; }
+#view-nakit .nakit-head h3 { margin:0; font-size:12.5px; font-weight:700; letter-spacing:0.4px; text-transform:uppercase; color:var(--navy); white-space:nowrap; }
+#view-nakit .nakit-head .rule { flex:1; height:1px; background:linear-gradient(90deg,var(--nakit-line),transparent); }
+#view-nakit .nakit-head .meta { font-size:11.5px; color:var(--muted); font-weight:600; white-space:nowrap; }
+
+#view-nakit .nakit-acc-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px,1fr)); gap:14px; }
+#view-nakit .nakit-acc-card { background:#fff; border:1px solid var(--nakit-line); border-left:4px solid var(--nakit-teal); border-radius:12px; padding:14px 16px; }
+#view-nakit .nakit-acc-card.acc-1 { border-left-color: var(--nakit-teal); }
+#view-nakit .nakit-acc-card.acc-2 { border-left-color: var(--nakit-accent); }
+#view-nakit .nakit-acc-card.acc-3 { border-left-color: #8e6bb0; }
+#view-nakit .nakit-acc-card.acc-total { background:var(--nakit-tint); border-left-color:var(--navy); }
+#view-nakit .nakit-acc-card .name { font-weight:700; color:var(--navy); font-size:13.5px; display:flex; justify-content:space-between; align-items:center; }
+#view-nakit .nakit-acc-card .bal-row { display:flex; justify-content:space-between; align-items:baseline; margin-top:10px; font-size:12px; color:var(--muted); }
+#view-nakit .nakit-acc-card .bal-row b { font-size:16px; color:var(--text); font-variant-numeric:tabular-nums; }
+#view-nakit .nakit-acc-card .bal-row.proj b { font-size:18px; }
+#view-nakit .nakit-acc-card .bal-row.proj b.neg-text { color:var(--nakit-red); }
+#view-nakit .nakit-acc-card .cp-note { font-size:10.5px; color:var(--muted); margin-top:2px; }
+#view-nakit .nakit-acc-card .cp-toggle { font-size:11px; color:var(--nakit-teal); cursor:pointer; font-weight:600; margin-top:8px; display:inline-block; }
+
+#view-nakit .nakit-crunch { border-top:3px solid var(--nakit-red); background:#fdf3f1; display:flex; gap:12px; align-items:flex-start; }
+#view-nakit .nakit-crunch .ico { font-size:22px; flex-shrink:0; }
+#view-nakit .nakit-crunch.ok { border-top-color:var(--nakit-green); background:#f2fbf6; }
+
+#view-nakit .nakit-addbar { display:flex; gap:8px; flex-wrap:wrap; }
+#view-nakit table.data-table tbody tr td:first-child { border-left:3px solid transparent; }
+#view-nakit table.data-table tbody tr.nakit-in td:first-child { border-left-color:var(--nakit-green); }
+#view-nakit table.data-table tbody tr.nakit-out td:first-child { border-left-color:var(--nakit-red); }
+#view-nakit table.data-table tbody tr.nakit-cancelled { opacity:0.5; }
+@media (max-width:600px){ #view-nakit .nakit-hero-stats { gap:14px; } }
 </style>
 </head>
 <body>
@@ -602,6 +649,7 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
   <button data-view="gelir">💵 Gelir</button>
   <button data-view="gider">💸 Giderler</button>
   <button data-view="borc">🔄 Borç-Alacak</button>
+  <button data-view="nakit">💰 Nakit Planlama</button>
   <button data-view="faturalar">🧾 Faturalar</button>
 
   <div class="nav-group-label">Belgeler</div>
@@ -933,6 +981,84 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
     <div class="section-title">Tüm Kayıtlar</div>
     <div class="toolbar"><input type="text" id="borcSearch" placeholder="Firma/kişi, tür, kategori ara..."><button type="button" class="btn small secondary" id="borcExport">⬇ CSV</button><span class="count" id="borcCount" style="margin-left:auto;color:var(--muted);font-size:12px;"></span></div>
     <div class="panel-box"><div class="table-wrap"><table class="data-table" id="borcTable"></table></div></div>
+  </section>
+
+  <!-- NAKİT PLANLAMA -->
+  <section class="view" id="view-nakit">
+    <div class="agent-hero">
+      <div class="ah-left">
+        <h2>💰 Nakit Planlama</h2>
+        <div class="ah-sub">İki hesap, tek görünüm — planlı ödeme ve tahsilatlarla nakit dengenizi planlayın. Sistem karar vermez; hesaplar ve sıkışma noktalarını gösterir.</div>
+        <div class="nakit-chips" id="nakitDateChips"></div>
+      </div>
+      <div class="nakit-hero-stats" id="nakitHeroStats"></div>
+    </div>
+
+    <div class="panel-box nakit-crunch" id="nakitCrunchBox" style="display:none;"></div>
+
+    <div class="nakit-head"><span class="ic">📈</span><h3>Nakit Akış Projeksiyonu</h3><span class="rule"></span><span class="meta" id="nakitChartMeta"></span></div>
+    <div class="panel-box"><div class="chart-wrap" style="height:220px;"><canvas id="nakitChart"></canvas></div></div>
+
+    <div class="nakit-head"><span class="ic">🏦</span><h3>Hesaplar</h3><span class="rule"></span></div>
+    <div class="nakit-acc-grid" id="nakitHesapKartlari"></div>
+
+    <div class="nakit-head"><span class="ic">➕</span><h3>Planlı Ödeme / Tahsilat Ekle</h3><span class="rule"></span></div>
+    <div class="panel-box">
+      <div class="nakit-addbar">
+        <button type="button" class="btn small" id="btnNakitElleAc">Elle Ekle</button>
+        <button type="button" class="btn small secondary" id="btnNakitBorcAc">Borç/Alacaktan Ekle</button>
+        <button type="button" class="btn small secondary" id="btnNakitUretimAc">Üretimden Hesapla</button>
+      </div>
+
+      <form class="stack" id="formNakitElle" style="display:none;margin-top:14px;">
+        <div class="form-row">
+          <div class="field"><label>Başlık</label><input type="text" name="title" required placeholder="Kira, ABC Okulu 2. Taksit..."></div>
+          <div class="field"><label>Yön</label><select name="direction"><option value="Ödeme">Ödeme (Gider)</option><option value="Tahsilat">Tahsilat (Gelir)</option></select></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Tutar (₺)</label><input type="number" step="0.01" name="amount" required></div>
+          <div class="field"><label>Tarih</label><input type="date" name="planned_date" required></div>
+          <div class="field"><label>Hesap</label><select name="account_id" id="nakitElleAccountSelect"></select></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Kategori</label><input type="text" name="category" placeholder="Kira, Maaş, Sipariş Tahsilatı..."></div>
+          <div class="field"><label>Taksit Sayısı</label><input type="number" name="installment_count" min="1" value="1" style="width:90px;"></div>
+          <div class="field"><label>Kaç Ay Aralıkla</label><input type="number" name="installment_interval" min="1" value="1" style="width:90px;"></div>
+        </div>
+        <div class="field"><label>Not (opsiyonel)</label><textarea name="note"></textarea></div>
+        <button type="submit" class="btn">Plana Ekle</button>
+      </form>
+
+      <div id="nakitBorcBox" style="display:none;margin-top:14px;">
+        <div class="field" style="min-width:320px;"><label>Açık Borç/Alacak Seç</label><select id="nakitBorcSelect"></select></div>
+        <div id="nakitBorcOnizleme" style="margin:10px 0;font-size:13px;color:var(--muted);"></div>
+        <button type="button" class="btn" id="btnNakitBorcEkle">Plana Ekle</button>
+      </div>
+
+      <div id="nakitUretimBox" style="display:none;margin-top:14px;">
+        <div class="form-row">
+          <div class="field"><label>Başlangıç</label><input type="date" id="nakitUretimFrom"></div>
+          <div class="field"><label>Bitiş</label><input type="date" id="nakitUretimTo"></div>
+          <div class="field"><label>Kalem Adı</label><input type="text" id="nakitUretimMatch" value="Dikim" style="width:120px;"></div>
+          <div class="field"><label>&nbsp;</label><button type="button" class="btn small secondary" id="btnNakitUretimHesapla">Hesapla</button></div>
+        </div>
+        <div id="nakitUretimOnizleme" style="margin:10px 0;font-size:13px;color:var(--muted);"></div>
+      </div>
+    </div>
+
+    <div class="nakit-head"><span class="ic">🗓️</span><h3>Zaman Çizelgesi</h3><span class="rule"></span></div>
+    <div class="toolbar">
+      <select id="nakitFilterAccount"></select>
+      <select id="nakitFilterDirection"><option value="">Tüm Yönler</option><option value="Tahsilat">Tahsilat</option><option value="Ödeme">Ödeme</option></select>
+      <select id="nakitFilterStatus"><option value="">Tüm Durumlar</option><option value="Planlandı">Planlandı</option><option value="Gerçekleşti">Gerçekleşti</option><option value="İptal">İptal</option></select>
+      <input type="text" id="nakitSearch" placeholder="Başlık, kategori, not ara...">
+      <button type="button" class="btn small secondary" id="nakitExport">⬇ CSV</button>
+      <span class="count" id="nakitCount" style="margin-left:auto;color:var(--muted);font-size:12px;"></span>
+    </div>
+    <div class="panel-box"><div class="table-wrap"><table class="data-table" id="nakitTable"></table></div></div>
+
+    <div class="nakit-head"><span class="ic">⚙️</span><h3>Hesap Ayarları</h3><span class="rule"></span><span class="meta">gerçek bakiyeyi ara sıra bankadan bakıp buradan güncelleyin</span></div>
+    <div class="grid-2" id="nakitHesapAyarlari"></div>
   </section>
 
   <!-- MÜŞTERİLER (contact-focused) -->
@@ -1512,6 +1638,11 @@ const SEED_DATA = {
   suppliers: [], hedefler: [], hedeflerAylik: [], uretimTakip: [], okulMail: [], okulTakip: [],
   tasks: [], invoices: [], supplierCategories: [],
   costTemplates: { products: [], baski: {}, nakis: {}, price_tiers: [], price_list: {}, maliyet_risk_pct: {}, meta: {} },
+  bankAccounts: [
+    { id: 1, name: 'Hesap 1', checkpoints: [] },
+    { id: 2, name: 'Hesap 2', checkpoints: [] },
+  ],
+  cashPlanItems: [],
 };
 
 const STORAGE_KEY = 'merciPanelData_v5';
@@ -1722,6 +1853,7 @@ migratePriceTiersV2();
 migrateMaliyetRiskPct();
 migrateHedeflerAylik();
 migrateSupplierCategories();
+migrateNakitPlanlama();
 // Tedarikçi kategorileri artık sabit değil, kullanıcı ekleyip silebiliyor. İlk kez
 // karşılaşıldığında eskiden sabit olan 6 kategoriyle başlatılır, sonrasında dokunmaz.
 function migrateSupplierCategories() {
@@ -1771,6 +1903,20 @@ function migrateMaliyetRiskPct() {
   const ct = DATA.costTemplates;
   if (!ct) return;
   if (!ct.maliyet_risk_pct) { ct.maliyet_risk_pct = {}; saveData(); }
+}
+// Nakit Planlama öncesi buluttan gelen eski veride bu alanlar hiç yok — eksikse varsayılan
+// 2 hesaplı boş yapıyla başlat ki hesaplama fonksiyonları undefined üzerinde patlamasın.
+function migrateNakitPlanlama() {
+  let changed = false;
+  if (!Array.isArray(DATA.bankAccounts) || !DATA.bankAccounts.length) {
+    DATA.bankAccounts = [
+      { id: 1, name: 'Hesap 1', checkpoints: [] },
+      { id: 2, name: 'Hesap 2', checkpoints: [] },
+    ];
+    changed = true;
+  }
+  if (!Array.isArray(DATA.cashPlanItems)) { DATA.cashPlanItems = []; changed = true; }
+  if (changed) saveData();
 }
 function migrateTasksSchema() {
   if (!Array.isArray(DATA.tasks)) { DATA.tasks = []; return; }
@@ -2081,6 +2227,7 @@ function adoptCloudSnapshot(cloud, opts) {
   migrateMaliyetRiskPct();
   migrateHedeflerAylik();
   migrateSupplierCategories();
+  migrateNakitPlanlama();
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA));
     localStorage.setItem(AUTH_KEY, JSON.stringify(AUTH));
@@ -2520,6 +2667,114 @@ function customerFirstOrderDate(c) {
 function debtRemaining(d) { return round2((d.amount||0)-(d.paid_amount||0)); }
 function debtStatus(d) { const r=debtRemaining(d); if(r<=0.01) return 'Ödendi'; if((d.paid_amount||0)>0) return 'Kısmi Ödendi'; return 'Bekliyor'; }
 function debtOverdue(d) { return !!(d.due_date && d.due_date < todayISO() && debtRemaining(d) > 0.01); }
+
+// ---------------- NAKİT PLANLAMA hesaplama ----------------
+// Model: her hesabın "gerçek bakiyesi" ara sıra bankadan bakılıp elle girilen, tarihli
+// checkpoint kayıtlarından gelir (asla üzerine yazılmaz, sadece eklenir — panelin genel
+// felsefesiyle aynı). "Tahmini bakiye" = son checkpoint + checkpoint TARİHİNDEN SONRAKİ plan
+// kalemlerinin net etkisi. Bir kalem checkpoint tarihinden önce/eşitse zaten gerçek bakiyeye
+// yansımış sayılır ve tekrar eklenmez — çift sayım burada böyle engellenir.
+function cashAccountById(id) { return (DATA.bankAccounts || []).find(a => a.id === id); }
+function cashLastCheckpoint(accountId, atDate) {
+  const acc = cashAccountById(accountId);
+  if (!acc) return null;
+  const cps = (acc.checkpoints || []).filter(c => c.date && c.date <= atDate);
+  if (!cps.length) return null;
+  return cps.slice().sort((a,b) => (a.date < b.date ? -1 : (a.date > b.date ? 1 : (a.id - b.id))))[cps.length-1];
+}
+function cashPlanNetEffect(item) { return (item.direction === 'Tahsilat' ? 1 : -1) * (item.amount || 0); }
+function cashItemEffectiveDate(item) { return item.realized_date || item.planned_date; }
+function cashAccountItems(accountId) {
+  return (DATA.cashPlanItems || []).filter(it => (it.account_id ?? null) === accountId && it.status !== 'İptal');
+}
+// atDate'de o hesabın "gerçek" (bankada gerçekten olan) bakiyesi — en son checkpoint.
+function accountRealBalance(accountId, atDate) {
+  const cp = cashLastCheckpoint(accountId, atDate);
+  return cp ? round2(cp.balance || 0) : 0;
+}
+// atDate'de o hesabın planlı kalemler dahil "tahmini" bakiyesi. accountId=null verilirse
+// TÜM hesapların + "hesap belirtilmedi" kalemlerinin toplamı (Toplam kartı için).
+function accountProjectedBalance(accountId, atDate) {
+  if (accountId === null || accountId === undefined) {
+    const accountsTotal = (DATA.bankAccounts || []).reduce((s,a) => s + accountProjectedBalance(a.id, atDate), 0);
+    const unassigned = cashAccountItems(null)
+      .filter(it => { const d = cashItemEffectiveDate(it); return d && d <= atDate; })
+      .reduce((s,it) => s + cashPlanNetEffect(it), 0);
+    return round2(accountsTotal + unassigned);
+  }
+  const cp = cashLastCheckpoint(accountId, atDate);
+  const cpDate = cp ? cp.date : '0000-00-00';
+  const base = cp ? (cp.balance || 0) : 0;
+  const net = cashAccountItems(accountId)
+    .filter(it => { const d = cashItemEffectiveDate(it); return d && d > cpDate && d <= atDate; })
+    .reduce((s,it) => s + cashPlanNetEffect(it), 0);
+  return round2(base + net);
+}
+// fromDate'den toDate'e kadar, kalem kalem kümülatif bakiye noktaları (grafik + en düşük nokta için).
+function cashRunningTimeline(accountIdOrNull, fromDate, toDate) {
+  const startBalance = accountProjectedBalance(accountIdOrNull, fromDate);
+  const pool = (accountIdOrNull === null || accountIdOrNull === undefined)
+    ? (DATA.cashPlanItems || []).filter(it => it.status !== 'İptal')
+    : cashAccountItems(accountIdOrNull);
+  const items = pool
+    .filter(it => { const d = cashItemEffectiveDate(it); return d && d > fromDate && d <= toDate; })
+    .sort((a,b) => cashItemEffectiveDate(a).localeCompare(cashItemEffectiveDate(b)));
+  let running = startBalance;
+  const points = [{ date: fromDate, balance: round2(running), item: null }];
+  items.forEach(it => { running = round2(running + cashPlanNetEffect(it)); points.push({ date: cashItemEffectiveDate(it), balance: running, item: it }); });
+  return points;
+}
+// Zaman çizelgesindeki en düşük kümülatif bakiye noktası + o tarihe kadar bakiyeyi 0'ın
+// altına düşürmemek için gereken ek tahsilat tutarı ("bu tarihe kadar en az X ₺ gerekir").
+function cashLowestPoint(timeline) {
+  if (!timeline || !timeline.length) return null;
+  let lowest = timeline[0];
+  timeline.forEach(p => { if (p.balance < lowest.balance) lowest = p; });
+  return { date: lowest.date, balance: lowest.balance, shortfall: lowest.balance < 0 ? round2(-lowest.balance) : 0 };
+}
+// Taksitli/aylık sabit planlama: karmaşık bir tekrar kuralı yerine N ayrı satır üretir —
+// her satır bağımsız düzenlenebilir/taşınabilir, ortak series_id ile gruplanır.
+function generateInstallmentItems(base, count, intervalMonths) {
+  count = Math.max(1, parseInt(count,10) || 1);
+  intervalMonths = Math.max(1, parseInt(intervalMonths,10) || 1);
+  const total = base.amount || 0;
+  const per = round2(total / count);
+  const baseId = nextId(DATA.cashPlanItems);
+  const seriesId = 'S' + baseId + '-' + Date.now();
+  // UTC öğlen'e sabitlenmiş taban tarih + UTC setter'lar: yerel gece yarısı üzerinden
+  // toISOString() gün kaymasına yol açabiliyor (bkz. nakitDateFromChip).
+  const startDate = new Date((base.planned_date || todayISO()) + 'T12:00:00Z');
+  const items = [];
+  for (let i = 0; i < count; i++) {
+    const d = new Date(startDate);
+    d.setUTCMonth(d.getUTCMonth() + i * intervalMonths);
+    const amount = (i === count - 1) ? round2(total - per * (count - 1)) : per;
+    items.push(Object.assign({}, base, {
+      id: baseId + i,
+      amount,
+      planned_date: d.toISOString().slice(0,10),
+      series_id: count > 1 ? seriesId : null,
+      title: count > 1 ? (base.title + ' (' + (i+1) + '/' + count + ')') : base.title,
+    }));
+  }
+  return items;
+}
+// Üretimden hesaplama: bir tarih aralığında teslim edilmiş işlerin kalem adı eşleşen (varsayılan
+// "Dikim") maliyet satırlarını toplar — otomatik plana eklemez, sadece kullanıcıya önizleme sunar.
+function jobDikimCostInRange(fromDate, toDate, matchText) {
+  matchText = (matchText || 'Dikim').toLocaleLowerCase('tr-TR');
+  const jobs = (DATA.jobs || []).filter(j => j.status === 'Teslim Edildi' && j.delivery_date
+    && j.delivery_date >= fromDate && j.delivery_date <= toDate);
+  let total = 0;
+  const contributing = [];
+  jobs.forEach(j => {
+    const items = jobCostItems(j).filter(it => (it.name||'').toLocaleLowerCase('tr-TR').indexOf(matchText) !== -1);
+    if (!items.length) return;
+    const sum = round2(items.reduce((s,it) => s + (it.amount||0), 0));
+    if (sum > 0) { total += sum; contributing.push({ job_no: j.job_no, amount: sum }); }
+  });
+  return { total: round2(total), jobs: contributing };
+}
 function pipelineEstTotal(p) { return round2((p.est_quantity||0)*(p.est_unit_price||0)); }
 // Olasılık ölçeği karışık: Excel'den gelen eski kayıtlar 0-100, panelin kendi kayıtları 0-1 tutuyor.
 // Veriyi değiştirmeden okurken normalize ediyoruz — 1'den büyük her değer yüzde kabul edilir.
@@ -2810,6 +3065,20 @@ const ENTITY_CONFIGS = {
     {name:'son_gorusulen_pozisyon', label:'Pozisyonu', type:'text'},
     {name:'aciklama', label:'Açıklama', type:'textarea'},
     {name:'takip_tarihi', label:'Takip Tarihi', type:'date'},
+  ]},
+  cashPlanItem: { arrayName: 'cashPlanItems', title: 'Nakit Plan Kalemini Düzenle', rerender: ()=>renderNakitPlanlama(), fields: [
+    {name:'title', label:'Başlık', type:'text', required:true},
+    {name:'direction', label:'Yön', type:'select', options:['Ödeme','Tahsilat']},
+    {name:'amount', label:'Tutar (₺)', type:'number', step:'0.01', required:true},
+    {name:'account_id', label:'Hesap', type:'select',
+      options: () => ['— Hesap Belirtilmedi —', ...((DATA.bankAccounts||[]).map(a=>a.name))],
+      transformOut: v => { const a = cashAccountById(v); return a ? a.name : '— Hesap Belirtilmedi —'; },
+      transformIn: v => { if (v === '— Hesap Belirtilmedi —') return null; const a = (DATA.bankAccounts||[]).find(x=>x.name===v); return a ? a.id : null; }},
+    {name:'planned_date', label:'Planlanan Tarih', type:'date', required:true},
+    {name:'status', label:'Durum', type:'select', options:['Planlandı','Gerçekleşti','İptal']},
+    {name:'realized_date', label:'Gerçekleşme Tarihi (farklıysa)', type:'date'},
+    {name:'category', label:'Kategori', type:'text'},
+    {name:'note', label:'Not', type:'textarea'},
   ]},
 };
 
@@ -3517,6 +3786,335 @@ document.getElementById('formBorcOdeme').addEventListener('submit', (e) => {
   e.target.reset();
   document.querySelector('#formBorcOdeme [name="tarih"]').value = todayISO();
   renderBorc(); renderGelir(); renderGider(); renderDashboard();
+});
+
+// ---------------- NAKİT PLANLAMA (view) ----------------
+let NAKIT_VIEW_DATE = null;       // null = bugün; "Tahmini Bakiye" bu tarihe göre hesaplanır
+let NAKIT_ACTIVE_CHIP = 'today';  // hangi hızlı-tarih çipi seçili (görsel durum)
+function nakitViewDate() { return NAKIT_VIEW_DATE || todayISO(); }
+function nakitDateFromChip(key) {
+  if (key === 'today') return todayISO();
+  // Yerel gece yarısı üzerinden toISOString() gün kaymasına yol açabiliyor (bkz. satır ~6322'deki
+  // aynı sorun) — UTC öğlen'e sabitleyip UTC setter'larla ilerlemek bu kaymayı engeller.
+  const d = new Date(todayISO() + 'T12:00:00Z');
+  if (key === '+7') d.setUTCDate(d.getUTCDate() + 7);
+  else if (key === '+30') d.setUTCDate(d.getUTCDate() + 30);
+  else if (key === 'eom') { d.setUTCMonth(d.getUTCMonth() + 1); d.setUTCDate(0); }
+  return d.toISOString().slice(0,10);
+}
+function nakitSetChip(key) {
+  NAKIT_ACTIVE_CHIP = key;
+  NAKIT_VIEW_DATE = nakitDateFromChip(key);
+  renderNakitChips(); renderNakitHero(); renderNakitCrunch(); renderNakitChart(); renderNakitHesapKartlari();
+}
+function renderNakitChips() {
+  const box = document.getElementById('nakitDateChips');
+  if (!box) return;
+  const chips = [['today','Bugün'], ['+7','+7 Gün'], ['+30','+30 Gün'], ['eom','Ay Sonu']];
+  box.innerHTML = chips.map(([k,label]) => '<button type="button" class="nakit-chip' + (NAKIT_ACTIVE_CHIP===k?' on':'') + '" data-chip="' + k + '">' + label + '</button>').join('')
+    + '<input type="date" id="nakitCustomDate" value="' + esc(nakitViewDate()) + '" style="border-radius:16px;border:1px solid rgba(255,255,255,0.28);background:rgba(255,255,255,0.1);color:#fff;color-scheme:dark;padding:4px 10px;font-size:11.5px;">';
+  box.querySelectorAll('.nakit-chip').forEach(btn => btn.addEventListener('click', () => nakitSetChip(btn.dataset.chip)));
+  const custom = document.getElementById('nakitCustomDate');
+  if (custom) custom.addEventListener('change', () => {
+    NAKIT_ACTIVE_CHIP = 'custom';
+    NAKIT_VIEW_DATE = custom.value || todayISO();
+    box.querySelectorAll('.nakit-chip').forEach(b => b.classList.remove('on'));
+    renderNakitHero(); renderNakitCrunch(); renderNakitChart(); renderNakitHesapKartlari();
+  });
+}
+function renderNakitHero() {
+  const box = document.getElementById('nakitHeroStats');
+  if (!box) return;
+  const today = todayISO();
+  const viewDate = nakitViewDate();
+  const realTotal = (DATA.bankAccounts||[]).reduce((s,a)=>s+accountRealBalance(a.id, today),0);
+  const projTotal = accountProjectedBalance(null, viewDate);
+  box.innerHTML = ''
+    + '<div class="hs"><div class="k">Gerçek Bakiye (bugün)</div><div class="v">' + fmtCurrency(realTotal) + '</div></div>'
+    + '<div class="hs"><div class="k">Tahmini Bakiye (' + esc(fmtDate(viewDate)) + ')</div><div class="v' + (projTotal<0?' neg':'') + '">' + fmtCurrency(projTotal) + '</div></div>';
+}
+function cashFurthestDate() {
+  const dates = (DATA.cashPlanItems || []).filter(it => it.status !== 'İptal').map(it => cashItemEffectiveDate(it)).filter(Boolean);
+  if (!dates.length) return null;
+  return dates.sort().pop();
+}
+function renderNakitCrunch() {
+  const box = document.getElementById('nakitCrunchBox');
+  if (!box) return;
+  const today = todayISO();
+  const viewDate = nakitViewDate();
+  const horizon = cashFurthestDate();
+  const toDate = (horizon && horizon > viewDate) ? horizon : viewDate;
+  if (toDate <= today) { box.style.display = 'none'; return; }
+  const timeline = cashRunningTimeline(null, today, toDate);
+  const lowest = cashLowestPoint(timeline);
+  box.style.display = 'flex';
+  if (!lowest || lowest.balance >= 0) {
+    box.classList.add('ok');
+    box.innerHTML = '<span class="ico">✅</span><div><b>Sıkışıklık görünmüyor.</b> Bugünden ' + esc(fmtDate(toDate)) + ' tarihine kadar planlı kalemlerle toplam bakiye negatife düşmüyor.</div>';
+    return;
+  }
+  box.classList.remove('ok');
+  box.innerHTML = '<span class="ico">⚠️</span><div><b>Nakit sıkışıklığı beklentisi:</b> ' + esc(fmtDate(lowest.date)) + ' tarihinde toplam bakiyenin ' + fmtCurrency(lowest.balance)
+    + "'ye düşmesi bekleniyor. Bu tarihe kadar en az <b>" + fmtCurrency(lowest.shortfall) + '</b> ek tahsilat gerekiyor (veya planlı ödemelerden bu kadarının tarihi ötelenmeli).</div>';
+}
+function renderNakitChart() {
+  const el = document.getElementById('nakitChart');
+  if (!el) return;
+  const today = todayISO();
+  const viewDate = nakitViewDate();
+  const horizon = cashFurthestDate();
+  const toDate = [viewDate, horizon].filter(Boolean).sort().pop() || viewDate;
+  const timeline = cashRunningTimeline(null, today, toDate);
+  const meta = document.getElementById('nakitChartMeta');
+  if (meta) meta.textContent = fmtDate(today) + ' → ' + fmtDate(toDate);
+  makeChart('nakitChart', {
+    type: 'line',
+    data: {
+      labels: timeline.map(p => fmtDate(p.date)),
+      datasets: [
+        { label: 'Toplam Bakiye (tahmini)', data: timeline.map(p => p.balance), borderColor:'#2e8f7c', backgroundColor:'rgba(46,143,124,0.12)', fill:true, tension:0.25, pointRadius:3,
+          segment: { borderColor: ctx => (ctx.p0.parsed.y < 0 || ctx.p1.parsed.y < 0) ? '#c0392b' : '#2e8f7c' } },
+        { label:'0 çizgisi', data: timeline.map(()=>0), borderColor:'#a3a3a3', borderDash:[4,4], pointRadius:0 },
+      ],
+    },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom',labels:{font:{size:10}}}}, scales:{ y:{ ticks:{ callback:v=>fmtCurrency(v) } } } }
+  });
+}
+const NAKIT_ACC_COLORS = ['acc-1','acc-2','acc-3'];
+function renderNakitHesapKartlari() {
+  const box = document.getElementById('nakitHesapKartlari');
+  if (!box) return;
+  const today = todayISO();
+  const viewDate = nakitViewDate();
+  const accounts = DATA.bankAccounts || [];
+  let html = accounts.map((a,i) => {
+    const cp = cashLastCheckpoint(a.id, today);
+    const real = accountRealBalance(a.id, today);
+    const proj = accountProjectedBalance(a.id, viewDate);
+    const colorCls = NAKIT_ACC_COLORS[i % NAKIT_ACC_COLORS.length];
+    return '<div class="nakit-acc-card ' + colorCls + '">'
+      + '<div class="name">' + esc(a.name) + '</div>'
+      + '<div class="bal-row"><span>Gerçek Bakiye</span><b>' + fmtCurrency(real) + '</b></div>'
+      + '<div class="cp-note">' + (cp ? ('son checkpoint: ' + fmtDate(cp.date)) : 'henüz checkpoint girilmedi') + '</div>'
+      + '<div class="bal-row proj"><span>Tahmini (' + esc(fmtDate(viewDate)) + ')</span><b class="' + (proj<0?'neg-text':'') + '">' + fmtCurrency(proj) + '</b></div>'
+      + '</div>';
+  }).join('');
+  const totalReal = accounts.reduce((s,a)=>s+accountRealBalance(a.id, today),0);
+  const totalProj = accountProjectedBalance(null, viewDate);
+  html += '<div class="nakit-acc-card acc-total">'
+    + '<div class="name">Toplam</div>'
+    + '<div class="bal-row"><span>Gerçek Bakiye</span><b>' + fmtCurrency(totalReal) + '</b></div>'
+    + '<div class="cp-note">hesapların toplamı</div>'
+    + '<div class="bal-row proj"><span>Tahmini (' + esc(fmtDate(viewDate)) + ')</span><b class="' + (totalProj<0?'neg-text':'') + '">' + fmtCurrency(totalProj) + '</b></div>'
+    + '</div>';
+  box.innerHTML = html;
+}
+function renderNakitFormSelects() {
+  const accounts = DATA.bankAccounts || [];
+  const accOptsHtml = accounts.map(a => '<option value="' + a.id + '">' + esc(a.name) + '</option>').join('');
+  const elleSel = document.getElementById('nakitElleAccountSelect');
+  if (elleSel) { const prev = elleSel.value; elleSel.innerHTML = '<option value="">— Hesap Belirtilmedi —</option>' + accOptsHtml; if (prev) elleSel.value = prev; }
+  const filtSel = document.getElementById('nakitFilterAccount');
+  if (filtSel) { const prev = filtSel.value; filtSel.innerHTML = '<option value="">Tüm Hesaplar</option>' + accOptsHtml + '<option value="__none__">Hesap Belirtilmedi</option>'; filtSel.value = prev; }
+  const borcSel = document.getElementById('nakitBorcSelect');
+  if (borcSel) {
+    const openDebts = (DATA.debts || []).filter(d => debtRemaining(d) > 0.01);
+    borcSel.innerHTML = openDebts.length
+      ? openDebts.map(d => '<option value="' + d.id + '">' + esc(d.party_name) + ' — ' + esc(d.type) + ' — ' + fmtCurrency(debtRemaining(d)) + (d.due_date?(' — vade ' + fmtDate(d.due_date)):'') + '</option>').join('')
+      : '<option value="">(açık borç/alacak yok)</option>';
+    renderNakitBorcOnizleme();
+  }
+}
+function cashFilteredItems() {
+  const accSel = document.getElementById('nakitFilterAccount');
+  const dirSel = document.getElementById('nakitFilterDirection');
+  const statSel = document.getElementById('nakitFilterStatus');
+  let rows = (DATA.cashPlanItems || []).slice();
+  if (accSel && accSel.value) {
+    if (accSel.value === '__none__') rows = rows.filter(it => it.account_id === null || it.account_id === undefined);
+    else rows = rows.filter(it => String(it.account_id) === accSel.value);
+  }
+  if (dirSel && dirSel.value) rows = rows.filter(it => it.direction === dirSel.value);
+  if (statSel && statSel.value) rows = rows.filter(it => it.status === statSel.value);
+  return rows;
+}
+function renderNakitTable() {
+  renderTable('nakitTable', 'nakitSearch', 'nakitCount', cashFilteredItems(), [
+    {key:'planned_date', label:'Tarih', render:it=>fmtDate(it.planned_date)},
+    {key:'title', label:'Başlık'},
+    {key:'account', label:'Hesap', render:it=>{ const a=cashAccountById(it.account_id); return a?esc(a.name):'<span style="color:var(--muted)">—</span>'; }, filterVal:it=>{ const a=cashAccountById(it.account_id); return a?a.name:''; }},
+    {key:'direction', label:'Yön', render:it=>'<span class="badge ' + (it.direction==='Tahsilat'?'green':'red') + '">' + esc(it.direction) + '</span>'},
+    {key:'amount', label:'Tutar', render:it=>fmtCurrency(it.amount), sortVal:it=>it.amount},
+    {key:'category', label:'Kategori'},
+    {key:'status', label:'Durum', render:it=>'<span class="badge ' + (it.status==='Gerçekleşti'?'green':(it.status==='İptal'?'red':'gray')) + '">' + esc(it.status) + '</span>'},
+    {key:'note', label:'Not'},
+    {key:'actions', label:'', render:it=>'<div class="actions-cell"><button class="btn small secondary" data-action="edit" data-id="'+it.id+'">Düzenle</button><button class="btn small danger" data-action="del" data-id="'+it.id+'">Sil</button></div>'},
+  ], { defaultSort:'planned_date', defaultDir:1, exportId:'nakitExport', exportName:'nakit-planlama',
+    rowClass: it => it.status==='İptal' ? 'nakit-cancelled' : (it.direction==='Tahsilat' ? 'nakit-in' : 'nakit-out'),
+    actions: {
+      edit: id => openGenericEditModal('cashPlanItem', id),
+      del: id => { if(!confirm('Bu plan kalemi silinsin mi?')) return; DATA.cashPlanItems = DATA.cashPlanItems.filter(x=>x.id!==id); saveData(); flash('Kayıt silindi.'); renderNakitPlanlama(); }
+    }
+  });
+}
+function renderNakitHesapAyarlari() {
+  const box = document.getElementById('nakitHesapAyarlari');
+  if (!box) return;
+  const accounts = DATA.bankAccounts || [];
+  box.innerHTML = accounts.map(a => {
+    const cps = (a.checkpoints||[]).slice().sort((x,y)=> x.date<y.date?1:(x.date>y.date?-1:0));
+    return '<div class="panel-box">'
+      + '<div class="inline-form" style="margin-bottom:10px;">'
+      + '<div class="field"><label>Hesap Adı</label><input type="text" class="nakit-acc-name" data-id="' + a.id + '" value="' + esc(a.name) + '"></div>'
+      + '<button type="button" class="btn small secondary nakit-acc-rename" data-id="' + a.id + '">Adı Kaydet</button>'
+      + '</div>'
+      + '<form class="inline-form nakit-cp-form" data-account="' + a.id + '">'
+      + '<div class="field"><label>Tarih</label><input type="date" name="date" required value="' + esc(todayISO()) + '"></div>'
+      + '<div class="field"><label>Gerçek Bakiye (₺)</label><input type="number" step="0.01" name="balance" required></div>'
+      + '<div class="field"><label>Not</label><input type="text" name="note" placeholder="banka ekran görüntüsü, mutabakat..."></div>'
+      + '<button type="submit" class="btn small">Checkpoint Ekle</button>'
+      + '</form>'
+      + '<div class="section-title" style="font-size:11.5px;margin:12px 0 6px;">Checkpoint Geçmişi</div>'
+      + (cps.length
+        ? '<ul class="stat-list">' + cps.map(c => '<li><span>' + fmtDate(c.date) + (c.note?(' — ' + esc(c.note)):'') + '</span><b>' + fmtCurrency(c.balance) + ' <button type="button" class="btn small danger nakit-cp-del" data-account="' + a.id + '" data-cp="' + c.id + '" style="margin-left:6px;">Sil</button></b></li>').join('') + '</ul>'
+        : '<div style="font-size:12px;color:var(--muted);">Henüz checkpoint girilmedi.</div>')
+      + '</div>';
+  }).join('');
+  box.querySelectorAll('.nakit-acc-rename').forEach(btn => btn.addEventListener('click', () => {
+    const id = parseInt(btn.dataset.id,10);
+    const input = box.querySelector('.nakit-acc-name[data-id="' + id + '"]');
+    const acc = cashAccountById(id);
+    if (!acc || !input) return;
+    const name = (input.value||'').trim();
+    if (!name) { flash('Hesap adı boş olamaz.', 'error'); return; }
+    acc.name = name; saveData(); flash('Hesap adı güncellendi.'); renderNakitPlanlama();
+  }));
+  box.querySelectorAll('.nakit-cp-form').forEach(form => form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const accId = parseInt(form.dataset.account,10);
+    const acc = cashAccountById(accId);
+    if (!acc) return;
+    const fd = new FormData(form);
+    acc.checkpoints = acc.checkpoints || [];
+    acc.checkpoints.push({ id: nextId(acc.checkpoints), date: fd.get('date'), balance: round2(parseFloat(fd.get('balance'))||0), note: fd.get('note')||'' });
+    saveData(); flash('Checkpoint eklendi.'); renderNakitPlanlama();
+  }));
+  box.querySelectorAll('.nakit-cp-del').forEach(btn => btn.addEventListener('click', () => {
+    if (!confirm('Bu checkpoint silinsin mi?')) return;
+    const accId = parseInt(btn.dataset.account,10);
+    const cpId = parseInt(btn.dataset.cp,10);
+    const acc = cashAccountById(accId);
+    if (!acc) return;
+    acc.checkpoints = (acc.checkpoints||[]).filter(c=>c.id!==cpId);
+    saveData(); flash('Checkpoint silindi.'); renderNakitPlanlama();
+  }));
+}
+function renderNakitBorcOnizleme() {
+  const sel = document.getElementById('nakitBorcSelect');
+  const box = document.getElementById('nakitBorcOnizleme');
+  if (!sel || !box) return;
+  const debt = DATA.debts.find(d => String(d.id) === sel.value);
+  if (!debt) { box.innerHTML = ''; return; }
+  const remaining = debtRemaining(debt);
+  box.innerHTML = esc(debt.party_name) + ' — ' + esc(debt.type) + ' — kalan tutar <b>' + fmtCurrency(remaining) + '</b>'
+    + (debt.due_date ? (', vade ' + fmtDate(debt.due_date)) : ', vade tarihi yok — bugün olarak eklenecek') + '.';
+}
+function renderNakitPlanlama() {
+  renderNakitChips();
+  renderNakitHero();
+  renderNakitCrunch();
+  renderNakitChart();
+  renderNakitHesapKartlari();
+  renderNakitFormSelects();
+  renderNakitTable();
+  renderNakitHesapAyarlari();
+}
+function nakitToggleAddBox(id) {
+  const target = document.getElementById(id);
+  if (!target) return;
+  const isOpen = target.style.display !== 'none';
+  ['formNakitElle','nakitBorcBox','nakitUretimBox'].forEach(bid => { const el = document.getElementById(bid); if (el) el.style.display = 'none'; });
+  if (!isOpen) target.style.display = '';
+}
+document.getElementById('btnNakitElleAc').addEventListener('click', () => nakitToggleAddBox('formNakitElle'));
+document.getElementById('btnNakitBorcAc').addEventListener('click', () => nakitToggleAddBox('nakitBorcBox'));
+document.getElementById('btnNakitUretimAc').addEventListener('click', () => nakitToggleAddBox('nakitUretimBox'));
+document.getElementById('formNakitElle').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const accVal = fd.get('account_id');
+  const base = {
+    account_id: accVal ? parseInt(accVal,10) : null,
+    direction: fd.get('direction'), title: fd.get('title'), amount: parseFloat(fd.get('amount'))||0,
+    planned_date: fd.get('planned_date'), status: 'Planlandı', realized_date: null,
+    category: fd.get('category')||'', source_type: 'manual', source_debt_id: null, source_job_id: null,
+    series_id: null, note: fd.get('note')||'',
+  };
+  const count = parseInt(fd.get('installment_count'),10) || 1;
+  const interval = parseInt(fd.get('installment_interval'),10) || 1;
+  const items = generateInstallmentItems(base, count, interval);
+  DATA.cashPlanItems = (DATA.cashPlanItems||[]).concat(items);
+  saveData();
+  e.target.reset();
+  document.querySelector('#formNakitElle [name="installment_count"]').value = 1;
+  document.querySelector('#formNakitElle [name="installment_interval"]').value = 1;
+  flash(items.length > 1 ? (items.length + ' taksit plana eklendi.') : 'Plana eklendi.');
+  renderNakitPlanlama();
+});
+document.getElementById('nakitBorcSelect').addEventListener('change', renderNakitBorcOnizleme);
+document.getElementById('btnNakitBorcEkle').addEventListener('click', () => {
+  const sel = document.getElementById('nakitBorcSelect');
+  const debt = DATA.debts.find(d => String(d.id) === sel.value);
+  if (!debt) { flash('Kayıt seçin.', 'error'); return; }
+  const remaining = debtRemaining(debt);
+  if (remaining <= 0.01) { flash('Bu kaydın kalan tutarı yok.', 'error'); return; }
+  DATA.cashPlanItems.push({
+    id: nextId(DATA.cashPlanItems), account_id: null,
+    direction: debt.type === 'Alacak' ? 'Tahsilat' : 'Ödeme',
+    title: debt.party_name + ' (Borç/Alacak)', amount: remaining,
+    planned_date: debt.due_date || todayISO(), status: 'Planlandı', realized_date: null,
+    category: debt.category || 'Borç/Alacak', source_type: 'debt', source_debt_id: debt.id,
+    source_job_id: null, series_id: null, note: debt.note || '',
+  });
+  saveData();
+  flash('Plana eklendi.');
+  renderNakitPlanlama();
+});
+document.getElementById('btnNakitUretimHesapla').addEventListener('click', () => {
+  const from = document.getElementById('nakitUretimFrom').value;
+  const to = document.getElementById('nakitUretimTo').value;
+  const match = document.getElementById('nakitUretimMatch').value || 'Dikim';
+  if (!from || !to) { flash('Başlangıç ve bitiş tarihi seçin.', 'error'); return; }
+  const result = jobDikimCostInRange(from, to, match);
+  const box = document.getElementById('nakitUretimOnizleme');
+  if (!result.jobs.length) {
+    box.innerHTML = 'Bu aralıkta teslim edilmiş, "' + esc(match) + '" kalemi olan iş bulunamadı.';
+    return;
+  }
+  box.innerHTML = '<b>' + fmtCurrency(result.total) + '</b> — ' + result.jobs.length + ' iş: '
+    + result.jobs.map(j => esc(j.job_no) + ' (' + fmtCurrency(j.amount) + ')').join(', ')
+    + '<div class="field" style="margin-top:8px;max-width:220px;"><label>Plana Eklenecek Tutar (₺, düzenlenebilir)</label>'
+    + '<input type="number" step="0.01" id="nakitUretimTutar" value="' + result.total + '"></div>'
+    + '<button type="button" class="btn small" id="btnNakitUretimEkle" style="margin-top:8px;">Plana Ekle</button>';
+  document.getElementById('btnNakitUretimEkle').addEventListener('click', () => {
+    const amount = parseFloat(document.getElementById('nakitUretimTutar').value) || 0;
+    if (amount <= 0) { flash('Tutar 0 olamaz.', 'error'); return; }
+    DATA.cashPlanItems.push({
+      id: nextId(DATA.cashPlanItems), account_id: null, direction: 'Ödeme',
+      title: 'Üretimden Hesaplanan ' + match + ' (' + fmtDate(from) + ' – ' + fmtDate(to) + ')',
+      amount: amount, planned_date: to, status: 'Planlandı', realized_date: null,
+      category: match, source_type: 'job_cost', source_debt_id: null, source_job_id: null,
+      series_id: null, note: result.jobs.map(j=>j.job_no).join(', '),
+    });
+    saveData();
+    flash('Plana eklendi.');
+    renderNakitPlanlama();
+  });
+});
+['nakitFilterAccount','nakitFilterDirection','nakitFilterStatus'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('change', renderNakitTable);
 });
 
 // ---------------- SABİT GİDERLER ----------------
@@ -4851,6 +5449,7 @@ async function restoreYedek(filename) {
     migrateMaliyetRiskPct();
     migrateHedeflerAylik();
     migrateSupplierCategories();
+    migrateNakitPlanlama();
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA));
       localStorage.setItem(AUTH_KEY, JSON.stringify(AUTH));
@@ -5134,6 +5733,7 @@ function renderAll() {
   renderGelir();
   renderGider();
   renderBorc();
+  renderNakitPlanlama();
   renderSabit();
   renderMusteriler();
   renderPotansiyel();
@@ -6996,7 +7596,7 @@ document.getElementById('sdrLeadSearch').addEventListener('input', sdrRenderLead
 const VIEW_RENDER_MAP = {
   dashboard: renderDashboard, isler: renderIsler, gelir: renderGelir,
   gider: () => { renderGider(); renderSabit(); },
-  borc: renderBorc, musteriler: renderMusteriler, potansiyel: renderPotansiyel,
+  borc: renderBorc, nakit: renderNakitPlanlama, musteriler: renderMusteriler, potansiyel: renderPotansiyel,
   uretim: renderUretimTakip, tedarikci: renderTedarikci,
   okul: () => { renderOkulMail(); renderOkulTakip(); },
   hedefler: renderHedefler, maliyet: renderMaliyetSablonlari, gorevler: renderGorevler,
