@@ -563,6 +563,25 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
 #view-nakit .nakit-crunch .ico { font-size:22px; flex-shrink:0; }
 #view-nakit .nakit-crunch.ok { border-top-color:var(--nakit-green); background:#f2fbf6; }
 
+#view-nakit .nakit-cal-nav { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+#view-nakit .nakit-cal-nav #nakitCalLabel { font-weight:700; color:var(--navy); font-size:12.5px; min-width:110px; text-align:center; }
+#view-nakit .nakit-cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
+#view-nakit .nakit-cal-dow { font-size:10.5px; font-weight:700; text-transform:uppercase; color:var(--muted); text-align:center; padding-bottom:4px; }
+#view-nakit .nakit-cal-day { border:1px solid var(--nakit-line); border-radius:8px; padding:6px 6px 8px; min-height:78px; background:#fff; cursor:pointer; display:flex; flex-direction:column; gap:3px; transition:box-shadow .12s; }
+#view-nakit .nakit-cal-day:hover { box-shadow:0 0 0 2px var(--nakit-teal) inset; }
+#view-nakit .nakit-cal-day.out-month { opacity:0.35; }
+#view-nakit .nakit-cal-day.today { border-color:var(--nakit-teal); border-width:2px; }
+#view-nakit .nakit-cal-day.selected { background:var(--nakit-tint); }
+#view-nakit .nakit-cal-day .d { font-size:11.5px; font-weight:700; color:var(--navy); }
+#view-nakit .nakit-cal-day .items { display:flex; flex-direction:column; gap:2px; }
+#view-nakit .nakit-cal-chip { font-size:9.5px; font-weight:700; border-radius:4px; padding:1px 4px; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#view-nakit .nakit-cal-chip.in { background:var(--nakit-green); }
+#view-nakit .nakit-cal-chip.out { background:var(--nakit-red); }
+#view-nakit .nakit-cal-day .more { font-size:9px; color:var(--muted); }
+#view-nakit .nakit-cal-day .bal { font-size:9.5px; color:var(--muted); margin-top:auto; font-variant-numeric:tabular-nums; }
+#view-nakit .nakit-cal-day .bal.neg { color:var(--nakit-red); font-weight:700; }
+@media (max-width:700px){ #view-nakit .nakit-cal-day { min-height:56px; padding:4px; } #view-nakit .nakit-cal-chip { display:none; } }
+
 #view-nakit .nakit-addbar { display:flex; gap:8px; flex-wrap:wrap; }
 #view-nakit table.data-table tbody tr td:first-child { border-left:3px solid transparent; }
 #view-nakit table.data-table tbody tr.nakit-in td:first-child { border-left-color:var(--nakit-green); }
@@ -999,6 +1018,21 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
     <div class="nakit-head"><span class="ic">📈</span><h3>Nakit Akış Projeksiyonu</h3><span class="rule"></span><span class="meta" id="nakitChartMeta"></span></div>
     <div class="panel-box"><div class="chart-wrap" style="height:220px;"><canvas id="nakitChart"></canvas></div></div>
 
+    <div class="nakit-head">
+      <span class="ic">🗓️</span><h3>Takvim Görünümü</h3><span class="rule"></span>
+      <div class="nakit-cal-nav">
+        <button type="button" class="btn small secondary" id="nakitCalPrev">‹</button>
+        <span id="nakitCalLabel"></span>
+        <button type="button" class="btn small secondary" id="nakitCalNext">›</button>
+        <button type="button" class="btn small secondary" id="nakitCalToday">Bugün</button>
+      </div>
+    </div>
+    <div class="panel-box">
+      <div class="nakit-cal-grid" id="nakitCalGrid"></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:8px;">Her günün altındaki tutar, o güne kadarki planlı hareketlerle toplam tahmini bakiyeyi gösterir. Bir güne tıklayınca ayrıntılar aşağıda açılır.</div>
+    </div>
+    <div class="panel-box" id="nakitCalDayBox" style="display:none;"></div>
+
     <div class="nakit-head"><span class="ic">🏦</span><h3>Hesaplar</h3><span class="rule"></span></div>
     <div class="nakit-acc-grid" id="nakitHesapKartlari"></div>
 
@@ -1046,16 +1080,20 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
       </div>
     </div>
 
-    <div class="nakit-head"><span class="ic">🗓️</span><h3>Zaman Çizelgesi</h3><span class="rule"></span></div>
-    <div class="toolbar">
-      <select id="nakitFilterAccount"></select>
-      <select id="nakitFilterDirection"><option value="">Tüm Yönler</option><option value="Tahsilat">Tahsilat</option><option value="Ödeme">Ödeme</option></select>
-      <select id="nakitFilterStatus"><option value="">Tüm Durumlar</option><option value="Planlandı">Planlandı</option><option value="Gerçekleşti">Gerçekleşti</option><option value="İptal">İptal</option></select>
-      <input type="text" id="nakitSearch" placeholder="Başlık, kategori, not ara...">
-      <button type="button" class="btn small secondary" id="nakitExport">⬇ CSV</button>
-      <span class="count" id="nakitCount" style="margin-left:auto;color:var(--muted);font-size:12px;"></span>
+    <div class="nakit-head" id="nakitTableToggle" style="cursor:pointer;">
+      <span class="ic">🗓️</span><h3>Zaman Çizelgesi</h3><span class="rule"></span><span class="meta" id="nakitTableToggleMeta"></span>
     </div>
-    <div class="panel-box"><div class="table-wrap"><table class="data-table" id="nakitTable"></table></div></div>
+    <div id="nakitTableWrap">
+      <div class="toolbar">
+        <select id="nakitFilterAccount"></select>
+        <select id="nakitFilterDirection"><option value="">Tüm Yönler</option><option value="Tahsilat">Tahsilat</option><option value="Ödeme">Ödeme</option></select>
+        <select id="nakitFilterStatus"><option value="">Tüm Durumlar</option><option value="Planlandı">Planlandı</option><option value="Gerçekleşti">Gerçekleşti</option><option value="İptal">İptal</option></select>
+        <input type="text" id="nakitSearch" placeholder="Başlık, kategori, not ara...">
+        <button type="button" class="btn small secondary" id="nakitExport">⬇ CSV</button>
+        <span class="count" id="nakitCount" style="margin-left:auto;color:var(--muted);font-size:12px;"></span>
+      </div>
+      <div class="panel-box"><div class="table-wrap"><table class="data-table" id="nakitTable"></table></div></div>
+    </div>
 
     <div class="nakit-head"><span class="ic">⚙️</span><h3>Hesap Ayarları</h3><span class="rule"></span><span class="meta">gerçek bakiyeyi ara sıra bankadan bakıp buradan güncelleyin</span></div>
     <div class="grid-2" id="nakitHesapAyarlari"></div>
@@ -3791,6 +3829,12 @@ document.getElementById('formBorcOdeme').addEventListener('submit', (e) => {
 // ---------------- NAKİT PLANLAMA (view) ----------------
 let NAKIT_VIEW_DATE = null;       // null = bugün; "Tahmini Bakiye" bu tarihe göre hesaplanır
 let NAKIT_ACTIVE_CHIP = 'today';  // hangi hızlı-tarih çipi seçili (görsel durum)
+let NAKIT_CAL_MONTH = null;       // 'YYYY-MM', null = bugünün ayı
+let NAKIT_CAL_SELECTED = null;    // takvimde seçili gün 'YYYY-MM-DD'
+// Liste (Zaman Çizelgesi) çok uzayabiliyor — bu yüzden tamamı katlanabilir: varsayılan kapalı,
+// başlığa tıklayınca açılır/kapanır, oturum boyunca hatırlanır (BELGE_LIST_COLLAPSED ile aynı
+// desen). Kayıt SİLİNMEZ/gizlenmez — sadece görünüm katlanır.
+let NAKIT_TABLE_COLLAPSED = true;
 function nakitViewDate() { return NAKIT_VIEW_DATE || todayISO(); }
 function nakitDateFromChip(key) {
   if (key === 'today') return todayISO();
@@ -3910,6 +3954,84 @@ function renderNakitHesapKartlari() {
     + '</div>';
   box.innerHTML = html;
 }
+// ---------------- NAKİT PLANLAMA takvim görünümü ----------------
+function nakitCalMonthKey() { return NAKIT_CAL_MONTH || todayISO().slice(0,7); }
+function nakitCalShiftMonth(delta) {
+  const [y,mo] = nakitCalMonthKey().split('-').map(Number);
+  const d = new Date(Date.UTC(y, mo - 1 + delta, 1));
+  NAKIT_CAL_MONTH = d.getUTCFullYear() + '-' + String(d.getUTCMonth()+1).padStart(2,'0');
+  renderNakitCalendar();
+}
+function nakitItemsOnDate(dateStr) {
+  return (DATA.cashPlanItems || []).filter(it => it.status !== 'İptal' && cashItemEffectiveDate(it) === dateStr);
+}
+function renderNakitCalendar() {
+  const grid = document.getElementById('nakitCalGrid');
+  if (!grid) return;
+  const [y,m] = nakitCalMonthKey().split('-').map(Number);
+  const label = document.getElementById('nakitCalLabel');
+  const monthNames = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+  if (label) label.textContent = monthNames[m-1] + ' ' + y;
+
+  // Tüm hesaplama UTC domaininde (Date.UTC + getUTC*) — yerel gece yarısı üzerinden
+  // toISOString() gün kaymasını (bkz. nakitDateFromChip) burada hiç riske atmıyoruz.
+  const startWeekday = (new Date(Date.UTC(y, m-1, 1)).getUTCDay() + 6) % 7; // Pazartesi=0
+  const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const daysInPrevMonth = new Date(Date.UTC(y, m-1, 0)).getUTCDate();
+  const today = todayISO();
+  const dow = ['Pzt','Sal','Çar','Per','Cum','Cmt','Paz'];
+
+  let html = dow.map(d => '<div class="nakit-cal-dow">' + d + '</div>').join('');
+  const totalCells = Math.ceil((startWeekday + daysInMonth) / 7) * 7;
+  for (let i = 0; i < totalCells; i++) {
+    const dayNum = i - startWeekday + 1;
+    let dateStr, outMonth = false, displayNum;
+    if (dayNum < 1) {
+      displayNum = daysInPrevMonth + dayNum; outMonth = true;
+      const pm = m - 1 < 1 ? 12 : m - 1; const py = m - 1 < 1 ? y - 1 : y;
+      dateStr = py + '-' + String(pm).padStart(2,'0') + '-' + String(displayNum).padStart(2,'0');
+    } else if (dayNum > daysInMonth) {
+      displayNum = dayNum - daysInMonth; outMonth = true;
+      const nm = m + 1 > 12 ? 1 : m + 1; const ny = m + 1 > 12 ? y + 1 : y;
+      dateStr = ny + '-' + String(nm).padStart(2,'0') + '-' + String(displayNum).padStart(2,'0');
+    } else {
+      displayNum = dayNum;
+      dateStr = y + '-' + String(m).padStart(2,'0') + '-' + String(displayNum).padStart(2,'0');
+    }
+    const items = nakitItemsOnDate(dateStr);
+    const bal = accountProjectedBalance(null, dateStr);
+    const shown = items.slice(0,2);
+    const extra = items.length - shown.length;
+    html += '<div class="nakit-cal-day' + (outMonth?' out-month':'') + (dateStr===today?' today':'') + (dateStr===NAKIT_CAL_SELECTED?' selected':'') + '" data-date="' + dateStr + '">'
+      + '<div class="d">' + displayNum + '</div>'
+      + '<div class="items">' + shown.map(it => '<span class="nakit-cal-chip ' + (it.direction==='Tahsilat'?'in':'out') + '" title="' + esc(it.title) + '">' + esc(it.title) + '</span>').join('')
+      + (extra > 0 ? '<span class="more">+' + extra + ' daha</span>' : '') + '</div>'
+      + '<div class="bal' + (bal<0?' neg':'') + '">' + fmtCurrency(bal) + '</div>'
+      + '</div>';
+  }
+  grid.innerHTML = html;
+  grid.querySelectorAll('.nakit-cal-day').forEach(cell => cell.addEventListener('click', () => {
+    NAKIT_CAL_SELECTED = cell.dataset.date;
+    renderNakitCalendar();
+    renderNakitCalDayBox();
+  }));
+}
+function renderNakitCalDayBox() {
+  const box = document.getElementById('nakitCalDayBox');
+  if (!box) return;
+  if (!NAKIT_CAL_SELECTED) { box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  const items = nakitItemsOnDate(NAKIT_CAL_SELECTED);
+  const bal = accountProjectedBalance(null, NAKIT_CAL_SELECTED);
+  box.innerHTML = '<h3 style="margin:0 0 8px;font-size:13.5px;color:var(--navy);">' + esc(fmtDate(NAKIT_CAL_SELECTED)) + '</h3>'
+    + '<div style="font-size:12.5px;color:var(--muted);margin-bottom:10px;">Bu tarihte toplam tahmini bakiye: <b class="' + (bal<0?'neg-text':'') + '">' + fmtCurrency(bal) + '</b></div>'
+    + (items.length
+      ? '<ul class="stat-list">' + items.map(it => {
+          const a = cashAccountById(it.account_id);
+          return '<li><span>' + esc(it.title) + (a?(' — '+esc(a.name)):'') + '</span><b class="' + (it.direction==='Tahsilat'?'pos-text':'neg-text') + '">' + (it.direction==='Tahsilat'?'+':'-') + fmtCurrency(it.amount) + '</b></li>';
+        }).join('') + '</ul>'
+      : '<div style="font-size:12.5px;color:var(--muted);">Bu tarihte planlı bir hareket yok.</div>');
+}
 function renderNakitFormSelects() {
   const accounts = DATA.bankAccounts || [];
   const accOptsHtml = accounts.map(a => '<option value="' + a.id + '">' + esc(a.name) + '</option>').join('');
@@ -3940,7 +4062,12 @@ function cashFilteredItems() {
   return rows;
 }
 function renderNakitTable() {
-  renderTable('nakitTable', 'nakitSearch', 'nakitCount', cashFilteredItems(), [
+  const rows = cashFilteredItems();
+  const wrap = document.getElementById('nakitTableWrap');
+  const meta = document.getElementById('nakitTableToggleMeta');
+  if (meta) meta.textContent = rows.length + ' kayıt — ' + (NAKIT_TABLE_COLLAPSED ? '▸ Göster' : '▾ Gizle');
+  if (wrap) wrap.style.display = NAKIT_TABLE_COLLAPSED ? 'none' : '';
+  renderTable('nakitTable', 'nakitSearch', 'nakitCount', rows, [
     {key:'planned_date', label:'Tarih', render:it=>fmtDate(it.planned_date)},
     {key:'title', label:'Başlık'},
     {key:'account', label:'Hesap', render:it=>{ const a=cashAccountById(it.account_id); return a?esc(a.name):'<span style="color:var(--muted)">—</span>'; }, filterVal:it=>{ const a=cashAccountById(it.account_id); return a?a.name:''; }},
@@ -4025,6 +4152,8 @@ function renderNakitPlanlama() {
   renderNakitHero();
   renderNakitCrunch();
   renderNakitChart();
+  renderNakitCalendar();
+  renderNakitCalDayBox();
   renderNakitHesapKartlari();
   renderNakitFormSelects();
   renderNakitTable();
@@ -4115,6 +4244,16 @@ document.getElementById('btnNakitUretimHesapla').addEventListener('click', () =>
 ['nakitFilterAccount','nakitFilterDirection','nakitFilterStatus'].forEach(id => {
   const el = document.getElementById(id);
   if (el) el.addEventListener('change', renderNakitTable);
+});
+document.getElementById('nakitCalPrev').addEventListener('click', () => nakitCalShiftMonth(-1));
+document.getElementById('nakitCalNext').addEventListener('click', () => nakitCalShiftMonth(1));
+document.getElementById('nakitCalToday').addEventListener('click', () => {
+  NAKIT_CAL_MONTH = null; NAKIT_CAL_SELECTED = todayISO();
+  renderNakitCalendar(); renderNakitCalDayBox();
+});
+document.getElementById('nakitTableToggle').addEventListener('click', () => {
+  NAKIT_TABLE_COLLAPSED = !NAKIT_TABLE_COLLAPSED;
+  renderNakitTable();
 });
 
 // ---------------- SABİT GİDERLER ----------------
