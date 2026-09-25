@@ -1019,6 +1019,13 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
         <h2>💰 Nakit Planlama</h2>
         <div class="ah-sub">İki hesap, tek görünüm — planlı ödeme ve tahsilatlarla nakit dengenizi planlayın. Sistem karar vermez; hesaplar ve sıkışma noktalarını gösterir.</div>
         <div class="nakit-chips" id="nakitDateChips"></div>
+        <!-- NAKIT-EASTER-EGG start: deneme özelliği, kaldırılacaksa bu label + ilgili HTML/JS bloklarını sil -->
+        <label id="nakitAudioToggleWrap" style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:11.5px;color:rgba(255,255,255,0.75);cursor:pointer;">
+          <input type="checkbox" id="nakitAudioToggle"> 🔔 Bakiye şarkı uyarısı (deneme)
+        </label>
+        <div id="nakitYtNeg" style="position:absolute;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;"></div>
+        <div id="nakitYtPos" style="position:absolute;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;"></div>
+        <!-- NAKIT-EASTER-EGG end -->
       </div>
       <div class="nakit-hero-stats" id="nakitHeroStats"></div>
     </div>
@@ -3921,7 +3928,79 @@ function renderNakitHero() {
   box.innerHTML = ''
     + '<div class="hs"><div class="k">Gerçek Bakiye (bugün)</div><div class="v">' + fmtCurrency(realTotal) + '</div></div>'
     + '<div class="hs"><div class="k">Tahmini Bakiye (' + esc(fmtDate(viewDate)) + ')</div><div class="v' + (projTotal<0?' neg':'') + '">' + fmtCurrency(projTotal) + '</div></div>';
+  nakitAudioToggleInit(); nakitAudioCheckBalance(projTotal); // NAKIT-EASTER-EGG
 }
+
+// NAKIT-EASTER-EGG start — deneme özelliği (kullanıcı isteğiyle eklendi, kaldırılacaksa bu blok +
+// yukarıdaki renderNakitHero'daki tek satır + HTML'deki nakitAudioToggleWrap/nakitYtNeg/nakitYtPos silinir)
+const NAKIT_AUDIO_NEG_ID = '3f_P7IXzkhg';   // tahmini bakiye eksiye düşünce
+const NAKIT_AUDIO_POS_ID = '9jlv6zc8L2o';   // tahmini bakiye artıya geçince (sözlü kısım)
+const NAKIT_AUDIO_POS_START = 32;           // sözlü kısmın başladığı saniye
+let NAKIT_AUDIO_ENABLED = false;
+let NAKIT_AUDIO_SIGN = null;                // null = henüz baz alınmadı
+let NAKIT_YT_NEG = null, NAKIT_YT_POS = null, NAKIT_YT_READY = false;
+let NAKIT_AUDIO_TIMER = null;
+
+function nakitAudioLoadApi() {
+  if (window.YT && window.YT.Player) { nakitAudioInitPlayers(); return; }
+  if (document.getElementById('nakitYtApiScript')) return;
+  const prevReady = window.onYouTubeIframeAPIReady;
+  window.onYouTubeIframeAPIReady = function() { if (prevReady) prevReady(); nakitAudioInitPlayers(); };
+  const s = document.createElement('script');
+  s.id = 'nakitYtApiScript';
+  s.src = 'https://www.youtube.com/iframe_api';
+  document.head.appendChild(s);
+}
+function nakitAudioInitPlayers() {
+  if (NAKIT_YT_READY) return;
+  if (!document.getElementById('nakitYtNeg') || !document.getElementById('nakitYtPos')) return;
+  const opts = { height: '1', width: '1', playerVars: { autoplay: 0, controls: 0, disablekb: 1, modestbranding: 1, rel: 0 } };
+  NAKIT_YT_NEG = new YT.Player('nakitYtNeg', Object.assign({ videoId: NAKIT_AUDIO_NEG_ID }, opts));
+  NAKIT_YT_POS = new YT.Player('nakitYtPos', Object.assign({ videoId: NAKIT_AUDIO_POS_ID }, opts));
+  NAKIT_YT_READY = true;
+}
+function nakitAudioStopAll() {
+  if (NAKIT_AUDIO_TIMER) { clearTimeout(NAKIT_AUDIO_TIMER); NAKIT_AUDIO_TIMER = null; }
+  if (NAKIT_YT_NEG && NAKIT_YT_NEG.pauseVideo) NAKIT_YT_NEG.pauseVideo();
+  if (NAKIT_YT_POS && NAKIT_YT_POS.pauseVideo) NAKIT_YT_POS.pauseVideo();
+}
+function nakitAudioPlay(kind) {
+  if (!NAKIT_AUDIO_ENABLED || !NAKIT_YT_READY) return;
+  nakitAudioStopAll();
+  const player = kind === 'neg' ? NAKIT_YT_NEG : NAKIT_YT_POS;
+  if (!player || !player.seekTo) return;
+  player.seekTo(kind === 'neg' ? 0 : NAKIT_AUDIO_POS_START, true);
+  player.playVideo();
+  NAKIT_AUDIO_TIMER = setTimeout(() => { if (player.pauseVideo) player.pauseVideo(); NAKIT_AUDIO_TIMER = null; }, 30000);
+}
+function nakitAudioCheckBalance(balance) {
+  if (!NAKIT_AUDIO_ENABLED) return;
+  const sign = balance < 0 ? 'neg' : 'pos';
+  if (NAKIT_AUDIO_SIGN === null) { NAKIT_AUDIO_SIGN = sign; return; } // ilk hesap: baz al, çalma
+  if (sign !== NAKIT_AUDIO_SIGN) { NAKIT_AUDIO_SIGN = sign; nakitAudioPlay(sign); }
+}
+function nakitAudioToggleInit() {
+  const cb = document.getElementById('nakitAudioToggle');
+  if (!cb || cb.dataset.bound) return;
+  cb.dataset.bound = '1';
+  cb.checked = NAKIT_AUDIO_ENABLED;
+  cb.addEventListener('change', () => {
+    NAKIT_AUDIO_ENABLED = cb.checked;
+    if (NAKIT_AUDIO_ENABLED) {
+      NAKIT_AUDIO_SIGN = null; // açılınca mevcut durumu baz al, hemen çalma
+      nakitAudioLoadApi();
+      // tarayıcının otomatik oynatma iznini bu tıklamayla al (kısa aç-kapa)
+      setTimeout(() => {
+        [NAKIT_YT_NEG, NAKIT_YT_POS].forEach(p => {
+          if (p && p.playVideo) { p.playVideo(); setTimeout(() => p.pauseVideo && p.pauseVideo(), 200); }
+        });
+      }, 500);
+    } else {
+      nakitAudioStopAll();
+    }
+  });
+}
+// NAKIT-EASTER-EGG end
 function cashFurthestDate() {
   const dates = (DATA.cashPlanItems || []).filter(it => it.status !== 'İptal').map(it => cashItemEffectiveDate(it)).filter(Boolean);
   if (!dates.length) return null;
