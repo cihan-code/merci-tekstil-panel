@@ -1065,8 +1065,9 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
         <button type="button" class="op-btn op-btn-main" id="opPlanPrint">PDF indir</button>
       </div>
     </div>
+    <div id="opFeedback"></div>
     <div id="opPlanBody"></div>
-    <p class="op-foot">Plan, Üretim Takip sekmesindeki açık kayıtlardan hazırlanır; panelde hiçbir veri değişmez. Kayıtta baskı/nakış bilgisi olmadığı için ilgili adımlarda teyit istenir.</p>
+    <p class="op-foot">Plan, Üretim Takip sekmesindeki açık kayıtlardan hazırlanır; panelde hiçbir veri değişmez. Gün içi bildirimler ajan günlüğüne kaydedilir ve planı yeniler. Eksik bilgiler için teyit istenir.</p>
   </section>
 
   <section class="view" id="view-uretim">
@@ -1583,6 +1584,8 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
 
 <footer>Merci Tekstil Canlı Yönetim Paneli · Bu bilgisayardaki tarayıcıda saklanır · Yalnızca yetkili yöneticiler tarafından kullanılır</footer>
 
+<link rel="stylesheet" href="assets/operations.css">
+<script src="assets/operations.js"></script>
 </body>
 </html>
 
@@ -7014,11 +7017,14 @@ function opPlanBuild() {
   const owners = Array.from(new Set(all.map(r => r.u.assigned_to).filter(Boolean))).sort();
   const hasUnowned = all.some(r => !r.u.assigned_to);
   const rows = all.filter(r => !OPPLAN_WHO || (OPPLAN_WHO === '__none' ? !r.u.assigned_to : r.u.assigned_to === OPPLAN_WHO));
+  if (typeof operationsApply === 'function') operationsApply(all);
   const route = Array.from(new Set(OPPLAN_STAGES.map(x => x[1])));
+  if (rows.some(r => r.section === 'Gün içi revizyon')) route.unshift('Gün içi revizyon');
+  if (rows.some(r => r.section === 'Tamamlanan')) route.push('Tamamlanan');
   if (rows.some(r => r.section === 'Kontrol gerekli')) route.push('Kontrol gerekli');
   const groups = route.map(sec => [sec, rows.filter(r => r.section === sec).sort((a, b) =>
     (b.late - a.late) || String(a.u.est_delivery || '9999').localeCompare(String(b.u.est_delivery || '9999')))]);
-  return { today, route, groups, owners, hasUnowned, total: rows.length, late: rows.filter(r => r.late > 0).length };
+  return { today, route, groups, owners, hasUnowned, total: rows.filter(r => r.u.status !== 'Teslim Edildi').length, late: rows.filter(r => r.u.status !== 'Teslim Edildi' && r.late > 0).length };
 }
 
 function opPlanSummary(plan) {
@@ -7038,7 +7044,7 @@ function opPlanRouteHtml(plan) {
 }
 
 function opPlanRowsHtml(plan) {
-  if (!plan.total) return '<p class="op-empty">Bu görünümde açık iş yok. Yeni iş eklemek için Üretim Takip sekmesini kullanın.</p>';
+  if (!plan.groups.some(g => g[1].length)) return '<p class="op-empty">Bu görünümde açık iş yok. Yeni iş eklemek için Üretim Takip sekmesini kullanın.</p>';
   return plan.groups.filter(g => g[1].length).map(([sec, rows]) => {
     const idx = plan.groups.findIndex(g => g[0] === sec);
     return '<section class="op-sec" id="op-sec-' + idx + '"><h3>' + esc(sec) + '<small>' + rows.length + ' iş</small></h3><ul class="op-rows">' +
@@ -7062,7 +7068,7 @@ function opPlanRowsHtml(plan) {
 
 function opPlanDaily(plan) {
   const rows = plan.groups.flatMap(g => g[1]);
-  const by = st => rows.filter(r => r.u.status === st);
+  const by = st => rows.filter(r => !r.feedback && r.u.status === st);
   const urgent = (a, b) => (b.late - a.late) ||
     String(a.u.est_delivery || '9999').localeCompare(String(b.u.est_delivery || '9999')) || (a.u.id - b.u.id);
   const label = r => String(r.u.customer_name || '(adsız kayıt)').trim() + (r.u.quantity ? ' (' + fmtNum(r.u.quantity) + ' adet)' : '');
@@ -7071,6 +7077,7 @@ function opPlanDaily(plan) {
   const sections = [];
   const add = (title, lines, ordered) => { if (lines.length) sections.push({ title, lines, ordered: !!ordered }); };
 
+  add('Bildirimlere göre güncellenen işler', rows.filter(r => r.feedback).map(r => label(r) + ': ' + r.action));
   const ready = by('Kumaş Geldi').sort(urgent);
   add('Bugün kesilecek', ready.slice(0, 1).map(label));
   add('Kesim sırasında bekleyen (bugün kesilmeyecek)', ready.slice(1).map(label));
@@ -7109,6 +7116,7 @@ function renderOperasyonPlan() {
   const body = document.getElementById('opPlanBody');
   if (!body) return;
   try {
+    if (typeof operationsMount === 'function') operationsMount();
     const plan = opPlanBuild();
     document.getElementById('opPlanMeta').textContent = opPlanSummary(plan);
     document.getElementById('opPlanWho').innerHTML = opPlanWhoHtml(plan);
@@ -7137,7 +7145,10 @@ function opPlanPrint() {
     opPlanDailyHtml(plan) + opPlanRouteHtml(plan) + opPlanRowsHtml(plan) + '</body></html>');
   w.document.close(); w.focus(); setTimeout(() => w.print(), 600);
 }
-document.getElementById('opPlanRefresh')?.addEventListener('click', renderOperasyonPlan);
+document.getElementById('opPlanRefresh')?.addEventListener('click', () => {
+  if (typeof operationsRefresh === 'function') operationsRefresh();
+  else renderOperasyonPlan();
+});
 document.getElementById('opPlanPrint')?.addEventListener('click', opPlanPrint);
 
 const VIEW_RENDER_MAP = {
