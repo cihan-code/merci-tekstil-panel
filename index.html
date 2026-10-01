@@ -522,19 +522,8 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
 #view-nakit table.data-table tbody tr.nakit-out td:first-child { border-left-color:var(--nakit-red); }
 #view-nakit table.data-table tbody tr.nakit-cancelled { opacity:0.5; }
 @media (max-width:600px){ #view-nakit .nakit-hero-stats { gap:14px; } }
-/* ---- Operasyon Planı sekmesi ---- */
-.op-meta { font-size:12.5px; color:var(--muted); margin:-6px 0 14px; }
-.op-sec { margin-bottom:16px; }
-.op-sec h3 { margin:0 0 6px; font-size:14px; color:var(--navy); }
-.op-sec h3 span { font-weight:400; color:var(--muted); font-size:12px; }
-.op-table { width:100%; border-collapse:collapse; font-size:12.5px; background:var(--card); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
-.op-table th { background:var(--navy); color:#fff; text-align:left; padding:7px 9px; font-weight:600; }
-.op-table td { padding:7px 9px; border-top:1px solid var(--border); vertical-align:top; }
-.op-table tr.op-late td { background:#fdecea; }
-.op-table .op-badge { display:inline-block; font-size:10.5px; font-weight:700; color:#fff; background:var(--red); border-radius:4px; padding:1px 6px; margin-top:2px; }
-.op-table .op-due { color:var(--accent); font-weight:600; font-size:11.5px; }
-.op-foot { font-size:11.5px; color:var(--muted); margin-top:10px; }
 </style>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
 
@@ -1064,17 +1053,20 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
   </section>
 
   <!-- ÜRETİM TAKİP -->
-  <section class="view" id="view-opplan">
-    <div class="page-header">
-      <h2>📋 Operasyon Planı</h2>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button type="button" class="btn" id="opPlanRefresh">↻ Yenile</button>
-        <button type="button" class="btn" id="opPlanPrint">⬇ PDF indir / Yazdır</button>
+  <section class="view opplan" id="view-opplan">
+    <div class="op-head">
+      <div>
+        <h2>Operasyon planı</h2>
+        <div class="op-date" id="opPlanMeta"></div>
+      </div>
+      <div class="op-tools">
+        <div class="op-who" id="opPlanWho" role="group" aria-label="Sorumluya göre filtrele"></div>
+        <button type="button" class="op-btn" id="opPlanRefresh">Yenile</button>
+        <button type="button" class="op-btn op-btn-main" id="opPlanPrint">PDF indir</button>
       </div>
     </div>
-    <div class="op-meta" id="opPlanMeta"></div>
     <div id="opPlanBody"></div>
-    <div class="op-foot">Plan, Üretim Takip sekmesindeki açık kayıtlardan otomatik hazırlanır; panelde hiçbir veri değiştirilmez. "Yapılacak" metni aşamaya göre genel bir hatırlatmadır: baskı/nakış bilgisi kayıtta olmadığı için teyit istenir.</div>
+    <p class="op-foot">Plan, Üretim Takip sekmesindeki açık kayıtlardan hazırlanır; panelde hiçbir veri değişmez. Kayıtta baskı/nakış bilgisi olmadığı için ilgili adımlarda teyit istenir.</p>
   </section>
 
   <section class="view" id="view-uretim">
@@ -6934,6 +6926,76 @@ document.getElementById('sdrQuery').addEventListener('keydown', e => { if (e.key
 document.getElementById('sdrLeadSearch').addEventListener('input', sdrRenderLeadTable);
 
 // ---------------- OPERASYON PLANI (Üretim Takip kayıtlarından günlük tablo; salt okunur) ----------------
+const OPPLAN_FONT_LINK = '<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">';
+const OPPLAN_CSS = `
+.opplan { --ink:#2A2F3A; --indigo:#1D2B5C; --chalk:#F4F6F8; --rule:#D5DBE3; --late:#B3261E; --due:#D9A400; --due-ink:#7A5B00; --mute:#5F6877;
+  font-family:"Barlow Semi Condensed",-apple-system,"Segoe UI",Arial,sans-serif; color:var(--ink); }
+.opplan *, .opplan *::before, .opplan *::after { box-sizing:border-box; }
+.opplan .op-head { display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:14px; margin-bottom:22px; }
+.opplan .op-head h2 { margin:0; font-size:28px; line-height:1.1; font-weight:700; color:var(--indigo); }
+.opplan .op-date { margin-top:4px; font-size:16px; color:var(--mute); }
+.opplan .op-tools { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.opplan .op-btn { font:inherit; font-weight:600; font-size:15px; padding:7px 14px; border:1.5px solid var(--indigo); background:transparent; color:var(--indigo); border-radius:6px; cursor:pointer; }
+.opplan .op-btn[aria-pressed="true"], .opplan .op-btn-main { background:var(--indigo); color:#fff; }
+.opplan .op-btn:focus-visible, .opplan .op-node:focus-visible { outline:3px solid var(--due); outline-offset:2px; }
+.opplan .op-who { display:flex; gap:6px; flex-wrap:wrap; margin-right:8px; }
+.opplan .op-route { list-style:none; display:flex; margin:0 0 26px; padding:0; }
+.opplan .op-route li { flex:1; position:relative; min-width:0; }
+.opplan .op-route li::before { content:""; position:absolute; top:11px; left:0; right:0; border-top:2px dashed var(--indigo); opacity:.55; animation:op-stitch .5s ease-out both; }
+.opplan .op-route li:first-child::before { left:11px; }
+.opplan .op-route li:last-child::before { right:calc(100% - 11px); }
+.opplan .op-route li:nth-child(2)::before { animation-delay:.12s; } .opplan .op-route li:nth-child(3)::before { animation-delay:.24s; }
+.opplan .op-route li:nth-child(4)::before { animation-delay:.36s; } .opplan .op-route li:nth-child(5)::before { animation-delay:.48s; }
+@keyframes op-stitch { from { clip-path:inset(0 100% 0 0); } to { clip-path:inset(0 0 0 0); } }
+@media (prefers-reduced-motion:reduce) { .opplan .op-route li::before { animation:none; } }
+.opplan .op-node { position:relative; display:block; width:100%; text-align:left; background:none; border:0; padding:0; cursor:pointer; font:inherit; color:inherit; }
+.opplan .op-node[disabled] { cursor:default; }
+.opplan .op-dot { display:block; width:22px; height:22px; border-radius:50%; background:var(--chalk); border:3px solid var(--indigo); position:relative; z-index:1; }
+.opplan .op-node.has-late .op-dot { border-color:var(--late); background:var(--late); }
+.opplan .op-node[disabled] .op-dot { border-color:var(--rule); }
+.opplan .op-node-name { display:block; margin-top:8px; font-weight:700; font-size:16px; color:var(--indigo); }
+.opplan .op-node[disabled] .op-node-name { color:var(--mute); font-weight:500; }
+.opplan .op-node-count { display:block; font-size:14px; color:var(--mute); }
+.opplan .op-node-late { display:block; font-size:14px; font-weight:700; color:var(--late); }
+.opplan .op-sec { margin:0 0 24px; scroll-margin-top:12px; }
+.opplan .op-sec h3 { margin:0 0 8px; font-size:20px; font-weight:700; color:var(--indigo); }
+.opplan .op-sec h3 small { margin-left:8px; font-size:15px; font-weight:500; color:var(--mute); }
+.opplan .op-rows { list-style:none; margin:0; padding:0; border-top:1px solid var(--rule); }
+.opplan .op-row { position:relative; display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,2fr) 140px 150px; gap:4px 20px; padding:12px 12px 12px 16px; border-bottom:1px solid var(--rule); background:#fff; }
+.opplan .op-row::before { content:""; position:absolute; left:0; top:0; bottom:0; width:4px; }
+.opplan .op-row.is-late::before { background:var(--late); }
+.opplan .op-row.is-due::before { background:var(--due); }
+.opplan .op-cust { font-weight:700; font-size:18px; line-height:1.2; }
+.opplan .op-sub { font-size:14px; color:var(--mute); }
+.opplan .op-todo { font-size:16px; line-height:1.35; }
+.opplan .op-note { margin-top:3px; font-size:14px; color:var(--mute); }
+.opplan .op-flag { margin-top:3px; font-size:14px; font-weight:700; color:var(--due-ink); }
+.opplan .op-owner, .opplan .op-when { font-size:16px; font-variant-numeric:tabular-nums; }
+.opplan .op-late-txt { display:block; font-weight:700; color:var(--late); }
+.opplan .op-none { color:var(--mute); }
+.opplan .op-empty { padding:28px 0; font-size:18px; }
+.opplan .op-foot { margin-top:14px; font-size:14px; color:var(--mute); max-width:75ch; }
+@media (max-width:760px) {
+  .opplan .op-route { display:grid; grid-template-columns:repeat(2,1fr); gap:16px; }
+  .opplan .op-route li::before { display:none; }
+  .opplan .op-row { grid-template-columns:1fr; }
+}
+@media print {
+  .opplan .op-tools, .opplan .op-foot { display:none; }
+  .opplan .op-row, .opplan .op-sec h3 { break-inside:avoid; }
+  .opplan .op-row::before, .opplan .op-dot { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .opplan .op-route li::before { animation:none; }
+}`;
+(function () {
+  try {
+    if (document.getElementById('opPlanStyle')) return;
+    const st = document.createElement('style'); st.id = 'opPlanStyle'; st.textContent = OPPLAN_CSS;
+    document.head.appendChild(st);
+  } catch (e) { /* stil yüklenemezse sekme yine de çalışır */ }
+})();
+
+let OPPLAN_WHO = '';   // '' = herkes, '__none' = sorumlusu olmayanlar, diğer = kişi adı
+
 function opPlanStages() { return [
   ['Kumaş Bekleniyor', 'Kumaş', 'Kumaşın geldiğini teyit et'],
   ['Kumaş Geldi', 'Kesim', 'Kesime başla'],
@@ -6946,7 +7008,7 @@ function opPlanStages() { return [
 function opPlanBuild() {
   const OPPLAN_STAGES = opPlanStages();
   const today = todayISO();
-  const rows = (DATA.uretimTakip || []).filter(u => u.status !== 'Teslim Edildi').map(u => {
+  const all = (DATA.uretimTakip || []).filter(u => u.status !== 'Teslim Edildi').map(u => {
     const st = OPPLAN_STAGES.find(x => x[0] === u.status);
     return {
       u, section: st ? st[1] : 'Kontrol gerekli',
@@ -6955,30 +7017,59 @@ function opPlanBuild() {
       followDue: !!(u.follow_up_date && u.follow_up_date <= today),
     };
   });
-  const order = Array.from(new Set(OPPLAN_STAGES.map(x => x[1]))).concat('Kontrol gerekli');
-  const groups = order.map(sec => [sec, rows.filter(r => r.section === sec).sort((a, b) =>
-    (b.late - a.late) || String(a.u.est_delivery || '9999').localeCompare(String(b.u.est_delivery || '9999')))]
-  ).filter(g => g[1].length);
-  return { today, groups, total: rows.length, late: rows.filter(r => r.late > 0).length };
+  const owners = Array.from(new Set(all.map(r => r.u.assigned_to).filter(Boolean))).sort();
+  const hasUnowned = all.some(r => !r.u.assigned_to);
+  const rows = all.filter(r => !OPPLAN_WHO || (OPPLAN_WHO === '__none' ? !r.u.assigned_to : r.u.assigned_to === OPPLAN_WHO));
+  const route = Array.from(new Set(OPPLAN_STAGES.map(x => x[1])));
+  if (rows.some(r => r.section === 'Kontrol gerekli')) route.push('Kontrol gerekli');
+  const groups = route.map(sec => [sec, rows.filter(r => r.section === sec).sort((a, b) =>
+    (b.late - a.late) || String(a.u.est_delivery || '9999').localeCompare(String(b.u.est_delivery || '9999')))]);
+  return { today, route, groups, owners, hasUnowned, total: rows.length, late: rows.filter(r => r.late > 0).length };
 }
 
-function opPlanHtml(plan) {
-  if (!plan.groups.length) return '<p>Bugün için açık üretim kaydı yok.</p>';
-  return plan.groups.map(([sec, rows]) =>
-    '<div class="op-sec"><h3>' + esc(sec) + ' <span>(' + rows.length + ')</span></h3>' +
-    '<table class="op-table"><thead><tr><th>Müşteri / İş</th><th>Adet</th><th>Aşama</th><th>Yapılacak</th><th>Sorumlu</th><th>Teslim</th><th>Not</th></tr></thead><tbody>' +
-    rows.map(r => {
-      const u = r.u;
-      const notes = [u.note, u.problem_note].filter(Boolean).join(' · ');
-      return '<tr class="' + (r.late > 0 ? 'op-late' : '') + '">' +
-        '<td>' + esc(u.customer_name || '(adsız kayıt)') + '</td>' +
-        '<td>' + (u.quantity ? fmtNum(u.quantity) : '—') + '</td>' +
-        '<td>' + esc(u.status) + '</td>' +
-        '<td>' + esc(r.action) + (r.followDue ? '<div class="op-due">Takip günü geldi</div>' : '') + '</td>' +
-        '<td>' + esc(u.assigned_to || '—') + '</td>' +
-        '<td>' + fmtDate(u.est_delivery) + (r.late > 0 ? '<div><span class="op-badge">GECİKMİŞ ' + r.late + ' gün</span></div>' : '') + '</td>' +
-        '<td>' + (notes ? esc(notes) : '—') + '</td></tr>';
-    }).join('') + '</tbody></table></div>').join('');
+function opPlanSummary(plan) {
+  const d = new Date(plan.today + 'T00:00:00');
+  const dateText = isNaN(d) ? plan.today : d.toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  return dateText + '. ' + plan.total + ' açık iş' + (plan.late ? ', ' + plan.late + ' gecikmiş.' : '.');
+}
+
+function opPlanRouteHtml(plan) {
+  return '<ol class="op-route">' + plan.groups.map(([sec, rows], i) => {
+    const late = rows.filter(r => r.late > 0).length;
+    return '<li><button type="button" class="op-node' + (late ? ' has-late' : '') + '" data-sec="' + i + '"' + (rows.length ? '' : ' disabled') + '>' +
+      '<span class="op-dot"></span><span class="op-node-name">' + esc(sec) + '</span>' +
+      '<span class="op-node-count">' + (rows.length ? rows.length + ' iş' : 'İş yok') + '</span>' +
+      (late ? '<span class="op-node-late">' + late + ' gecikmiş</span>' : '') + '</button></li>';
+  }).join('') + '</ol>';
+}
+
+function opPlanRowsHtml(plan) {
+  if (!plan.total) return '<p class="op-empty">Bu görünümde açık iş yok. Yeni iş eklemek için Üretim Takip sekmesini kullanın.</p>';
+  return plan.groups.filter(g => g[1].length).map(([sec, rows]) => {
+    const idx = plan.groups.findIndex(g => g[0] === sec);
+    return '<section class="op-sec" id="op-sec-' + idx + '"><h3>' + esc(sec) + '<small>' + rows.length + ' iş</small></h3><ul class="op-rows">' +
+      rows.map(r => {
+        const u = r.u;
+        const cls = r.late > 0 ? ' is-late' : (r.followDue ? ' is-due' : '');
+        const when = r.late > 0
+          ? '<span class="op-late-txt">' + r.late + ' gün gecikti</span>Teslim ' + esc(fmtDate(u.est_delivery))
+          : (u.est_delivery ? 'Teslim ' + esc(fmtDate(u.est_delivery)) : '<span class="op-none">Teslim tarihi yok</span>');
+        const notes = [u.note, u.problem_note].filter(Boolean).join('. ');
+        return '<li class="op-row' + cls + '">' +
+          '<div><div class="op-cust">' + esc(u.customer_name || '(adsız kayıt)') + '</div>' +
+          '<div class="op-sub">' + (u.quantity ? esc(fmtNum(u.quantity)) + ' adet, ' : '') + esc(u.status) + '</div></div>' +
+          '<div class="op-todo">' + esc(r.action) + (notes ? '<div class="op-note">' + esc(notes) + '</div>' : '') +
+          (r.followDue ? '<div class="op-flag">Takip günü geldi</div>' : '') + '</div>' +
+          '<div class="op-owner">' + (u.assigned_to ? esc(u.assigned_to) : '<span class="op-none">Sorumlu yok</span>') + '</div>' +
+          '<div class="op-when">' + when + '</div></li>';
+      }).join('') + '</ul></section>';
+  }).join('');
+}
+
+function opPlanWhoHtml(plan) {
+  const chip = (val, label) => '<button type="button" class="op-btn" data-who="' + esc(val) + '" aria-pressed="' + (OPPLAN_WHO === val) + '">' + esc(label) + '</button>';
+  if (!plan.owners.length && !plan.hasUnowned) return '';
+  return chip('', 'Herkes') + plan.owners.map(o => chip(o, o)).join('') + (plan.hasUnowned ? chip('__none', 'Sorumlusu yok') : '');
 }
 
 function renderOperasyonPlan() {
@@ -6986,11 +7077,20 @@ function renderOperasyonPlan() {
   if (!body) return;
   try {
     const plan = opPlanBuild();
-    document.getElementById('opPlanMeta').textContent =
-      fmtDate(plan.today) + ' · ' + plan.total + ' açık iş, ' + plan.late + ' gecikmiş';
-    body.innerHTML = opPlanHtml(plan);
+    document.getElementById('opPlanMeta').textContent = opPlanSummary(plan);
+    document.getElementById('opPlanWho').innerHTML = opPlanWhoHtml(plan);
+    body.innerHTML = opPlanRouteHtml(plan) + opPlanRowsHtml(plan);
+    if (body.querySelectorAll) {
+      body.querySelectorAll('.op-node').forEach(b => b.addEventListener('click', () => {
+        const t = document.getElementById('op-sec-' + b.dataset.sec);
+        if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }));
+      document.getElementById('opPlanWho').querySelectorAll('[data-who]').forEach(b => b.addEventListener('click', () => {
+        OPPLAN_WHO = b.dataset.who; renderOperasyonPlan();
+      }));
+    }
   } catch (e) {
-    body.textContent = 'Plan hazırlanamadı: ' + e.message;
+    body.textContent = 'Plan hazırlanamadı: ' + e.message + '. Sayfayı yenileyip tekrar deneyin.';
   }
 }
 
@@ -6998,13 +7098,11 @@ function opPlanPrint() {
   const plan = opPlanBuild();
   const w = window.open('', '_blank');
   if (!w) { alert('Yazdırma penceresi engellendi. Tarayıcıda bu site için açılır pencerelere izin verin.'); return; }
-  const css = 'body{font-family:Arial,sans-serif;font-size:11px;margin:12mm 10mm}h1{font-size:18px;margin:0 0 4px}h3{font-size:13px;margin:14px 0 5px}' +
-    'table{width:100%;border-collapse:collapse}th{background:#12213b;color:#fff;text-align:left;padding:4px 6px}td{border:1px solid #c9d0dc;padding:4px 6px;vertical-align:top}' +
-    'tr.op-late td{background:#fdecea}.op-badge{background:#c0392b;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px}.op-due{color:#b06d1f;font-weight:700}' +
-    'tr{break-inside:avoid}@page{size:A4 landscape;margin:8mm}';
-  w.document.write('<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Günlük Üretim Planı ' + esc(plan.today) + '</title><style>' + css + '</style></head><body>' +
-    '<h1>Günlük Üretim Planı — ' + esc(fmtDate(plan.today)) + '</h1><div>' + plan.total + ' açık iş, ' + plan.late + ' gecikmiş.</div>' + opPlanHtml(plan) + '</body></html>');
-  w.document.close(); w.focus(); setTimeout(() => w.print(), 300);
+  w.document.write('<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Günlük Üretim Planı ' + esc(plan.today) + '</title>' + OPPLAN_FONT_LINK +
+    '<style>body{margin:12mm 10mm;background:#fff}@page{size:A4 landscape;margin:8mm}</style><style>' + OPPLAN_CSS + '</style></head><body class="opplan">' +
+    '<div class="op-head"><div><h2>Günlük üretim planı</h2><div class="op-date">' + esc(opPlanSummary(plan)) + '</div></div></div>' +
+    opPlanRouteHtml(plan) + opPlanRowsHtml(plan) + '</body></html>');
+  w.document.close(); w.focus(); setTimeout(() => w.print(), 600);
 }
 document.getElementById('opPlanRefresh')?.addEventListener('click', renderOperasyonPlan);
 document.getElementById('opPlanPrint')?.addEventListener('click', opPlanPrint);
