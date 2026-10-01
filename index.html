@@ -522,6 +522,18 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
 #view-nakit table.data-table tbody tr.nakit-out td:first-child { border-left-color:var(--nakit-red); }
 #view-nakit table.data-table tbody tr.nakit-cancelled { opacity:0.5; }
 @media (max-width:600px){ #view-nakit .nakit-hero-stats { gap:14px; } }
+/* ---- Operasyon Planı sekmesi ---- */
+.op-meta { font-size:12.5px; color:var(--muted); margin:-6px 0 14px; }
+.op-sec { margin-bottom:16px; }
+.op-sec h3 { margin:0 0 6px; font-size:14px; color:var(--navy); }
+.op-sec h3 span { font-weight:400; color:var(--muted); font-size:12px; }
+.op-table { width:100%; border-collapse:collapse; font-size:12.5px; background:var(--card); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+.op-table th { background:var(--navy); color:#fff; text-align:left; padding:7px 9px; font-weight:600; }
+.op-table td { padding:7px 9px; border-top:1px solid var(--border); vertical-align:top; }
+.op-table tr.op-late td { background:#fdecea; }
+.op-table .op-badge { display:inline-block; font-size:10.5px; font-weight:700; color:#fff; background:var(--red); border-radius:4px; padding:1px 6px; margin-top:2px; }
+.op-table .op-due { color:var(--accent); font-weight:600; font-size:11.5px; }
+.op-foot { font-size:11.5px; color:var(--muted); margin-top:10px; }
 </style>
 </head>
 <body>
@@ -590,6 +602,7 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
 
   <div class="nav-group-label">Ajanlar</div>
   <button data-view="sdr">🎯 Satış Ajanı</button>
+  <button data-view="opplan">📋 Operasyon Planı</button>
 
   <div class="nav-group-label">Satış &amp; Üretim</div>
   <button data-view="isler">💼 İşler</button>
@@ -1051,6 +1064,19 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
   </section>
 
   <!-- ÜRETİM TAKİP -->
+  <section class="view" id="view-opplan">
+    <div class="page-header">
+      <h2>📋 Operasyon Planı</h2>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button type="button" class="btn" id="opPlanRefresh">↻ Yenile</button>
+        <button type="button" class="btn" id="opPlanPrint">⬇ PDF indir / Yazdır</button>
+      </div>
+    </div>
+    <div class="op-meta" id="opPlanMeta"></div>
+    <div id="opPlanBody"></div>
+    <div class="op-foot">Plan, Üretim Takip sekmesindeki açık kayıtlardan otomatik hazırlanır; panelde hiçbir veri değiştirilmez. "Yapılacak" metni aşamaya göre genel bir hatırlatmadır: baskı/nakış bilgisi kayıtta olmadığı için teyit istenir.</div>
+  </section>
+
   <section class="view" id="view-uretim">
     <div class="page-header"><h2>🏭 Üretim Takip Listesi</h2></div>
     <div class="panel-box">
@@ -5914,6 +5940,7 @@ function renderAll() {
   renderMusteriler();
   renderPotansiyel();
   renderUretimTakip();
+  renderOperasyonPlan();
   renderTedarikci();
   renderOkulMail();
   renderOkulTakip();
@@ -6906,11 +6933,87 @@ document.getElementById('sdrResearchBtn').addEventListener('click', sdrRunResear
 document.getElementById('sdrQuery').addEventListener('keydown', e => { if (e.key === 'Enter') sdrRunResearch(); });
 document.getElementById('sdrLeadSearch').addEventListener('input', sdrRenderLeadTable);
 
+// ---------------- OPERASYON PLANI (Üretim Takip kayıtlarından günlük tablo; salt okunur) ----------------
+function opPlanStages() { return [
+  ['Kumaş Bekleniyor', 'Kumaş', 'Kumaşın geldiğini teyit et'],
+  ['Kumaş Geldi', 'Kesim', 'Kesime başla'],
+  ['Kesimde', 'Kesim', 'Kesimi bitir; baskı/nakış var mı teyit et, sonra ilgili yere (baskı/nakış/dikim) gönder'],
+  ['Baskı/Nakışta', 'Baskı / Nakış', 'Baskı/nakış durumunu teyit et; bitince dikime gönder'],
+  ['Dikimde', 'Dikim', 'Dikim durumunu teyit et; bitince ütü-paket aşamasına al'],
+  ['Ütü-Pakette-Teslimat Bekliyor', 'Ütü / Paket / Teslimat', 'Ütü ve paketi tamamla, teslimatı planla'],
+]; }
+
+function opPlanBuild() {
+  const OPPLAN_STAGES = opPlanStages();
+  const today = todayISO();
+  const rows = (DATA.uretimTakip || []).filter(u => u.status !== 'Teslim Edildi').map(u => {
+    const st = OPPLAN_STAGES.find(x => x[0] === u.status);
+    return {
+      u, section: st ? st[1] : 'Kontrol gerekli',
+      action: st ? st[2] : 'Aşama tanınmıyor, kaydı kontrol et',
+      late: uretimLateDays(u),
+      followDue: !!(u.follow_up_date && u.follow_up_date <= today),
+    };
+  });
+  const order = Array.from(new Set(OPPLAN_STAGES.map(x => x[1]))).concat('Kontrol gerekli');
+  const groups = order.map(sec => [sec, rows.filter(r => r.section === sec).sort((a, b) =>
+    (b.late - a.late) || String(a.u.est_delivery || '9999').localeCompare(String(b.u.est_delivery || '9999')))]
+  ).filter(g => g[1].length);
+  return { today, groups, total: rows.length, late: rows.filter(r => r.late > 0).length };
+}
+
+function opPlanHtml(plan) {
+  if (!plan.groups.length) return '<p>Bugün için açık üretim kaydı yok.</p>';
+  return plan.groups.map(([sec, rows]) =>
+    '<div class="op-sec"><h3>' + esc(sec) + ' <span>(' + rows.length + ')</span></h3>' +
+    '<table class="op-table"><thead><tr><th>Müşteri / İş</th><th>Adet</th><th>Aşama</th><th>Yapılacak</th><th>Sorumlu</th><th>Teslim</th><th>Not</th></tr></thead><tbody>' +
+    rows.map(r => {
+      const u = r.u;
+      const notes = [u.note, u.problem_note].filter(Boolean).join(' · ');
+      return '<tr class="' + (r.late > 0 ? 'op-late' : '') + '">' +
+        '<td>' + esc(u.customer_name || '(adsız kayıt)') + '</td>' +
+        '<td>' + (u.quantity ? fmtNum(u.quantity) : '—') + '</td>' +
+        '<td>' + esc(u.status) + '</td>' +
+        '<td>' + esc(r.action) + (r.followDue ? '<div class="op-due">Takip günü geldi</div>' : '') + '</td>' +
+        '<td>' + esc(u.assigned_to || '—') + '</td>' +
+        '<td>' + fmtDate(u.est_delivery) + (r.late > 0 ? '<div><span class="op-badge">GECİKMİŞ ' + r.late + ' gün</span></div>' : '') + '</td>' +
+        '<td>' + (notes ? esc(notes) : '—') + '</td></tr>';
+    }).join('') + '</tbody></table></div>').join('');
+}
+
+function renderOperasyonPlan() {
+  const body = document.getElementById('opPlanBody');
+  if (!body) return;
+  try {
+    const plan = opPlanBuild();
+    document.getElementById('opPlanMeta').textContent =
+      fmtDate(plan.today) + ' · ' + plan.total + ' açık iş, ' + plan.late + ' gecikmiş';
+    body.innerHTML = opPlanHtml(plan);
+  } catch (e) {
+    body.textContent = 'Plan hazırlanamadı: ' + e.message;
+  }
+}
+
+function opPlanPrint() {
+  const plan = opPlanBuild();
+  const w = window.open('', '_blank');
+  if (!w) { alert('Yazdırma penceresi engellendi. Tarayıcıda bu site için açılır pencerelere izin verin.'); return; }
+  const css = 'body{font-family:Arial,sans-serif;font-size:11px;margin:12mm 10mm}h1{font-size:18px;margin:0 0 4px}h3{font-size:13px;margin:14px 0 5px}' +
+    'table{width:100%;border-collapse:collapse}th{background:#12213b;color:#fff;text-align:left;padding:4px 6px}td{border:1px solid #c9d0dc;padding:4px 6px;vertical-align:top}' +
+    'tr.op-late td{background:#fdecea}.op-badge{background:#c0392b;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px}.op-due{color:#b06d1f;font-weight:700}' +
+    'tr{break-inside:avoid}@page{size:A4 landscape;margin:8mm}';
+  w.document.write('<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Günlük Üretim Planı ' + esc(plan.today) + '</title><style>' + css + '</style></head><body>' +
+    '<h1>Günlük Üretim Planı — ' + esc(fmtDate(plan.today)) + '</h1><div>' + plan.total + ' açık iş, ' + plan.late + ' gecikmiş.</div>' + opPlanHtml(plan) + '</body></html>');
+  w.document.close(); w.focus(); setTimeout(() => w.print(), 300);
+}
+document.getElementById('opPlanRefresh')?.addEventListener('click', renderOperasyonPlan);
+document.getElementById('opPlanPrint')?.addEventListener('click', opPlanPrint);
+
 const VIEW_RENDER_MAP = {
   dashboard: renderDashboard, isler: renderIsler, gelir: renderGelir,
   gider: () => { renderGider(); renderSabit(); },
   borc: renderBorc, nakit: renderNakitPlanlama, musteriler: renderMusteriler, potansiyel: renderPotansiyel,
-  uretim: renderUretimTakip, tedarikci: renderTedarikci,
+  uretim: renderUretimTakip, opplan: renderOperasyonPlan, tedarikci: renderTedarikci,
   okul: () => { renderOkulMail(); renderOkulTakip(); },
   hedefler: renderHedefler, maliyet: renderMaliyetSablonlari, gorevler: renderGorevler,
   // Belge İşleme backend'e istek attığı için renderAll() içinde değil, yalnız sekme açılınca çalışır.
