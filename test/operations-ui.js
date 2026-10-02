@@ -57,13 +57,13 @@ test('cloud edits prevent reporting and ambiguity preserves the text', async () 
   const { api, ctx, elements } = harness(); api.setState(snapshot());
   elements.opFeedbackJob.value = '7'; elements.opFeedbackText.value = 'Baskı yapıldı.';
   let calls = 0;
-  ctx.matApi = async () => { calls++; return { json: async () => ({ saved: false, clarification: 'Kaç adet kaldı?' }) }; };
+  ctx.matApi = async () => { calls++; return { json: async () => ({ saved: false, clarification: 'Hangi üretim işlemi yapıldı? Bugün yapılan işlemi ve varsa kalan işi açıkça yazın.' }) }; };
   ctx.CLOUD_DIRTY = true;
   await api.submit({ preventDefault() {} }); assert.equal(calls, 0);
   ctx.CLOUD_DIRTY = false;
   await api.submit({ preventDefault() {} }); assert.equal(calls, 1);
   assert.equal(elements.opFeedbackText.value, 'Baskı yapıldı.');
-  assert.equal(elements.opFeedbackStatus.textContent, 'Kaç adet kaldı?');
+  assert.match(elements.opFeedbackStatus.textContent, /Hangi üretim işlemi/);
 });
 
 function finalFixture() {
@@ -162,4 +162,24 @@ test('edits made while the report response is arriving are preserved without a s
   await api.submit({ preventDefault() {} });
   assert.equal(adoptions, 0); assert.equal(ctx.DATA.jobs.length, 1); assert.equal(ctx.CLOUD_DIRTY, true);
   assert.match(elements.opFeedbackStatus.textContent, /Yerel değişikliklerin korundu/);
+});
+
+test('partial work without a count uses the shared stage and reason, with no null count', () => {
+  const { api } = harness(); const s = finalFixture();
+  s.records[0].entries = [{ op: 'cut', status: 'partial', remaining: null, reason: 'kapşon astarı henüz kesilmedi' }];
+  s.records[0].revision = { status: 'Kesimde', section: 'Gün içi revizyon', action: 'Kesim: kalanı tamamla', note: 'kapşon astarı henüz kesilmedi' };
+  s.records[0].basis.status = 'Kesimde'; s.records[0].stage_sync = { status: 'applied', from_status: 'Baskı/Nakışta', to_status: 'Kesimde' };
+  s.plan.decisions[0].action = 'Kesim: kalanı tamamla. Kapşon astarı henüz kesilmedi';
+  const rows = finalRows(); api.setState(s); api.apply(rows);
+  assert.equal(rows[0].u.status, 'Kesimde'); assert.equal(rows[0].source, 'jev');
+  assert.match(rows[0].action, /astarı/); assert.doesNotMatch(rows[0].action, /null|undefined/);
+});
+test('foreign clarification never reaches the screen and retains the report text', async () => {
+  const { api, ctx, elements } = harness(); api.setState(snapshot());
+  elements.opFeedbackJob.value = '7'; elements.opFeedbackText.value = 'İş halledildi.';
+  ctx.matApi = async () => ({ json: async () => ({ saved: false, clarification: 'Please specify which operation.' }) });
+  await api.submit({ preventDefault() {} });
+  assert.match(elements.opFeedbackStatus.textContent, /Hangi üretim işlemi/);
+  assert.doesNotMatch(elements.opFeedbackStatus.textContent, /Please/);
+  assert.equal(elements.opFeedbackText.value, 'İş halledildi.');
 });

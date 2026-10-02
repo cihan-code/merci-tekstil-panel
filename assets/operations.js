@@ -146,6 +146,16 @@ async function operationsEvaluatePlan() {
   } catch (e) { operationsPlanError = 'Plan alınamadı: ' + e.message + '. Tekrar dene.'; }
   finally { operationsPlanning = false; operationsPlanStatus(); }
 }
+function operationsClarification(value) {
+  const messages = [
+    'Hangi üretim işlemi yapıldı? Bugün yapılan işlemi ve varsa kalan işi açıkça yazın.',
+    'Bildirilen işlemler çelişiyor; bugün yapılan işlemi ve kalan işi açıkça yazın.',
+    'Bugün gerçekleşen üretim işlemini yazın; soru veya gelecek planı kaydedilmez.',
+    'Bildirim başka bir güne ait; bugünkü üretim durumunu yazın.',
+    'Bu bildirim geri alınmış; yeni bildirim yazın.',
+  ];
+  return messages.includes(value) ? value : messages[0];
+}
 function operationsMessage(message, error = false) {
   const el = document.getElementById('opFeedbackStatus');
   if (el) { el.textContent = message; el.classList.toggle('op-feedback-error', error); }
@@ -155,7 +165,7 @@ function operationsMount() {
   if (!el || operationsMounted) return;
   operationsMounted = true;
   el.innerHTML = '<section class="op-feedback"><h3>Yapılanları ve kalanları bildir</h3>' +
-    '<p class="op-feedback-muted">İşi seçip bugünkü gelişmeyi yaz. Tamamlanan işlemler ve kalanlar günlük plana işlenir; Üretim Takip aşaması da güncellenir.</p>' +
+    '<p class="op-feedback-muted">İşi seçip bugünkü gelişmeyi yaz. Adet belirtmek zorunda değilsin; yapılan işlemler ve kalan işler plana işlenir, Üretim Takip aşaması güncellenir.</p>' +
     '<form id="opFeedbackForm"><label for="opFeedbackJob">İş / ürün</label><select id="opFeedbackJob" required><option value="">İş seç</option></select>' +
     '<label for="opFeedbackText">Ne yapıldı, ne kaldı?</label><textarea id="opFeedbackText" maxlength="2000" required placeholder="Baskıya götürüldü. Beş tanesinin baskı kâğıdı eksik olduğu için onlar basılmadı, diğerleri tamamlandı."></textarea>' +
     '<div class="op-feedback-actions"><button type="submit" class="op-btn op-btn-main" id="opFeedbackSave">Kaydet ve planı güncelle</button>' +
@@ -215,7 +225,7 @@ async function operationsSubmit(event) {
     const result = await (await matApi('/api/agent/operations/report', { method: 'POST',
       headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ record_id: recordId, text,
         request_id: operationsPending.id, revision: operationsState.revision, fingerprint: record.fingerprint }) })).json();
-    if (!result.saved) { operationsMessage(result.clarification, true); operationsPending = null; return; }
+    if (!result.saved) { operationsMessage(operationsClarification(result.clarification), true); operationsPending = null; return; }
     operationsState = result.snapshot;
     const syncNotice = operationsAdoptPanel(result);
     operationsPlanError = '';
