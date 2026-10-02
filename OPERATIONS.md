@@ -77,3 +77,6 @@ Evidence/reason remain exact source substrings. Dispatch still does not complete
 work. Haiku remains one attempt, 1500 output tokens, 45 seconds per interpretation.
 Ordinary reads, stage synchronization and optional-count handling add no calls.
 Daily warning-and-send behavior and `40 4 * * 1-6` schedule are unchanged.
+
+Native JSON/transport/filesystem failures also use Turkish public messages; existing
+Turkish validation errors are preserved and no translation request is made.

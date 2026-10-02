@@ -143,7 +143,7 @@ async function operationsEvaluatePlan() {
     operationsHistory();
     operationsMemory();
     renderOperasyonPlan();
-  } catch (e) { operationsPlanError = 'Plan alınamadı: ' + e.message + '. Tekrar dene.'; }
+  } catch (e) { operationsPlanError = 'Plan alınamadı: ' + operationsErrorMessage(e) + '. Tekrar dene.'; }
   finally { operationsPlanning = false; operationsPlanStatus(); }
 }
 function operationsClarification(value) {
@@ -155,6 +155,11 @@ function operationsClarification(value) {
     'Bu bildirim geri alınmış; yeni bildirim yazın.',
   ];
   return messages.includes(value) ? value : messages[0];
+}
+function operationsErrorMessage(error) {
+  if (['SyntaxError', 'TypeError', 'AbortError', 'NetworkError'].includes(error?.name))
+    return 'Sunucu yanıtı işlenemedi; planı yenileyip tekrar deneyin.';
+  return error?.message || 'İşlem tamamlanamadı; yeniden deneyin.';
 }
 function operationsMessage(message, error = false) {
   const el = document.getElementById('opFeedbackStatus');
@@ -200,8 +205,8 @@ async function operationsRefresh() {
     renderOperasyonPlan();
   } catch (e) {
     operationsState = null;
-    operationsPlanError = 'Plan yüklenemedi: ' + e.message + '. Yenile düğmesiyle tekrar dene.';
-    operationsMessage('Günlük yüklenemedi: ' + e.message + '. Yenile düğmesiyle tekrar dene.', true);
+    operationsPlanError = 'Plan yüklenemedi: ' + operationsErrorMessage(e) + '. Yenile düğmesiyle tekrar dene.';
+    operationsMessage('Günlük yüklenemedi: ' + operationsErrorMessage(e) + '. Yenile düğmesiyle tekrar dene.', true);
     const button = document.getElementById('opFeedbackSave'); if (button) button.disabled = true;
     renderOperasyonPlan();
   } finally { operationsLoading = false; operationsPlanStatus(); }
@@ -236,7 +241,7 @@ async function operationsSubmit(event) {
     operationsHistory();
     if (typeof operationsMemory === 'function') operationsMemory();
     renderOperasyonPlan();
-  } catch (e) { operationsMessage('Kaydedilemedi: ' + e.message, true); }
+  } catch (e) { operationsMessage('Kaydedilemedi: ' + operationsErrorMessage(e), true); }
   finally { button.disabled = false; operationsWriting = false; operationsPlanStatus(); }
 }
 function operationsHistory() {
@@ -260,7 +265,7 @@ function operationsHistory() {
       operationsMessage(['Bildirim geri alındı; plan yeniden hesaplandı.', operationsStageMessage(result.stage_sync), syncNotice].filter(Boolean).join('\n')); operationsHistory();
       if (typeof operationsMemory === 'function') operationsMemory();
       renderOperasyonPlan();
-    } catch (e) { operationsMessage(e.message, true); b.disabled = false; }
+    } catch (e) { operationsMessage(operationsErrorMessage(e), true); b.disabled = false; }
     finally { operationsWriting = false; operationsPlanStatus(); }
   }));
 }
@@ -284,7 +289,7 @@ function operationsMemory() {
         body: JSON.stringify({ issue: b.dataset.issue, status: b.dataset.rule, revision: operationsState.revision }) })).json();
       operationsPlanError = '';
       operationsMemory(); renderOperasyonPlan(); operationsMessage('Üretim hafızası güncellendi.');
-    } catch (e) { operationsMessage(e.message, true); b.disabled = false; }
+    } catch (e) { operationsMessage(operationsErrorMessage(e), true); b.disabled = false; }
     finally { operationsWriting = false; operationsPlanStatus(); }
   }));
 }

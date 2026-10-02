@@ -183,3 +183,13 @@ test('foreign clarification never reaches the screen and retains the report text
   assert.doesNotMatch(elements.opFeedbackStatus.textContent, /Please/);
   assert.equal(elements.opFeedbackText.value, 'İş halledildi.');
 });
+
+test('unexpected native JSON errors are shown in Turkish, preserving the report input', async () => {
+  const { api, ctx, elements } = harness(); api.setState(snapshot());
+  elements.opFeedbackJob.value = '7'; elements.opFeedbackText.value = 'Kesim yapıldı.';
+  ctx.matApi = async () => ({ json: async () => { throw new SyntaxError('Unexpected token in JSON'); } });
+  await api.submit({ preventDefault() {} });
+  assert.match(elements.opFeedbackStatus.textContent, /Sunucu yanıtı işlenemedi/);
+  assert.doesNotMatch(elements.opFeedbackStatus.textContent, /Unexpected/);
+  assert.equal(elements.opFeedbackText.value, 'Kesim yapıldı.');
+});
