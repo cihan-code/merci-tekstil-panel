@@ -155,7 +155,7 @@ function operationsMount() {
   if (!el || operationsMounted) return;
   operationsMounted = true;
   el.innerHTML = '<section class="op-feedback"><h3>Yapılanları ve kalanları bildir</h3>' +
-    '<p class="op-feedback-muted">İşi seçip bugünkü gelişmeyi yaz. Tamamlanan işlemler ve kalanlar günlük plana işlenir.</p>' +
+    '<p class="op-feedback-muted">İşi seçip bugünkü gelişmeyi yaz. Tamamlanan işlemler ve kalanlar günlük plana işlenir; Üretim Takip aşaması da güncellenir.</p>' +
     '<form id="opFeedbackForm"><label for="opFeedbackJob">İş / ürün</label><select id="opFeedbackJob" required><option value="">İş seç</option></select>' +
     '<label for="opFeedbackText">Ne yapıldı, ne kaldı?</label><textarea id="opFeedbackText" maxlength="2000" required placeholder="Baskıya götürüldü. Beş tanesinin baskı kâğıdı eksik olduğu için onlar basılmadı, diğerleri tamamlandı."></textarea>' +
     '<div class="op-feedback-actions"><button type="submit" class="op-btn op-btn-main" id="opFeedbackSave">Kaydet ve planı güncelle</button>' +
