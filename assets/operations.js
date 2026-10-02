@@ -92,7 +92,7 @@ function operationsApply(rows) {
     }
     if (row.u.status === 'Teslim Edildi' || row.section === 'Tamamlanan') continue;
     if (stale) {
-      row.action = 'Planın dayanağı değişti; güncel yapılanları, kalanları ve engelleri teyit edip Jev ile planı yeniden değerlendir.';
+      row.action = 'Planın dayanağı değişti; güncel yapılanları, kalanları ve engelleri teyit edip planı yeniden değerlendir.';
       row.planStale = true;
       continue;
     }
@@ -114,19 +114,19 @@ function operationsPlanStatus() {
   if (!el) return;
   const plan = operationsState?.plan;
   let message = 'Plan durumu yükleniyor…', error = false;
-  if (operationsPlanning) message = 'Jev tüm aşamaları değerlendiriyor…';
+  if (operationsPlanning) message = 'Tüm aşamalar değerlendiriliyor…';
   else if (operationsPlanError) { message = operationsPlanError; error = true; }
-  else if (operationsCloudBusy()) message = 'Panel değişikliklerinin kaydı tamamlanınca Jev ile planı değerlendir.';
+  else if (operationsCloudBusy()) message = 'Panel değişikliklerinin kaydı tamamlanınca planı değerlendir.';
   else if (plan?.status === 'stale' || operationsLocalPlanStale) {
-    message = 'Plan güncel değil. Son durumu teyit edip Jev ile yeniden değerlendir.'; error = true;
+    message = 'Plan güncel değil. Son durumu teyit edip yeniden değerlendir.'; error = true;
   } else if (plan?.status === 'empty') message = 'Planlanacak açık iş yok.';
   else if (plan?.status === 'ready' && plan.source === 'jev') {
-    message = 'Jev son planı hazır. ' + (plan.considered_count ?? plan.record_count ?? 0) + ' iş değerlendirildi; aşağıdaki eylemler bu kararı kullanıyor.';
+    message = 'Plan hazır. ' + (plan.considered_count ?? plan.record_count ?? 0) + ' iş değerlendirildi; aşağıdaki eylemler bu planı kullanıyor.';
   } else if (plan?.status === 'fallback') {
-    message = 'Jev değerlendirmesi alınamadı; mevcut ilerleme ve kurallara göre plan gösteriliyor. Yeniden deneyebilirsin.'; error = true;
+    message = 'Plan değerlendirilemedi; mevcut ilerleme ve kurallara göre plan gösteriliyor. Yeniden deneyebilirsin.'; error = true;
   } else if (operationsState && !operationsState.jev?.configured) {
-    message = 'Jev henüz sunucuda yapılandırılmamış; mevcut ilerleme ve kurallara göre plan gösteriliyor.';
-  } else if (operationsState) message = 'Jev değerlendirmesi henüz yok. Düğmeyle tüm işleri birlikte değerlendir; Yenile yalnız kayıtlı planı getirir.';
+    message = 'Plan değerlendirmesi henüz sunucuda kurulmamış; mevcut ilerleme ve kurallara göre plan gösteriliyor.';
+  } else if (operationsState) message = 'Plan henüz değerlendirilmedi. Düğmeyle tüm işleri birlikte değerlendir; Yenile yalnız kayıtlı planı getirir.';
   el.textContent = message;
   el.classList.toggle('op-feedback-error', error);
 }
@@ -143,7 +143,7 @@ async function operationsEvaluatePlan() {
     operationsHistory();
     operationsMemory();
     renderOperasyonPlan();
-  } catch (e) { operationsPlanError = 'Jev planı alınamadı: ' + e.message + '. Tekrar dene.'; }
+  } catch (e) { operationsPlanError = 'Plan alınamadı: ' + e.message + '. Tekrar dene.'; }
   finally { operationsPlanning = false; operationsPlanStatus(); }
 }
 function operationsMessage(message, error = false) {
@@ -160,8 +160,8 @@ function operationsMount() {
     '<label for="opFeedbackText">Ne yapıldı, ne kaldı?</label><textarea id="opFeedbackText" maxlength="2000" required placeholder="Baskıya götürüldü. Beş tanesinin baskı kâğıdı eksik olduğu için onlar basılmadı, diğerleri tamamlandı."></textarea>' +
     '<div class="op-feedback-actions"><button type="submit" class="op-btn op-btn-main" id="opFeedbackSave">Kaydet ve planı güncelle</button>' +
     '<span id="opFeedbackStatus" class="op-feedback-status" role="status" aria-live="polite">Günlük yükleniyor…</span></div></form>' +
-    '<div class="op-jev-plan"><h4>Jev ile son plan</h4><p class="op-feedback-muted">Tüm işler, üretim aşamaları, yapılanlar, kalanlar, engeller ve kabul ettiğin kurallar birlikte değerlendirilir.</p>' +
-    '<div class="op-feedback-actions"><button type="button" class="op-btn" id="opJevPlan" disabled>Jev ile planı değerlendir</button>' +
+    '<div class="op-jev-plan"><h4>Günün planını değerlendir</h4><p class="op-feedback-muted">Tüm işler, üretim aşamaları, yapılanlar, kalanlar, engeller ve kabul ettiğin kurallar birlikte değerlendirilir.</p>' +
+    '<div class="op-feedback-actions"><button type="button" class="op-btn" id="opJevPlan" disabled>Planı değerlendir</button>' +
     '<span id="opJevStatus" class="op-feedback-status" role="status" aria-live="polite">Plan durumu yükleniyor…</span></div></div>' +
     '<details><summary>Bildirim geçmişi</summary><div id="opFeedbackHistory"></div></details><div id="opFeedbackMemory"></div></section>';
   document.getElementById('opFeedbackForm').addEventListener('submit', operationsSubmit);

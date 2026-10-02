@@ -7058,7 +7058,7 @@ function opPlanRowsHtml(plan) {
         return '<li class="op-row' + cls + '">' +
           '<div><div class="op-cust">' + esc(u.customer_name || '(adsız kayıt)') + '</div>' +
           '<div class="op-sub">' + (u.quantity ? esc(fmtNum(u.quantity)) + ' adet, ' : '') + esc(u.status) + (r.deco ? ', ' + esc(OPPLAN_DECO_LABEL[r.deco]) : '') + '</div></div>' +
-          '<div class="op-todo">' + esc(r.action) + (r.source === 'jev' ? '<div class="op-note">Jev son kararı · Öncelik ' + esc(r.priority) + '</div>' : '') + (notes ? '<div class="op-note">' + esc(notes) + '</div>' : '') +
+          '<div class="op-todo">' + esc(r.action) + (r.source === 'jev' ? '<div class="op-note">Öncelik ' + esc(r.priority) + '</div>' : '') + (notes ? '<div class="op-note">' + esc(notes) + '</div>' : '') +
           (r.followDue ? '<div class="op-flag">Takip günü geldi</div>' : '') + '</div>' +
           '<div class="op-owner">' + (u.assigned_to ? esc(u.assigned_to) : '<span class="op-none">Sorumlu yok</span>') + '</div>' +
           '<div class="op-when">' + when + '</div></li>';
@@ -7078,9 +7078,9 @@ function opPlanDaily(plan) {
   const add = (title, lines, ordered) => { if (lines.length) sections.push({ title, lines, ordered: !!ordered }); };
 
   const decided = rows.filter(r => r.planApplied).sort(urgent);
-  add('Jev son kararına göre yapılacaklar', decided.filter(r => r.source === 'jev' && r.disposition === 'do').map(r => label(r) + ': ' + r.action), true);
-  add('Jev son kararına göre beklenecekler', decided.filter(r => r.source === 'jev' && r.disposition === 'defer').map(r => label(r) + ': ' + r.action));
-  add('Jev son kararına göre teyit edilecekler', decided.filter(r => r.source === 'jev' && !['do', 'defer'].includes(r.disposition)).map(r => label(r) + ': ' + r.action));
+  add('Bugün yapılacaklar', decided.filter(r => r.source === 'jev' && r.disposition === 'do').map(r => label(r) + ': ' + r.action), true);
+  add('Bugün beklenecekler', decided.filter(r => r.source === 'jev' && r.disposition === 'defer').map(r => label(r) + ': ' + r.action));
+  add('Teyit edilecekler', decided.filter(r => r.source === 'jev' && !['do', 'defer'].includes(r.disposition)).map(r => label(r) + ': ' + r.action));
   add('İlerleme ve kurallara göre plan', decided.filter(r => r.source !== 'jev').map(r => label(r) + ': ' + r.action), true);
   add('Güncel durumu teyit edilecek işler', rows.filter(r => r.planStale).map(r => label(r) + ': ' + r.action));
   add('Bildirimlere göre güncellenen işler', rows.filter(r => r.feedback && !r.planApplied && !r.planStale).map(r => label(r) + ': ' + r.action));
@@ -7107,9 +7107,9 @@ function opPlanDailyHtml(plan) {
   const sections = opPlanDaily(plan);
   if (!sections.length) return '';
   const rows = plan.groups.flatMap(g => g[1]);
-  const note = rows.some(r => r.planStale) ? 'Planın dayanağı değişti. Güncel durumu teyit edip Jev ile yeniden değerlendir.' :
-    rows.some(r => r.source === 'jev') ? 'Günün planı ve iş satırları aynı Jev kararını kullanır. Sıralama Jev önceliğine göredir.' :
-    'Plan, kayıtlı ilerleme ve kuralları kullanır; Jev değerlendirmesi olan işler ayrıca belirtilir.';
+  const note = rows.some(r => r.planStale) ? 'Planın dayanağı değişti. Güncel durumu teyit edip planı yeniden değerlendir.' :
+    rows.some(r => r.source === 'jev') ? 'Günün planı ve iş satırları aynı planı kullanır. Sıralama önceliğe göredir.' :
+    'Plan, kayıtlı ilerleme ve kuralları kullanır.';
   return '<section class="op-day"><h3>Günün planı</h3><div class="op-day-grid">' + sections.map(sec => {
     const tag = sec.ordered ? 'ol' : 'ul';
     return '<div><h4>' + esc(sec.title) + '</h4><' + tag + '>' + sec.lines.map(l => '<li>' + esc(l) + '</li>').join('') + '</' + tag + '></div>';
