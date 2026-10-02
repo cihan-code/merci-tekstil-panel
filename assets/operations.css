@@ -14,5 +14,9 @@
 .op-feedback article p { margin:4px 0; white-space:pre-line; overflow-wrap:anywhere; }
 .op-feedback .op-feedback-error { color:#B3261E; }
 .op-feedback .op-feedback-muted { color:#5F6877; font-size:14px; }
+.op-feedback .op-jev-plan { margin-top:20px; padding-top:16px; border-top:1px solid var(--rule); }
+.op-feedback .op-jev-plan h4 { margin:0; color:var(--indigo); font-size:17px; }
+.op-feedback .op-jev-plan p { margin:6px 0; }
+.op-feedback .op-jev-plan .op-feedback-status { flex:1 1 260px; }
 @media(max-width:600px) { .op-feedback { padding:14px; } }
 @media print { .op-feedback { display:none; } }

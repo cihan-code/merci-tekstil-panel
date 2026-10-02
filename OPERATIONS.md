@@ -1,21 +1,27 @@
-# Intraday feedback UI
+# Intraday production and shared final plan
 
-`assets/operations.js` and `assets/operations.css` extend **Operasyon Planı**.
-The extension reads the authenticated API's separate production journal and
-overlays plan rows without writing `DATA`, local storage or `/api/paneldata`.
+The Operasyon Planı tab accepts completed work, partial quantities and blockers
+for a selected production job. Saving a report commits actual progress, then the
+server evaluates all jobs together with Jev. Undo and preparation-rule decisions
+also refresh the shared final plan. Panel DATA is never changed by plan overlays.
 
-Select a production record, describe today's actual work and explicitly state
-the total remaining count for partial work. Ambiguous reports require clarification.
-Saved events appear in **Bildirim geçmişi** and can be undone. **Üretim hafızası**
-shows source evidence and allows accepting or disabling preparation reminders.
+**Jev ile planı değerlendir** explicitly computes or reuses the server plan.
+Ordinary Yenile only reads the stored snapshot and makes no model call. The daily
+agent reads this same plan. Rows and today's actions show the same final actions,
+relative priorities, deferrals and confirmations. Delivered work remains completed.
 
-The API must expose `/api/agent/operations` before this panel is published. An
-unavailable or unsupported snapshot disables reporting and displays an error.
-Unsaved panel changes prevent reporting until cloud sync finishes. Changes to
-the record invalidate the old report's plan and require confirmation of its state.
+Save pending panel edits before evaluation or reporting. If any job's quantities,
+stage, dates, owner, notes or decoration changes, the complete global plan becomes
+stale. Refresh and evaluate again; changed actual progress may require a new
+report. Incomplete/malformed decisions never apply partially. Provider failure is
+labeled as a rule plan, preserving valid reported progress and accepted reminders.
 
-Run `node --test test/operations-ui.js` for overlay, staleness and retry checks.
-Run `node test/sync-harness.js SCENARIO` for each existing sync scenario: `normal`,
-`poll-race`, `save-during-response`, `net-fail`, `stale-autoheal`, `real-conflict`,
-`schema-422`, `quota`. Desktop and mobile preview use synthetic records; verify
-the real configured extraction separately after deploying the backend.
+Three distinct jobs reporting the same supported obstacle suggest a preparation
+rule. Accept it to include its reminder in future planning. This is application
+memory, not model training or automatic capacity estimation. An accepted reminder
+does not prove a current blocker.
+
+TypeSafe credentials belong only on the API server. Existing Merci authentication
+is reused; no provider key is sent to the browser. Deploy the API before these
+assets. Run `node --test test/operations-ui.js` and the eight scenarios in
+`test/sync-harness.js`. Browser QA uses synthetic data on desktop and mobile.

@@ -65,3 +65,56 @@ test('cloud edits prevent reporting and ambiguity preserves the text', async () 
   assert.equal(elements.opFeedbackText.value, 'Baskı yapıldı.');
   assert.equal(elements.opFeedbackStatus.textContent, 'Kaç adet kaldı?');
 });
+
+function finalFixture() {
+  const s = snapshot();
+  s.jev = { configured: true }; s.state_hash = 'current-state';
+  s.records[0].planning_basis = { assigned_to: '', follow_up_date: null, note: 'Original', problem_note: '' };
+  s.records.push({ record_id: 8, basis: { status: 'Dikimde', customer: 'Synthetic B', quantity: 80,
+    decoration: 'yok', est_delivery: null }, planning_basis: { assigned_to: '', follow_up_date: null, note: '', problem_note: '' }, revision: null, reminders: [], history: [] });
+  s.plan = { date: new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul' }).format(new Date()), version: 1, status: 'ready', source: 'jev', state_hash: s.state_hash,
+    considered_count: 2, record_count: 2, decisions: [
+      { record_id: 7, task_key: 'reported_remaining', action: 'Önce kâğıt engelini gider; kalan 5 adedi tamamla', disposition: 'do', priority: 1, source: 'jev', confidence: .9 },
+      { record_id: 8, task_key: 'finish_sewing', action: 'Dikimi bitir; paketlemeye hazırla', disposition: 'do', priority: 2, source: 'jev', confidence: .8 },
+    ] };
+  return s;
+}
+function finalRows() { return [{ u: record(), deco: 'baski' }, { u: { id: 8, status: 'Dikimde', customer_name: 'Synthetic B', quantity: 80 }, deco: 'yok' }]; }
+test('all rows, including feedback rows, use the shared final Jev actions', () => {
+  const { api } = harness(); const s = finalFixture(); api.setState(s);
+  const rows = finalRows(), original = JSON.stringify(rows); api.apply(rows);
+  assert.equal(rows[0].action, s.plan.decisions[0].action); assert.equal(rows[0].source, 'jev');
+  assert.equal(rows[1].action, s.plan.decisions[1].action); assert.equal(rows[1].priority, 2);
+  assert.equal(rows[0].u.quantity, 100); assert.match(rows[0].action, /kalan 5/);
+  assert.match(original, /Original/);
+});
+test('a planning note change invalidates the complete global plan', () => {
+  const { api } = harness(); api.setState(finalFixture()); const rows = finalRows(); rows[1].u.note = 'New constraint';
+  api.apply(rows); assert.ok(rows.every(row => row.planStale)); assert.ok(rows.every(row => row.source !== 'jev'));
+});
+test('incomplete, duplicated or malformed final decisions never apply partially', () => {
+  for (const mutate of [s => s.plan.decisions.pop(), s => s.plan.decisions[1].record_id = 7,
+    s => s.plan.decisions[1].priority = 1, s => s.plan.decisions[1].disposition = 'done',
+    s => s.plan.decisions[1].confidence = 2, s => s.plan.state_hash = 'old']) {
+    const { api } = harness(), s = finalFixture(); mutate(s); api.setState(s); const rows = finalRows(); api.apply(rows);
+    assert.ok(rows.every(row => !row.planApplied)); assert.ok(rows.every(row => row.planStale));
+  }
+});
+test('completed feedback is excluded from pending decisions without being scheduled again', () => {
+  const { api } = harness(), s = finalFixture();
+  s.records[0].revision = { status: 'Teslim Edildi', section: 'Tamamlanan', action: 'Teslim edildi.' };
+  s.plan.decisions.shift(); s.plan.decisions[0].priority = 1; s.plan.record_count = 1;
+  api.setState(s); const rows = finalRows(); api.apply(rows);
+  assert.equal(rows[0].u.status, 'Teslim Edildi'); assert.equal(rows[0].planApplied, undefined);
+  assert.equal(rows[1].source, 'jev');
+});
+test('refresh only reads; explicit evaluate posts once and dirty state blocks it', async () => {
+  const { ctx, api } = harness(); api.setState(finalFixture());
+  ctx.DATA = { uretimTakip: [] }; ctx.esc = String;
+  const calls = []; ctx.matApi = async (url, opts) => { calls.push({ url, method: opts?.method || 'GET' }); return { json: async () => finalFixture() }; };
+  await vm.runInContext('operationsRefresh()', ctx);
+  assert.equal(calls[0].method, 'GET');
+  ctx.CLOUD_DIRTY = true; await vm.runInContext('operationsEvaluatePlan()', ctx); assert.equal(calls.length, 1);
+  ctx.CLOUD_DIRTY = false; await vm.runInContext('operationsEvaluatePlan()', ctx);
+  assert.equal(calls.length, 2); assert.equal(calls[1].url, '/api/agent/operations/plan'); assert.equal(calls[1].method, 'POST');
+});
