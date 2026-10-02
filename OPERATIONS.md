@@ -3,7 +3,8 @@
 The Operasyon Planı tab accepts completed work, partial quantities and blockers
 for a selected production job. Saving a report commits actual progress, then the
 server evaluates all jobs together with Jev. Undo and preparation-rule decisions
-also refresh the shared final plan. Panel DATA is never changed by plan overlays.
+also refresh the shared final plan. Plan overlays do not mutate DATA; a validated report also synchronizes the
+selected job’s kanban stage on the server.
 
 **Jev ile planı değerlendir** explicitly computes or reuses the server plan.
 Ordinary Yenile only reads the stored snapshot and makes no model call. The daily
@@ -23,5 +24,26 @@ does not prove a current blocker.
 
 TypeSafe credentials belong only on the API server. Existing Merci authentication
 is reused; no provider key is sent to the browser. Deploy the API before these
-assets. Run `node --test test/operations-ui.js` and the eight scenarios in
+assets. Run `node --test test/operations-ui.js` and the ten scenarios in
 `test/sync-harness.js`. Browser QA uses synthetic data on desktop and mobile.
+
+## Kanban updates and undo
+
+A saved report applies the server-computed revision stage, forward or backward,
+and shows `Aşama: Kesimde → Baskı/Nakışta` when it changes. Partial work retains
+its current stage. Delivery is valid; delivered records with report history remain
+selectable so their reports can be undone.
+
+Server responses carry canonical panel data and the new cloud token. The existing
+`adoptCloudSnapshot` flow updates DATA/local storage when clean. It sends no second
+whole-data save: the server already patched the single status through CAS. If a
+new local edit arrives while the response is being read, adoption is refused;
+unsaved data and the old token stay intact, and normal conflict handling prevents
+a stale save from erasing the server stage. Never force adoption or call saveData
+again just for this server patch. Older responses cannot replace newer cloud data.
+
+Basis checks accept a documented stage-only transition during the short refresh
+gap, while still checking quantities, decoration, dates, names and planning inputs.
+Undo restores the remaining revision or original stage. If the stage was manually
+changed, the server preserves it and the UI explains that it was not overwritten.
+`kanban-sync` and `kanban-race` extend the September data-loss regression harness.

@@ -16,7 +16,7 @@ const path = require('path');
 const vm = require('vm');
 require(path.join(__dirname, 'dom-stub.js'));
 
-const ALL = ['normal', 'poll-race', 'save-during-response', 'net-fail', 'stale-autoheal', 'real-conflict', 'schema-422', 'quota'];
+const ALL = ['normal', 'poll-race', 'save-during-response', 'net-fail', 'stale-autoheal', 'real-conflict', 'schema-422', 'quota', 'kanban-sync', 'kanban-race'];
 const scenario = process.argv[2] || 'normal';
 const PANEL_HTML = process.argv[3] || path.join(__dirname, '..', 'index.html');
 
@@ -28,7 +28,7 @@ function buildBundle() {
   let m;
   while ((m = re.exec(html)) !== null) blocks.push(m[1]);
   if (!blocks.length) throw new Error('index.html icinde satir ici script bulunamadi: ' + PANEL_HTML);
-  return blocks.join('\n;\n') + EPILOGUE;
+  return blocks.join('\n;\n') + (scenario.startsWith('kanban-') ? '\n' + fs.readFileSync(path.join(__dirname, '../assets/operations.js'), 'utf8') : '') + EPILOGUE;
 }
 
 // Test erisimi: script kapsamindaki degiskenleri disariya acar.
@@ -45,11 +45,12 @@ const EPILOGUE = `
   get ready() { try { return CLOUD_SYNC_READY; } catch (e) { return undefined; } },
   get data() { try { return DATA; } catch (e) { return undefined; } },
   set data(v) { DATA = v; },
+  stageAdopt: function (value) { return operationsAdoptPanel(value); },
   saveData: function () { return saveData(); },
   tick: function () { return cloudRefreshTick(); },
   push: function () { return runCloudPush(); },
   report: function () { return panelErrorReportText(); },
-  stubRender: function () { renderAll = function () {}; populateLoginNames = function () {}; renderYoneticiler = function () {}; },
+  stubRender: function () { renderUretimTakip = function () {}; renderAll = function () {}; populateLoginNames = function () {}; renderYoneticiler = function () {}; },
 };
 `;
 const wait = (ms) => new Promise(r => setTimeout(r, ms));
@@ -73,6 +74,7 @@ globalThis.__fetchImpl = async (url, opts) => {
   if (String(url).indexOf('/api/paneldata') !== -1 && isPost) {
     if (server.nextPost) { const r = server.nextPost; server.nextPost = null; if (r instanceof Error) throw r; return r; }
     const body = JSON.parse(opts.body);
+    if (scenario.startsWith('kanban-') && body.expectedUpdatedAt !== server.updatedAt) return jsonRes(409, { code: 'PD-409-CONFLICT', error: 'changed' });
     server.data = body.data;
     server.updatedAt = new Date().toISOString() + '#' + Math.random().toString(36).slice(2, 6);
     return jsonRes(200, { ok: true, updatedAt: server.updatedAt });
@@ -92,6 +94,31 @@ T.stubRender();
 (async function run() {
   await wait(120);                       // açılış senkronu otursun
   console.log('\n=== SENARYO: ' + scenario + ' ===');
+
+  if (scenario.startsWith('kanban-')) {
+    server.data = JSON.parse(JSON.stringify(T.data));
+    server.data.uretimTakip = [{ id: 7, customer_name: 'Synthetic', quantity: 100, status: 'Kesimde' }];
+    server.updatedAt = '2026-10-02T08:00:00.000Z'; await T.tick();
+    const beforeStamp = T.stamp;
+    if (scenario === 'kanban-race') { T.data.jobs.push({ id: 77, title: 'Unsaved local job' }); T.saveData(); }
+    server.data.uretimTakip[0].status = 'Baskı/Nakışta'; server.updatedAt = '2026-10-02T08:00:01.000Z';
+    const cloud = JSON.parse(JSON.stringify({ data: server.data, updatedAt: server.updatedAt }));
+    T.stageAdopt({ panel_sync: cloud });
+    if (scenario === 'kanban-sync') {
+      check(T.data.uretimTakip[0].status === 'Baskı/Nakışta', 'kanban canonical sunucu aşamasını aldı');
+      check(T.stamp === cloud.updatedAt && T.dirty === false, 'sunucu damgası alındı; ikinci full POST gerekmiyor');
+      T.data.jobs.push({ id: 78, title: 'Next local edit' }); T.saveData(); await T.tick(); await wait(900);
+      check(!T.conflict && !T.dirty && server.data.jobs.length === 1, 'sonraki normal saveData kaydı sorunsuz tamamlandı');
+      check(server.data.uretimTakip[0].status === 'Baskı/Nakışta', 'periyodik yenileme ve yeni kayıt kanban aşamasını silmedi');
+    } else {
+      check(T.data.jobs.length === 1 && T.dirty, 'yanıt gelirken oluşturulan yerel kayıt korundu');
+      check(T.stamp === beforeStamp, 'kirli veri üzerine yeni sunucu damgası basılmadı');
+      await T.tick(); await wait(1100);
+      check(T.conflict, 'bayat tüm-veri yazması CAS ile durduruldu');
+      check(T.data.jobs.length === 1 && server.data.jobs.length === 0, 'yerel iş ve bulut verisi kullanıcı kararına kadar ayrı korundu');
+      check(server.data.uretimTakip[0].status === 'Baskı/Nakışta', 'sunucudaki kanban değişimi ezilmedi');
+    }
+  }
 
   if (scenario === 'normal') {
     check(T.ready === true, 'açılış senkronu tamamlandı');

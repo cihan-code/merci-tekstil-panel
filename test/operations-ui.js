@@ -118,3 +118,48 @@ test('refresh only reads; explicit evaluate posts once and dirty state blocks it
   ctx.CLOUD_DIRTY = false; await vm.runInContext('operationsEvaluatePlan()', ctx);
   assert.equal(calls.length, 2); assert.equal(calls[1].url, '/api/agent/operations/plan'); assert.equal(calls[1].method, 'POST');
 });
+
+test('documented server stage transitions bridge the short paneldata delay without stale warnings', () => {
+  const { api } = harness(); const s = finalFixture();
+  s.records[0].basis.status = 'Dikimde';
+  s.records[0].revision = { status: 'Dikimde', action: 'Dikime alındı.', section: 'Dikim' };
+  s.records[0].stage_sync = { status: 'applied', from_status: 'Baskı/Nakışta', to_status: 'Dikimde' };
+  const rows = finalRows(); api.setState(s); api.apply(rows);
+  assert.equal(rows[0].planStale, undefined); assert.equal(rows[0].source, 'jev'); assert.equal(rows[0].u.status, 'Dikimde');
+});
+test('stage-only compatibility never hides changed quantities or unsaved manual stages', () => {
+  for (const dirty of [false, true]) {
+    const { api, ctx } = harness(); const s = finalFixture();
+    s.records[0].basis.status = 'Dikimde'; s.records[0].stage_sync = { status: 'applied', from_status: 'Baskı/Nakışta', to_status: 'Dikimde' };
+    ctx.CLOUD_DIRTY = dirty;
+    const rows = finalRows(); if (!dirty) rows[0].u.quantity = 200;
+    api.setState(s); api.apply(rows); assert.equal(rows[0].planStale, true);
+  }
+});
+test('report adopts canonical server data through existing sync and displays the stage change', async () => {
+  const { api, ctx, elements } = harness(); const s = finalFixture(); api.setState(s);
+  ctx.DATA = { uretimTakip: [record()] };
+  elements.opFeedbackJob.value = '7'; elements.opFeedbackText.value = 'Dikime alındı.';
+  let adoptions = 0, saves = 0;
+  ctx.adoptCloudSnapshot = cloud => { adoptions++; ctx.DATA = cloud.data; return true; };
+  ctx.saveData = () => saves++;
+  ctx.matApi = async () => ({ json: async () => ({ saved: true, snapshot: s,
+    panel_sync: { data: { uretimTakip: [{ ...record(), status: 'Dikimde' }] }, updatedAt: '2026-10-02T08:00:00Z' },
+    stage_sync: { status: 'applied', from_status: 'Baskı/Nakışta', to_status: 'Dikimde' } }) });
+  await api.submit({ preventDefault() {} });
+  assert.equal(adoptions, 1); assert.equal(saves, 0); assert.equal(ctx.DATA.uretimTakip[0].status, 'Dikimde');
+  assert.match(elements.opFeedbackStatus.textContent, /Aşama: Baskı\/Nakışta → Dikimde/);
+});
+test('edits made while the report response is arriving are preserved without a second cloud write', async () => {
+  const { api, ctx, elements } = harness(); const s = finalFixture(); api.setState(s);
+  ctx.DATA = { jobs: [], uretimTakip: [record()] };
+  elements.opFeedbackJob.value = '7'; elements.opFeedbackText.value = 'Dikime alındı.';
+  let adoptions = 0; ctx.adoptCloudSnapshot = () => { adoptions++; return true; };
+  ctx.matApi = async () => ({ json: async () => {
+    ctx.DATA.jobs.push({ id: 99, title: 'Keep local edit' }); ctx.CLOUD_DIRTY = true;
+    return { saved: true, snapshot: s, panel_sync: { data: { jobs: [], uretimTakip: [] }, updatedAt: '2026-10-02T08:00:00Z' } };
+  } });
+  await api.submit({ preventDefault() {} });
+  assert.equal(adoptions, 0); assert.equal(ctx.DATA.jobs.length, 1); assert.equal(ctx.CLOUD_DIRTY, true);
+  assert.match(elements.opFeedbackStatus.textContent, /Yerel değişikliklerin korundu/);
+});

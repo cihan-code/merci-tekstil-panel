@@ -6,7 +6,32 @@ let operationsPlanning = false, operationsWriting = false, operationsPlanError =
 function operationsCloudBusy() {
   return (typeof CLOUD_DIRTY !== 'undefined' && CLOUD_DIRTY) ||
     (typeof CLOUD_INFLIGHT !== 'undefined' && CLOUD_INFLIGHT) ||
-    (typeof CLOUD_CONFLICT !== 'undefined' && CLOUD_CONFLICT);
+    (typeof CLOUD_CONFLICT !== 'undefined' && CLOUD_CONFLICT) ||
+    (typeof CLOUD_RESOLVING !== 'undefined' && CLOUD_RESOLVING);
+}
+function operationsStageMatches(status, found) {
+  if (status === found?.basis?.status) return true;
+  if (operationsCloudBusy() || found?.stale) return false;
+  const sync = found?.stage_sync;
+  if (sync) return sync.status === 'applied' && status === sync.from_status && found.basis.status === sync.to_status;
+  return status === found?.revision?.status;
+}
+// Server has already saved the narrow stage patch with CAS. Adopt the canonical
+// cloud snapshot through the existing sync path; never issue a second full save.
+function operationsAdoptPanel(result) {
+  const cloud = result?.panel_sync;
+  if (!cloud?.data || !cloud.updatedAt || typeof adoptCloudSnapshot !== 'function') return '';
+  if (operationsCloudBusy()) return 'Yerel değişikliklerin korundu; kanban bulutta güncellendi. Kaydı tamamlayıp Yenile.';
+  const known = typeof CLOUD_LAST_KNOWN_UPDATED_AT !== 'undefined' ? Date.parse(CLOUD_LAST_KNOWN_UPDATED_AT) : NaN;
+  if (Number.isFinite(known) && Date.parse(cloud.updatedAt) < known) return 'Daha güncel panel verisi korundu; planı Yenile.';
+  if (!adoptCloudSnapshot(cloud)) return 'Panel eşitlemesini tamamlayıp Yenile.';
+  if (typeof renderUretimTakip === 'function') renderUretimTakip();
+  return '';
+}
+function operationsStageMessage(change) {
+  if (change?.message) return change.message;
+  return change?.status === 'applied' && change.from_status !== change.to_status
+    ? 'Aşama: ' + change.from_status + ' → ' + change.to_status : '';
 }
 function operationsBasisChanged(row, found) {
   const basis = found?.basis && { ...found.basis, ...found.planning_basis };
@@ -15,14 +40,15 @@ function operationsBasisChanged(row, found) {
     decoration: row.deco, est_delivery: row.u.est_delivery || null,
     note: row.u.note || '', problem_note: row.u.problem_note || '',
     assigned_to: row.u.assigned_to || '', follow_up_date: row.u.follow_up_date || null };
-  return Object.keys(current).some(key => Object.prototype.hasOwnProperty.call(basis, key) && basis[key] !== current[key]);
+  return Object.keys(current).some(key => Object.prototype.hasOwnProperty.call(basis, key) && (key === 'status' ? !operationsStageMatches(current.status, found) : basis[key] !== current[key]));
 }
 function operationsApply(rows) {
   const records = operationsState?.records || [];
   const plan = operationsState?.plan;
   const changed = new Set(rows.filter(row => operationsBasisChanged(row,
     records.find(r => String(r.record_id) === String(row.u.id)))).map(row => String(row.u.id)));
-  const activeRecords = records.filter(record => record.basis?.status !== 'Teslim Edildi');
+  const activeRecords = records.filter(record => record.basis?.status !== 'Teslim Edildi' ||
+    rows.some(row => String(row.u.id) === String(record.record_id) && operationsStageMatches(row.u.status, record)));
   operationsLocalPlanStale = !!plan && (operationsCloudBusy() || changed.size > 0 ||
     (operationsState.state_hash && plan.state_hash !== operationsState.state_hash) ||
     activeRecords.length !== rows.length || rows.some(row => !activeRecords.some(r => String(r.record_id) === String(row.u.id))));
@@ -154,7 +180,7 @@ async function operationsRefresh() {
     const select = document.getElementById('opFeedbackJob');
     if (!select) return;
     const selected = select.value;
-    select.innerHTML = '<option value="">İş seç</option>' + (DATA.uretimTakip || []).filter(r => r.status !== 'Teslim Edildi').map(r =>
+    select.innerHTML = '<option value="">İş seç</option>' + (DATA.uretimTakip || []).filter(r => r.status !== 'Teslim Edildi' || operationsState.records.find(s => String(s.record_id) === String(r.id))?.history?.length).map(r =>
       '<option value="' + esc(r.id) + '">' + esc('#' + r.id + ' ' + r.customer_name + (r.quantity ? ' — ' + r.quantity + ' adet' : '')) + '</option>').join('');
     select.value = selected;
     document.getElementById('opFeedbackSave').disabled = !operationsState.configured;
@@ -191,10 +217,12 @@ async function operationsSubmit(event) {
         request_id: operationsPending.id, revision: operationsState.revision, fingerprint: record.fingerprint }) })).json();
     if (!result.saved) { operationsMessage(result.clarification, true); operationsPending = null; return; }
     operationsState = result.snapshot;
+    const syncNotice = operationsAdoptPanel(result);
     operationsPlanError = '';
     document.getElementById('opFeedbackText').value = '';
     operationsPending = null;
-    operationsMessage('Kaydedildi; plan güncellendi.\n' + (result.summary || 'Bu bildirim daha önce kaydedilmiş.'));
+    operationsMessage(['Kaydedildi; plan güncellendi.', result.summary || 'Bu bildirim daha önce kaydedilmiş.',
+      operationsStageMessage(result.stage_sync), syncNotice].filter(Boolean).join('\n'));
     operationsHistory();
     if (typeof operationsMemory === 'function') operationsMemory();
     renderOperasyonPlan();
@@ -214,10 +242,12 @@ function operationsHistory() {
     b.disabled = true;
     operationsWriting = true; operationsPlanStatus();
     try {
-      operationsState = await (await matApi('/api/agent/operations/undo', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      const result = await (await matApi('/api/agent/operations/undo', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ event_id: b.dataset.undo, revision: operationsState.revision }) })).json();
+      operationsState = result;
+      const syncNotice = operationsAdoptPanel(result);
       operationsPlanError = '';
-      operationsMessage('Bildirim geri alındı; plan yeniden hesaplandı.'); operationsHistory();
+      operationsMessage(['Bildirim geri alındı; plan yeniden hesaplandı.', operationsStageMessage(result.stage_sync), syncNotice].filter(Boolean).join('\n')); operationsHistory();
       if (typeof operationsMemory === 'function') operationsMemory();
       renderOperasyonPlan();
     } catch (e) { operationsMessage(e.message, true); b.disabled = false; }
