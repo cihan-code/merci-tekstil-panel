@@ -1099,6 +1099,20 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
             </select></div>
         </div>
 <div class="field"><label>Ürün</label><select name="product_type"><option value="">— Belirtilmedi —</option><option value="sweat">Sweatshirt</option><option value="tisort">Tişört</option><option value="polar">Polar</option><option value="polo">Polo yaka</option><option value="esofman">Eşofman</option><option value="yarim_fermuar">Yarım fermuarlı</option><option value="tam_fermuar">Tam fermuarlı</option><option value="sort">Şort</option></select></div>
+        <div class="form-row">
+          <div class="field"><label>Kordon <span style="font-weight:400;color:var(--muted);font-size:11.5px;">(ilik için)</span></label>
+            <select name="cord">
+              <option value="">— Belirtilmedi —</option>
+              <option value="var">Var</option>
+              <option value="yok">Yok</option>
+            </select></div>
+          <div class="field"><label>Astar <span style="font-weight:400;color:var(--muted);font-size:11.5px;">(kesim için)</span></label>
+            <select name="lining">
+              <option value="">— Belirtilmedi —</option>
+              <option value="var">Var</option>
+              <option value="yok">Yok</option>
+            </select></div>
+        </div>
         <div class="field"><label>Not</label><textarea name="note"></textarea></div>
         <div class="field"><label>Problem Durumu</label><textarea name="problem_note"></textarea></div>
         <button type="submit" class="btn">Kaydet</button>
@@ -3003,6 +3017,14 @@ const ENTITY_CONFIGS = {
       options: () => ['— Belirtilmedi —', 'Baskı', 'Nakış', 'Baskı ve nakış', 'Yok (düz)'],
       transformOut: v => ({baski:'Baskı', nakis:'Nakış', ikisi:'Baskı ve nakış', yok:'Yok (düz)'})[v] || '— Belirtilmedi —',
       transformIn: v => ({'Baskı':'baski', 'Nakış':'nakis', 'Baskı ve nakış':'ikisi', 'Yok (düz)':'yok'})[v] || ''},
+    {name:'cord', label:'Kordon (ilik için)', type:'select',
+      options: () => ['— Belirtilmedi —', 'Var', 'Yok'],
+      transformOut: v => ({var:'Var', yok:'Yok'})[v] || '— Belirtilmedi —',
+      transformIn: v => ({'Var':'var', 'Yok':'yok'})[v] || ''},
+    {name:'lining', label:'Astar (kesim için)', type:'select',
+      options: () => ['— Belirtilmedi —', 'Var', 'Yok'],
+      transformOut: v => ({var:'Var', yok:'Yok'})[v] || '— Belirtilmedi —',
+      transformIn: v => ({'Var':'var', 'Yok':'yok'})[v] || ''},
     {name:'note', label:'Not', type:'textarea'},
     {name:'problem_note', label:'Problem Durumu', type:'textarea'},
   ]},
@@ -4673,7 +4695,7 @@ if (document.getElementById('uretimSearch')) document.getElementById('uretimSear
 document.getElementById('formUretim').addEventListener('submit', (e) => {
   e.preventDefault();
   const fd = new FormData(e.target);
-  DATA.uretimTakip.push({ id: nextId(DATA.uretimTakip), date: fd.get('date'), customer_name: fd.get('customer_name'), est_delivery: fd.get('est_delivery')||null, quantity: parseFloat(fd.get('quantity'))||0, status: fd.get('status')||URETIM_STATUSES[0], follow_up_date: fd.get('follow_up_date')||null, assigned_to: fd.get('assigned_to')||'', note: fd.get('note')||'', problem_note: fd.get('problem_note')||'', decoration: fd.get('decoration')||'', product_type: fd.get('product_type')||'' });
+  DATA.uretimTakip.push({ id: nextId(DATA.uretimTakip), date: fd.get('date'), customer_name: fd.get('customer_name'), est_delivery: fd.get('est_delivery')||null, quantity: parseFloat(fd.get('quantity'))||0, status: fd.get('status')||URETIM_STATUSES[0], follow_up_date: fd.get('follow_up_date')||null, assigned_to: fd.get('assigned_to')||'', note: fd.get('note')||'', problem_note: fd.get('problem_note')||'', decoration: fd.get('decoration')||'', product_type: fd.get('product_type')||'', cord: fd.get('cord')||'', lining: fd.get('lining')||'' });
   saveData(); e.target.reset(); document.querySelector('#formUretim [name="date"]').value = todayISO();
   flash('Üretim kaydı eklendi.'); renderUretimTakip();
 });
@@ -7050,6 +7072,15 @@ function opPlanRouteHtml(plan) {
   }).join('') + '</ol>';
 }
 
+// Reçete notları sunucu planından gelir (malzeme ≈kg, ürüne özel adımlar, hazırlık teyitleri); panel yalnız gösterir.
+function opPlanRecipeText(r, withPreparations) {
+  const rc = r.recipe;
+  if (!rc) return '';
+  return [...(rc.hints || []), rc.materials && rc.materials.message,
+    ...(withPreparations ? (rc.preparations || []).map(p => p.text) : [])].filter(Boolean).join(' ');
+}
+function opPlanTodo(r, withPreparations) { return [r.action, opPlanRecipeText(r, withPreparations)].filter(Boolean).join(' '); }
+
 function opPlanRowsHtml(plan) {
   if (!plan.groups.some(g => g[1].length)) return '<p class="op-empty">Bu görünümde açık iş yok. Yeni iş eklemek için Üretim Takip sekmesini kullanın.</p>';
   return plan.groups.filter(g => g[1].length).map(([sec, rows]) => {
@@ -7065,7 +7096,7 @@ function opPlanRowsHtml(plan) {
         return '<li class="op-row' + cls + '">' +
           '<div><div class="op-cust">' + esc(u.customer_name || '(adsız kayıt)') + '</div>' +
           '<div class="op-sub">' + (u.quantity ? '≈' + esc(fmtNum(u.quantity)) + ' adet, ' : '') + (OPPLAN_PRODUCT_LABEL[u.product_type] ? esc(OPPLAN_PRODUCT_LABEL[u.product_type]) + ', ' : '') + esc(u.status) + (r.deco ? ', ' + esc(OPPLAN_DECO_LABEL[r.deco]) : '') + '</div></div>' +
-          '<div class="op-todo">' + esc(r.action) + (r.source === 'jev' ? '<div class="op-note">Öncelik ' + esc(r.priority) + '</div>' : '') + (notes ? '<div class="op-note">' + esc(notes) + '</div>' : '') +
+          '<div class="op-todo">' + esc(opPlanTodo(r, true)) + (r.source === 'jev' ? '<div class="op-note">Öncelik ' + esc(r.priority) + '</div>' : '') + (notes ? '<div class="op-note">' + esc(notes) + '</div>' : '') +
           (r.followDue ? '<div class="op-flag">Takip günü geldi</div>' : '') + '</div>' +
           '<div class="op-owner">' + (u.assigned_to ? esc(u.assigned_to) : '<span class="op-none">Sorumlu yok</span>') + '</div>' +
           '<div class="op-when">' + when + '</div></li>';
@@ -7086,10 +7117,11 @@ function opPlanDaily(plan) {
 
   const decided = rows.filter(r => r.planApplied).sort(urgent);
   if (typeof operationsCapacityNotes === 'function') add('Kapasite ve ürün geçişleri', operationsCapacityNotes());
-  add('Bugün yapılacaklar', decided.filter(r => r.source === 'jev' && r.disposition === 'do').map(r => label(r) + ': ' + r.action), true);
-  add('Bugün beklenecekler', decided.filter(r => r.source === 'jev' && r.disposition === 'defer').map(r => label(r) + ': ' + r.action));
-  add('Teyit edilecekler', decided.filter(r => r.source === 'jev' && !['do', 'defer'].includes(r.disposition)).map(r => label(r) + ': ' + r.action));
-  add('İlerleme ve kurallara göre plan', decided.filter(r => r.source !== 'jev').map(r => label(r) + ': ' + r.action), true);
+  add('Bugün yapılacaklar', decided.filter(r => r.source === 'jev' && r.disposition === 'do').map(r => label(r) + ': ' + opPlanTodo(r)), true);
+  add('Hazırlık teyitleri', decided.flatMap(r => ((r.recipe && r.recipe.preparations) || []).filter(p => p.text).map(p => label(r) + ': ' + p.text)));
+  add('Bugün beklenecekler', decided.filter(r => r.source === 'jev' && r.disposition === 'defer').map(r => label(r) + ': ' + opPlanTodo(r)));
+  add('Teyit edilecekler', decided.filter(r => r.source === 'jev' && !['do', 'defer'].includes(r.disposition)).map(r => label(r) + ': ' + opPlanTodo(r)));
+  add('İlerleme ve kurallara göre plan', decided.filter(r => r.source !== 'jev').map(r => label(r) + ': ' + opPlanTodo(r)), true);
   add('Güncel durumu teyit edilecek işler', rows.filter(r => r.planStale).map(r => label(r) + ': ' + r.action));
   add('Bildirimlere göre güncellenen işler', rows.filter(r => r.feedback && !r.planApplied && !r.planStale).map(r => label(r) + ': ' + r.action));
   const ready = by('Kumaş Geldi').sort(urgent);

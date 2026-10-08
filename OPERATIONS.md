@@ -104,3 +104,18 @@ no additional model request is made by the panel.
 
 Validate with `node --test test/operations-ui.js`, all ten sync-harness scenarios
 and synthetic browser checks of both product selectors and shared capacity output.
+
+## Product recipes (2026-10-08)
+
+Üretim Takip has two optional selects next to Baskı/Nakış: **Kordon (ilik için)**
+and **Astar (kesim için)**, stored as `cord` / `lining` = `var`, `yok` or empty.
+They only refine recipe notes; empty keeps a conditional note.
+
+The server's final plan decisions may carry a `recipe` object (material need in
+≈kg, product-specific steps, zipper/yaka-kol confirmations). The panel validates
+its shape (malformed data marks the whole plan stale, like other decision fields)
+and only renders text: job rows show `action` + all recipe notes; Günün planı
+lines show `action` + steps and materials, and confirmations are listed once under
+**Hazırlık teyitleri**. The print view reuses these sections in its existing
+landscape layout. No recipe values or calculations live in the panel.
+Tests: `node --test test/operations-ui.js` and the ten `test/sync-harness.js` scenarios.

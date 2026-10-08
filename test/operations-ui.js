@@ -217,3 +217,36 @@ test('changing the selected product invalidates the whole shared capacity plan',
   rows[0].u.product_type = 'tisort'; api.apply(rows);
   assert.ok(rows.every(r => r.planStale)); assert.ok(rows.every(r => !r.planApplied));
 });
+test('recipe notes from the final plan are kept per row; malformed recipe data never applies', () => {
+  const recipe = { version: 1, product_type: 'tam_fermuar', label: 'Tam fermuarlı', cord: null, lining: null,
+    hints: ['Dikimde kemerleme yapılır.'], materials: null,
+    preparations: [{ op: 'zipper', label: 'Tam fermuar temini', condition: null, status: 'unconfirmed', reason: '', text: 'Tam fermuar temini teyit edilsin.' }],
+    text: 'Dikimde kemerleme yapılır. Tam fermuar temini teyit edilsin.' };
+  const { api } = harness(), s = finalFixture(); s.plan.decisions[1].recipe = recipe; api.setState(s);
+  const rows = finalRows(); api.apply(rows);
+  assert.equal(rows[1].recipe.text, recipe.text); assert.equal(rows[0].recipe, null);
+  assert.equal(rows[1].action, s.plan.decisions[1].action);
+  for (const broken of [{ ...recipe, version: 2 }, { ...recipe, hints: [1] }, { ...recipe, preparations: [{ text: 'x' }] }, 'text']) {
+    const other = harness(), bad = finalFixture(); bad.plan.decisions[1].recipe = broken; other.api.setState(bad);
+    const badRows = finalRows(); other.api.apply(badRows);
+    assert.ok(badRows.every(row => !row.planApplied && row.planStale));
+  }
+});
+test('daily plan shows materials with the action and lists preparations separately', () => {
+  const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+  const pick = name => { const start = html.indexOf('function ' + name + '('); let depth = 0, i = html.indexOf('{', start);
+    for (; i < html.length; i++) { if (html[i] === '{') depth++; else if (html[i] === '}' && !--depth) break; }
+    return html.slice(start, i + 1); };
+  const ctx = vm.createContext({ fmtNum: n => String(n) });
+  vm.runInContext(['opPlanRecipeText', 'opPlanTodo', 'opPlanDaily'].map(pick).join('\n') + '\nthis.daily = opPlanDaily; this.todo = opPlanTodo;', ctx);
+  const recipe = { hints: ['Kesimden sonra kapüşonu ilikçiye gönder.'], materials: { message: 'Malzeme (fire hariç): ≈180 kg kumaş.', items: [] },
+    preparations: [{ label: 'Tam fermuar temini', text: 'Tam fermuar temini teyit edilsin.' }] };
+  const row = { u: { id: 1, customer_name: 'A', quantity: 250, status: 'Kumaş Geldi' }, planApplied: true, source: 'jev',
+    disposition: 'do', priority: 1, late: 0, action: 'Kesimi yap.', recipe };
+  const sections = ctx.daily({ today: '2026-10-08', groups: [['Kesim', [row]]] });
+  const byTitle = Object.fromEntries(sections.map(s => [s.title, s.lines]));
+  assert.deepEqual(byTitle['Bugün yapılacaklar'], ['A (≈250 adet): Kesimi yap. Kesimden sonra kapüşonu ilikçiye gönder. Malzeme (fire hariç): ≈180 kg kumaş.']);
+  assert.deepEqual(byTitle['Hazırlık teyitleri'], ['A (≈250 adet): Tam fermuar temini teyit edilsin.']);
+  assert.match(ctx.todo(row, true), /Malzeme.*Tam fermuar temini teyit edilsin\.$/);
+  assert.equal(ctx.todo({ action: 'Kesimi yap.', recipe: null }, true), 'Kesimi yap.');
+});

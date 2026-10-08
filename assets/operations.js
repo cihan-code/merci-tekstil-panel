@@ -69,6 +69,7 @@ function operationsApply(rows) {
       priorities.size === list.length && list.every(d => typeof d.action === 'string' && !!d.action.trim() &&
         typeof d.task_key === 'string' && !!d.task_key.trim() && ['do', 'defer', 'confirm'].includes(d.disposition) &&
         Number.isInteger(d.priority) && d.priority >= 1 && d.priority <= list.length && d.source === expectedSource && (!d.capacity || operationsCapacityValid(d.capacity)) &&
+        (d.recipe == null || operationsRecipeValid(d.recipe)) &&
         (d.confidence === null || typeof d.confidence === 'number' && Number.isFinite(d.confidence) && d.confidence >= 0 && d.confidence <= 1));
     if (!valid) operationsLocalPlanStale = true;
   }
@@ -104,6 +105,7 @@ function operationsApply(rows) {
     row.priority = Math.min(...decisions.map(d => Number.isInteger(d.priority) ? d.priority : 999));
     row.disposition = decisions.some(d => d.disposition === 'confirm') ? 'confirm' : decisions[0].disposition;
     row.capacity = decisions[0].capacity || null;
+    row.recipe = decisions[0].recipe || null;
     row.planApplied = true;
     row.source = plan.status === 'ready' && plan.source === 'jev' && decisions.every(d => d.source === 'jev') ? 'jev' : 'rules';
   }
@@ -325,4 +327,12 @@ function operationsCapacitySummaryValid(c) {
       typeof t.from_type === 'string' && typeof t.to_type === 'string' &&
       typeof t.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(t.date) &&
       typeof t.hours === 'number' && Number.isFinite(t.hours) && t.hours >= 0);
+}
+
+// Recipe notes are computed once on the server; the panel validates the shape and renders text only.
+function operationsRecipeValid(r) {
+  const text = v => typeof v === 'string';
+  return !!r && typeof r === 'object' && r.version === 1 && text(r.text) && Array.isArray(r.hints) && r.hints.every(text) &&
+    Array.isArray(r.preparations) && r.preparations.every(p => p && text(p.text) && text(p.label)) &&
+    (r.materials === null || !!r.materials && text(r.materials.message) && Array.isArray(r.materials.items));
 }
