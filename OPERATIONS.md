@@ -6,7 +6,7 @@ server evaluates all jobs together with Jev. Undo and preparation-rule decisions
 also refresh the shared final plan. Plan overlays do not mutate DATA; a validated report also synchronizes the
 selected job’s kanban stage on the server.
 
-**Jev ile planı değerlendir** explicitly computes or reuses the server plan.
+**Planı değerlendir** explicitly computes or reuses the server plan.
 Ordinary Yenile only reads the stored snapshot and makes no model call. The daily
 agent reads this same plan. Rows and today's actions show the same final actions,
 relative priorities, deferrals and confirmations. Delivered work remains completed.
@@ -80,3 +80,27 @@ Daily warning-and-send behavior and `40 4 * * 1-6` schedule are unchanged.
 
 Native JSON/transport/filesystem failures also use Turkish public messages; existing
 Turkish validation errors are preserved and no translation request is made.
+
+
+## Product selection and capacity (2026-10-08)
+
+Production Tracking's new-record form and edit dialog include **Ürün** with eight
+stable product keys and `— Belirtilmedi —`. Choose it explicitly: customer/order
+names do not determine a product, and existing records stay unspecified. Product
+edits invalidate the complete shared plan and require **Planı değerlendir** again.
+
+The API owns capacity configuration and all calculations. The browser validates
+and displays the same actions/typed capacity that the daily agent receives; do
+not duplicate rate tables here. Rows and **Günün planı** show today's ≈quantity,
+remaining ≈quantity, estimated station completion, delivery risk and today's
+product transitions. Missing product/quantity and blocked or uncertain queue load
+have visible unavailable estimates. A +15% alternative never replaces the minimum
+plan. Sewing estimates do not promise packing or final delivery.
+
+Panel PDF printing retains the existing **A4 landscape** layout. The daily agent's
+PDF remains portrait A4. Public panel wording does not mention the provider name.
+Capacity does not modify report validation, stage synchronization, undo or memory;
+no additional model request is made by the panel.
+
+Validate with `node --test test/operations-ui.js`, all ten sync-harness scenarios
+and synthetic browser checks of both product selectors and shared capacity output.

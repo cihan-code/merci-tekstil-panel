@@ -39,7 +39,7 @@ function operationsBasisChanged(row, found) {
   const current = { status: row.u.status, quantity: row.u.quantity, customer: row.u.customer_name,
     decoration: row.deco, est_delivery: row.u.est_delivery || null,
     note: row.u.note || '', problem_note: row.u.problem_note || '',
-    assigned_to: row.u.assigned_to || '', follow_up_date: row.u.follow_up_date || null };
+    assigned_to: row.u.assigned_to || '', follow_up_date: row.u.follow_up_date || null, product_type: row.u.product_type || '' };
   return Object.keys(current).some(key => Object.prototype.hasOwnProperty.call(basis, key) && (key === 'status' ? !operationsStageMatches(current.status, found) : basis[key] !== current[key]));
 }
 function operationsApply(rows) {
@@ -63,12 +63,12 @@ function operationsApply(rows) {
     const priorities = new Set(Array.isArray(list) ? list.map(d => d.priority) : []);
     const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul' }).format(new Date());
     const valid = plan.date === day && plan.source === expectedSource && plan.state_hash === operationsState.state_hash &&
-      plan.record_count === pendingIds.size && plan.considered_count === records.length &&
+      (!plan.capacity || operationsCapacitySummaryValid(plan.capacity)) && plan.record_count === pendingIds.size && plan.considered_count === records.length &&
       (plan.status === 'empty') === (pendingIds.size === 0) && Array.isArray(list) &&
       list.length === pendingIds.size && ids.size === list.length && [...pendingIds].every(id => ids.has(id)) &&
       priorities.size === list.length && list.every(d => typeof d.action === 'string' && !!d.action.trim() &&
         typeof d.task_key === 'string' && !!d.task_key.trim() && ['do', 'defer', 'confirm'].includes(d.disposition) &&
-        Number.isInteger(d.priority) && d.priority >= 1 && d.priority <= list.length && d.source === expectedSource &&
+        Number.isInteger(d.priority) && d.priority >= 1 && d.priority <= list.length && d.source === expectedSource && (!d.capacity || operationsCapacityValid(d.capacity)) &&
         (d.confidence === null || typeof d.confidence === 'number' && Number.isFinite(d.confidence) && d.confidence >= 0 && d.confidence <= 1));
     if (!valid) operationsLocalPlanStale = true;
   }
@@ -103,6 +103,7 @@ function operationsApply(rows) {
     row.action = [...new Set(decisions.map(d => d.action))].join(' · ');
     row.priority = Math.min(...decisions.map(d => Number.isInteger(d.priority) ? d.priority : 999));
     row.disposition = decisions.some(d => d.disposition === 'confirm') ? 'confirm' : decisions[0].disposition;
+    row.capacity = decisions[0].capacity || null;
     row.planApplied = true;
     row.source = plan.status === 'ready' && plan.source === 'jev' && decisions.every(d => d.source === 'jev') ? 'jev' : 'rules';
   }
@@ -292,4 +293,36 @@ function operationsMemory() {
     } catch (e) { operationsMessage(operationsErrorMessage(e), true); b.disabled = false; }
     finally { operationsWriting = false; operationsPlanStatus(); }
   }));
+}
+
+// Capacity is computed once on the server; the panel validates and renders it.
+function operationsCapacityValid(c) {
+  const amount = n => typeof n === 'number' && Number.isFinite(n) && n >= 0;
+  const date = d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d) &&
+    Number.isFinite(Date.parse(d + 'T00:00:00Z')) && new Date(d + 'T00:00:00Z').toISOString().slice(0, 10) === d;
+  if (c.version !== 1 || !['sewing', 'cut'].includes(c.station) ||
+      !['scheduled', 'unavailable', 'blocked'].includes(c.status) || typeof c.message !== 'string' || !c.message.trim()) return false;
+  if (c.status !== 'scheduled') return c.today_quantity === null && c.estimated_finish === null;
+  if (!amount(c.quantity) || !amount(c.today_quantity) || !amount(c.remaining_after_today) ||
+      Math.abs(c.quantity - c.today_quantity - c.remaining_after_today) > .021 || !date(c.estimated_finish) ||
+      !(c.risk_days === null || Number.isInteger(c.risk_days) && c.risk_days >= 0)) return false;
+  return !c.boost || c.station === 'sewing' && c.boost.factor > 1 && amount(c.boost.today_quantity) &&
+    amount(c.boost.remaining_after_today) && Math.abs(c.quantity - c.boost.today_quantity - c.boost.remaining_after_today) <= .021 && date(c.boost.estimated_finish);
+}
+function operationsCapacityNotes() {
+  if (operationsLocalPlanStale || !['ready', 'fallback'].includes(operationsState?.plan?.status)) return [];
+  const capacity = operationsState.plan.capacity;
+  if (!capacity || capacity.version !== 1) return [];
+  const labels = typeof OPPLAN_PRODUCT_LABEL === 'undefined' ? {} : OPPLAN_PRODUCT_LABEL;
+  return [...(capacity.notes || []), ...(capacity.transitions_today || []).map(t =>
+    (labels[t.from_type] || t.from_type) + ' → ' + (labels[t.to_type] || t.to_type) + ' geçişi, ≈' + t.hours + ' saat')];
+}
+
+function operationsCapacitySummaryValid(c) {
+  return c?.version === 1 && typeof c.config_hash === 'string' && !!c.config_hash &&
+    Array.isArray(c.notes) && c.notes.every(n => typeof n === 'string' && !!n.trim()) &&
+    Array.isArray(c.transitions_today) && c.transitions_today.every(t =>
+      typeof t.from_type === 'string' && typeof t.to_type === 'string' &&
+      typeof t.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(t.date) &&
+      typeof t.hours === 'number' && Number.isFinite(t.hours) && t.hours >= 0);
 }

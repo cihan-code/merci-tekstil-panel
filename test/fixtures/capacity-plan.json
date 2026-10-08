@@ -1,0 +1,194 @@
+{
+  "data": {
+    "jobs": [],
+    "uretimTakip": [
+      {
+        "id": 1,
+        "customer_name": "Sentetik Sweat 1",
+        "quantity": 250,
+        "product_type": "sweat",
+        "status": "Dikimde",
+        "decoration": "yok",
+        "est_delivery": "2026-10-09"
+      },
+      {
+        "id": 2,
+        "customer_name": "Sentetik Sweat 2",
+        "quantity": 250,
+        "product_type": "sweat",
+        "status": "Dikimde",
+        "decoration": "yok",
+        "est_delivery": "2026-10-09"
+      }
+    ]
+  },
+  "snapshot": {
+    "version": 1,
+    "revision": 0,
+    "records": [
+      {
+        "record_id": 1,
+        "fingerprint": "a5ba724bfb2911e3c368836c5b719ae945b9321efa83a2fa50ccf0de6fed01d3",
+        "entries": [],
+        "basis": {
+          "status": "Dikimde",
+          "quantity": 250,
+          "customer": "Sentetik Sweat 1",
+          "decoration": "yok",
+          "est_delivery": "2026-10-09"
+        },
+        "planning_basis": {
+          "assigned_to": "",
+          "follow_up_date": null,
+          "note": "",
+          "problem_note": "",
+          "product_type": "sweat"
+        },
+        "stage_sync": null,
+        "reminders": [],
+        "revision": null,
+        "stale": false,
+        "history": []
+      },
+      {
+        "record_id": 2,
+        "fingerprint": "3e7f749f64daf4a0c6b343a090ef02693e37878603887b5bbcc17593069f45e7",
+        "entries": [],
+        "basis": {
+          "status": "Dikimde",
+          "quantity": 250,
+          "customer": "Sentetik Sweat 2",
+          "decoration": "yok",
+          "est_delivery": "2026-10-09"
+        },
+        "planning_basis": {
+          "assigned_to": "",
+          "follow_up_date": null,
+          "note": "",
+          "problem_note": "",
+          "product_type": "sweat"
+        },
+        "stage_sync": null,
+        "reminders": [],
+        "revision": null,
+        "stale": false,
+        "history": []
+      }
+    ],
+    "knowledge": [],
+    "sewing_setup": {
+      "product_type": null,
+      "date": null,
+      "source": "unknown"
+    },
+    "build": null,
+    "configured": true,
+    "model": "claude-haiku-4-5",
+    "state_hash": "8903a47949f3a8afef66b634d3c73cde35da5721a94c49ac9ba923a4a10e9939",
+    "plan": {
+      "version": 1,
+      "status": "ready",
+      "source": "jev",
+      "state_hash": "8903a47949f3a8afef66b634d3c73cde35da5721a94c49ac9ba923a4a10e9939",
+      "date": "2026-10-08",
+      "generated_at": "2026-10-08T08:00:00Z",
+      "record_count": 2,
+      "considered_count": 2,
+      "model": "synthetic-capacity",
+      "decisions": [
+        {
+          "record_id": 1,
+          "task_key": "finish_sewing",
+          "action": "Bugün dikilecek ≈200 adet; kalan ≈50 adet; tahmini dikim bitiş 09.10. Teslim 09.10, tahmini bitiş 09.10 → dikim/kesim bitişi teslim tarihini aşmıyor.",
+          "disposition": "do",
+          "priority": 1,
+          "urgent": false,
+          "confidence": 0.9,
+          "source": "jev",
+          "model_disposition": "do",
+          "capacity": {
+            "version": 1,
+            "station": "sewing",
+            "queue": "existing",
+            "product_type": "sweat",
+            "product_label": "Sweatshirt",
+            "quantity": 250,
+            "order_quantity": 250,
+            "delivery_date": "2026-10-09",
+            "daily_minimum": 200,
+            "required_hours": 12.5,
+            "required_workdays": 1.25,
+            "blocked": false,
+            "reason": "",
+            "status": "scheduled",
+            "today_quantity": 200,
+            "remaining_after_today": 50,
+            "estimated_finish": "2026-10-09",
+            "risk_days": 0,
+            "boost": null,
+            "message": "Bugün dikilecek ≈200 adet; kalan ≈50 adet; tahmini dikim bitiş 09.10. Teslim 09.10, tahmini bitiş 09.10 → dikim/kesim bitişi teslim tarihini aşmıyor."
+          }
+        },
+        {
+          "record_id": 2,
+          "task_key": "finish_sewing",
+          "action": "Bugün dikilecek ≈0 adet; kalan ≈250 adet; tahmini dikim bitiş 10.10. Teslim 09.10, tahmini bitiş 10.10 → ≈1 gün gecikme riski. Alternatif: zorlanmış kapasite (+%15), bugün ≈0 adet; tahmini dikim bitiş 10.10. Asgari plan değiştirilmedi.",
+          "disposition": "defer",
+          "priority": 2,
+          "urgent": false,
+          "confidence": 0.9,
+          "source": "jev",
+          "model_disposition": "do",
+          "capacity": {
+            "version": 1,
+            "station": "sewing",
+            "queue": "existing",
+            "product_type": "sweat",
+            "product_label": "Sweatshirt",
+            "quantity": 250,
+            "order_quantity": 250,
+            "delivery_date": "2026-10-09",
+            "daily_minimum": 200,
+            "required_hours": 12.5,
+            "required_workdays": 1.25,
+            "blocked": false,
+            "reason": "",
+            "status": "scheduled",
+            "today_quantity": 0,
+            "remaining_after_today": 250,
+            "estimated_finish": "2026-10-10",
+            "risk_days": 1,
+            "boost": {
+              "label": "zorlanmış kapasite (+%15)",
+              "factor": 1.15,
+              "today_quantity": 0,
+              "remaining_after_today": 250,
+              "estimated_finish": "2026-10-10",
+              "risk_days": 1
+            },
+            "message": "Bugün dikilecek ≈0 adet; kalan ≈250 adet; tahmini dikim bitiş 10.10. Teslim 09.10, tahmini bitiş 10.10 → ≈1 gün gecikme riski. Alternatif: zorlanmış kapasite (+%15), bugün ≈0 adet; tahmini dikim bitiş 10.10. Asgari plan değiştirilmedi."
+          }
+        }
+      ],
+      "capacity": {
+        "version": 1,
+        "config_hash": "b5af52162a0e2f7596203b802b022c79c4937dcc98817ab384a433583db58e6e",
+        "workday": {
+          "start": "09:00",
+          "end": "19:00",
+          "hours": 10,
+          "closed_weekdays": [
+            0
+          ]
+        },
+        "transitions_today": [],
+        "notes": [
+          "Önceki dikilen ürün bilinmiyor; ilk ürün geçişi süresi hariç tahmin yapıldı."
+        ]
+      }
+    },
+    "jev": {
+      "configured": true
+    }
+  }
+}

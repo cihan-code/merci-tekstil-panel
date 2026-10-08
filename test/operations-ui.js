@@ -193,3 +193,27 @@ test('unexpected native JSON errors are shown in Turkish, preserving the report 
   assert.doesNotMatch(elements.opFeedbackStatus.textContent, /Unexpected/);
   assert.equal(elements.opFeedbackText.value, 'Kesim yapıldı.');
 });
+
+test('capacity actions preserve the shared 200/0 allocation and reject malformed estimates', () => {
+  const payload = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/capacity-plan.json')));
+  const s = payload.snapshot;
+  s.plan.date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul' }).format(new Date());
+  const { api } = harness(); api.setState(s);
+  const rows = payload.data.uretimTakip.map(u => ({ u, deco: 'yok' }));
+  api.apply(rows);
+  assert.deepEqual(rows.map(r => r.capacity.today_quantity), [200, 0]);
+  assert.equal(rows[1].disposition, 'defer');
+  assert.match(rows[0].action, /≈200 adet/); assert.match(rows[1].action, /zorlanmış kapasite/);
+  s.plan.decisions[0].capacity.today_quantity = 300;
+  const invalid = payload.data.uretimTakip.map(u => ({ u, deco: 'yok' })); api.apply(invalid);
+  assert.ok(invalid.every(r => r.planStale)); assert.ok(invalid.every(r => !r.planApplied));
+});
+test('changing the selected product invalidates the whole shared capacity plan', () => {
+  const payload = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/capacity-plan.json')));
+  const s = payload.snapshot;
+  s.plan.date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul' }).format(new Date());
+  const { api } = harness(); api.setState(s);
+  const rows = payload.data.uretimTakip.map(u => ({ u, deco: 'yok' }));
+  rows[0].u.product_type = 'tisort'; api.apply(rows);
+  assert.ok(rows.every(r => r.planStale)); assert.ok(rows.every(r => !r.planApplied));
+});
