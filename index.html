@@ -7152,6 +7152,7 @@ function opPlanDaily(plan) {
   const decided = rows.filter(r => r.planApplied).sort(urgent);
   if (typeof operationsCapacityNotes === 'function') add('Kapasite ve ürün geçişleri', operationsCapacityNotes());
   add('Bugün yapılacaklar', decided.filter(r => r.source === 'jev' && r.disposition === 'do').map(r => label(r) + ': ' + opPlanTodo(r)), true);
+  add('Bugün beklenenler', rows.flatMap(r => (r.expectations || []).filter(x => x.status !== 'upcoming').map(x => label(r) + ': ' + x.text)));
   add('Hazırlık teyitleri', decided.flatMap(r => ((r.recipe && r.recipe.preparations) || []).filter(p => p.text).map(p => label(r) + ': ' + p.text)));
   add('Bugün beklenecekler', decided.filter(r => r.source === 'jev' && r.disposition === 'defer').map(r => label(r) + ': ' + opPlanTodo(r)));
   add('Teyit edilecekler', decided.filter(r => r.source === 'jev' && !['do', 'defer'].includes(r.disposition)).map(r => label(r) + ': ' + opPlanTodo(r)));

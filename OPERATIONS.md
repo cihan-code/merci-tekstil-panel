@@ -124,3 +124,13 @@ lines show `action` + steps and materials, and confirmations are listed once und
 **Hazırlık teyitleri**. The print view reuses these sections in its existing
 landscape layout. No recipe values or calculations live in the panel.
 Tests: `node --test test/operations-ui.js` and the ten `test/sync-harness.js` scenarios.
+
+## Dated expectations (2026-10-09)
+
+Reports may say when work will finish ("kalanı pazartesi bitecek") or when delivery
+is due. The API resolves the dates and returns `records[].expectations` (`upcoming`,
+`due`, `overdue`, with ready Turkish `text`); the panel adds them to the job row note
+and lists `due`/`overdue` in Günün planı under **Bugün beklenenler**. A stated
+delivery date updates Tahmini Teslimat on the server; the saved-report message shows
+`Tahmini teslimat: eski → yeni`, and the report history shows its expectations.
+Undo restores the date. No dates are computed in the browser.

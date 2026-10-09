@@ -30,8 +30,16 @@ function operationsAdoptPanel(result) {
 }
 function operationsStageMessage(change) {
   if (change?.message) return change.message;
-  return change?.status === 'applied' && change.from_status !== change.to_status
-    ? 'Aşama: ' + change.from_status + ' → ' + change.to_status : '';
+  if (change?.status !== 'applied') return '';
+  const day = d => d ? d.slice(8, 10) + '.' + d.slice(5, 7) + '.' + d.slice(0, 4) : 'boş';
+  return [change.from_status !== change.to_status ? 'Aşama: ' + change.from_status + ' → ' + change.to_status : '',
+    'to_delivery' in change && change.from_delivery !== change.to_delivery ? 'Tahmini teslimat: ' + day(change.from_delivery) + ' → ' + day(change.to_delivery) : '']
+    .filter(Boolean).join('\n');
+}
+// Dated plans from reports ("pazartesi bitecek"); dates and texts are computed on the server.
+function operationsExpectations(found) {
+  return (Array.isArray(found?.expectations) ? found.expectations : []).filter(x => x && typeof x.text === 'string' && !!x.text.trim() &&
+    ['upcoming', 'due', 'overdue'].includes(x.status));
 }
 function operationsBasisChanged(row, found) {
   const basis = found?.basis && { ...found.basis, ...found.planning_basis };
@@ -79,6 +87,8 @@ function operationsApply(rows) {
     const found = records.find(r => String(r.record_id) === String(row.u.id));
     const reminders = (found?.reminders || []).map(r => r.message).join(' ');
     if (reminders) row.u = { ...row.u, note: [row.u.note, 'Üretim hafızası: ' + reminders].filter(Boolean).join(' · ') };
+    row.expectations = operationsExpectations(found);
+    if (row.expectations.length) row.u = { ...row.u, note: [row.u.note, ...row.expectations.map(x => x.text)].filter(Boolean).join(' · ') };
     if (found?.revision) row.feedback = true;
     if (changed.has(String(row.u.id))) {
       row.section = 'Gün içi revizyon';
@@ -153,7 +163,7 @@ function operationsClarification(value) {
   const messages = [
     'Hangi üretim işlemi yapıldı? Bugün yapılan işlemi ve varsa kalan işi açıkça yazın.',
     'Bildirilen işlemler çelişiyor; bugün yapılan işlemi ve kalan işi açıkça yazın.',
-    'Bugün gerçekleşen üretim işlemini yazın; soru veya gelecek planı kaydedilmez.',
+    'Bugün gerçekleşen üretim işlemini veya bir işin hangi gün biteceğini yazın; soru kaydedilmez.',
     'Bildirim başka bir güne ait; bugünkü üretim durumunu yazın.',
     'Bu bildirim geri alınmış; yeni bildirim yazın.',
   ];
@@ -173,7 +183,7 @@ function operationsMount() {
   if (!el || operationsMounted) return;
   operationsMounted = true;
   el.innerHTML = '<section class="op-feedback"><h3>Yapılanları ve kalanları bildir</h3>' +
-    '<p class="op-feedback-muted">İşi seçip bugünkü gelişmeyi yaz. Adet belirtmek zorunda değilsin; yapılan işlemler ve kalan işler plana işlenir, Üretim Takip aşaması güncellenir.</p>' +
+    '<p class="op-feedback-muted">İşi seçip bugünkü gelişmeyi yaz. Adet belirtmek zorunda değilsin; yapılan işlemler ve kalan işler plana işlenir, Üretim Takip aşaması güncellenir. Bir işin hangi gün biteceğini yazarsan o gün hatırlatılır; teslim günü yazarsan Tahmini Teslimat güncellenir.</p>' +
     '<form id="opFeedbackForm"><label for="opFeedbackJob">İş / ürün</label><select id="opFeedbackJob" required><option value="">İş seç</option></select>' +
     '<label for="opFeedbackText">Ne yapıldı, ne kaldı?</label><textarea id="opFeedbackText" maxlength="2000" required placeholder="Baskıya götürüldü. Beş tanesinin baskı kâğıdı eksik olduğu için onlar basılmadı, diğerleri tamamlandı."></textarea>' +
     '<div class="op-feedback-actions"><button type="submit" class="op-btn op-btn-main" id="opFeedbackSave">Kaydet ve planı güncelle</button>' +
@@ -253,7 +263,10 @@ function operationsHistory() {
   const id = document.getElementById('opFeedbackJob').value;
   const record = operationsState.records.find(r => String(r.record_id) === id);
   box.innerHTML = record?.history.length ? record.history.map(e => '<article><strong>' + esc(e.date) + '</strong><p>' +
-    esc(e.text) + '</p><button type="button" class="op-btn" data-undo="' + esc(e.id) + '">Bildirimi geri al</button></article>').join('')
+    esc(e.text) + '</p>' + (e.expectations || []).filter(x => x.op !== 'delivery' && x.date).map(x => '<p class="op-feedback-muted">Beklenti: ' +
+      esc(x.label || x.op) + ' — ' + esc(x.date.split('-').reverse().join('.')) + '</p>').join('') +
+    (e.delivery_change ? '<p class="op-feedback-muted">Tahmini teslimat güncellendi: ' + esc((e.delivery_change.to || '').split('-').reverse().join('.')) + '</p>' : '') +
+    '<button type="button" class="op-btn" data-undo="' + esc(e.id) + '">Bildirimi geri al</button></article>').join('')
     : '<p class="op-feedback-muted">Geçmişi görmek için bir iş seç. Henüz bildirimi olmayan işler burada boş görünür.</p>';
   box.querySelectorAll('[data-undo]').forEach(b => b.addEventListener('click', async () => {
     if (operationsCloudBusy() || operationsPlanning || operationsWriting) { operationsMessage('Panel kaydı ve plan değerlendirmesi tamamlandıktan sonra tekrar dene.', true); return; }

@@ -274,3 +274,27 @@ test('Kordon is asked only for sweat, tam fermuarlı, şort and eşofman; Astar 
   }
   assert.match(html, /if \(f\.showIf && !f\.showIf\(fd\)\) \{ item\[f\.name\] = ''; return; \}/);
 });
+test('dated expectations reach the row note and Günün planı; delivery changes are announced', () => {
+  const { api, ctx } = harness(), s = finalFixture();
+  s.records[1].expectations = [
+    { op: 'embroidery', status: 'due', text: 'Bugün bekleniyor: Nakış — “pazartesi bitecek” (09.10 bildirimi).' },
+    { op: 'sewing', status: 'upcoming', text: 'Beklenen: Dikim 14.10 — “çarşamba biter” (09.10 bildirimi).' },
+    { op: 'x', status: 'weird', text: 'ignored' }, null];
+  api.setState(s); const rows = finalRows(); api.apply(rows);
+  assert.equal(rows[1].expectations.map(x => x.status).join(), "due,upcoming");
+  assert.match(rows[1].u.note, /Bugün bekleniyor: Nakış/); assert.doesNotMatch(rows[1].u.note, /ignored/);
+  assert.equal(rows[0].expectations.length, 0);
+  const message = vm.runInContext('operationsStageMessage', ctx);
+  assert.equal(message({ status: 'applied', from_status: 'Kesimde', to_status: 'Baskı/Nakışta', from_delivery: '2026-10-15', to_delivery: '2026-10-13' }),
+    'Aşama: Kesimde → Baskı/Nakışta\nTahmini teslimat: 15.10.2026 → 13.10.2026');
+  assert.equal(message({ status: 'applied', from_status: 'Kesimde', to_status: 'Kesimde', from_delivery: null, to_delivery: '2026-10-13' }), 'Tahmini teslimat: boş → 13.10.2026');
+  assert.equal(message({ status: 'applied', from_status: 'Kesimde', to_status: 'Kesimde' }), '');
+  const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+  const pick = name => { const start = html.indexOf('function ' + name + '('); let depth = 0, i = html.indexOf('{', start);
+    for (; i < html.length; i++) { if (html[i] === '{') depth++; else if (html[i] === '}' && !--depth) break; }
+    return html.slice(start, i + 1); };
+  const daily = vm.createContext({ fmtNum: n => String(n) });
+  vm.runInContext(['opPlanRecipeText', 'opPlanTodo', 'opPlanDaily'].map(pick).join('\n') + '\nthis.daily = opPlanDaily;', daily);
+  const sections = daily.daily({ today: '2026-10-12', groups: [['Baskı / Nakış', [{ ...rows[1], u: { ...rows[1].u, customer_name: 'B', quantity: 80 }, late: 0 }]]] });
+  assert.deepEqual(sections.find(x => x.title === 'Bugün beklenenler').lines, ['B (≈80 adet): Bugün bekleniyor: Nakış — “pazartesi bitecek” (09.10 bildirimi).']);
+});
