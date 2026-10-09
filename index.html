@@ -2944,6 +2944,13 @@ function downloadCsv(filename, header, rows) {
 
 // ---------------- GENERIC EDIT MODAL SYSTEM ----------------
 // Each config: { arrayName, idField, fields: [{name,label,type,options,step}], onSave? }
+// Kordon (ilik) kapüşonlu ürünlerde ve şort / eşofman altında, astar yalnız kapüşonlu ürünlerde sorulur.
+// Sunucu reçetesindeki cord_part / lining ile aynı tutulmalı (erci-materials-api agent/operations/recipes.json).
+const URETIM_CORD_PRODUCTS = ['sweat', 'tam_fermuar', 'esofman', 'sort'];
+const URETIM_LINING_PRODUCTS = ['sweat', 'tam_fermuar'];
+function uretimProductKey(label) {
+  return Object.keys(OPPLAN_PRODUCT_LABEL).find(k => OPPLAN_PRODUCT_LABEL[k] === label) || '';
+}
 const ENTITY_CONFIGS = {
   customer: { arrayName: 'customers', title: 'Müşteriyi Düzenle', rerender: ()=>{renderMusteriler(); renderDashboard();}, fields: [
     {name:'name', label:'Müşteri Adı', type:'text', required:true},
@@ -3018,10 +3025,12 @@ const ENTITY_CONFIGS = {
       transformOut: v => ({baski:'Baskı', nakis:'Nakış', ikisi:'Baskı ve nakış', yok:'Yok (düz)'})[v] || '— Belirtilmedi —',
       transformIn: v => ({'Baskı':'baski', 'Nakış':'nakis', 'Baskı ve nakış':'ikisi', 'Yok (düz)':'yok'})[v] || ''},
     {name:'cord', label:'Kordon (ilik için)', type:'select',
+      showIf: fd => URETIM_CORD_PRODUCTS.includes(uretimProductKey(fd.get('product_type'))),
       options: () => ['— Belirtilmedi —', 'Var', 'Yok'],
       transformOut: v => ({var:'Var', yok:'Yok'})[v] || '— Belirtilmedi —',
       transformIn: v => ({'Var':'var', 'Yok':'yok'})[v] || ''},
     {name:'lining', label:'Astar (kesim için)', type:'select',
+      showIf: fd => URETIM_LINING_PRODUCTS.includes(uretimProductKey(fd.get('product_type'))),
       options: () => ['— Belirtilmedi —', 'Var', 'Yok'],
       transformOut: v => ({var:'Var', yok:'Yok'})[v] || '— Belirtilmedi —',
       transformIn: v => ({'Var':'var', 'Yok':'yok'})[v] || ''},
@@ -3098,13 +3107,13 @@ function openGenericEditModal(configKey, itemId) {
     if (f.transformOut) rawVal = f.transformOut(rawVal);
     const val = rawVal ?? '';
     if (f.type === 'textarea') {
-      return `<div class="field"><label>${f.label}</label><textarea name="${f.name}">${esc(val)}</textarea></div>`;
+      return `<div class="field" data-field="${f.name}"><label>${f.label}</label><textarea name="${f.name}">${esc(val)}</textarea></div>`;
     }
     if (f.type === 'select') {
-      return `<div class="field"><label>${f.label}</label><select name="${f.name}">` +
+      return `<div class="field" data-field="${f.name}"><label>${f.label}</label><select name="${f.name}">` +
         (typeof f.options === 'function' ? f.options() : f.options).map(o=>`<option value="${esc(o)}" ${o===val?'selected':''}>${esc(o)}</option>`).join('') + '</select></div>';
     }
-    return `<div class="field"><label>${f.label}</label><input type="${f.type}" name="${f.name}" ${f.step?'step="'+f.step+'"':''} value="${esc(val)}" ${f.required?'required':''}></div>`;
+    return `<div class="field" data-field="${f.name}"><label>${f.label}</label><input type="${f.type}" name="${f.name}" ${f.step?'step="'+f.step+'"':''} value="${esc(val)}" ${f.required?'required':''}></div>`;
   }).join('') + `
     <input type="hidden" name="__configKey" value="${configKey}">
     <input type="hidden" name="__itemId" value="${itemId}">
@@ -3114,6 +3123,12 @@ function openGenericEditModal(configKey, itemId) {
     </div>
   `;
   document.getElementById('genericModalCancel').addEventListener('click', closeGenericModal);  document.getElementById('genericModalOverlay').classList.add('active');
+  // showIf: alan yalnız koşul sağlanınca görünür (ör. Kordon/Astar ürüne göre); gizli alan boş kaydedilir.
+  const conditional = config.fields.filter(f => f.showIf);
+  const sync = () => { const fd = new FormData(form);
+    conditional.forEach(f => { const box = form.querySelector('[data-field="' + f.name + '"]'); if (box) box.style.display = f.showIf(fd) ? '' : 'none'; }); };
+  form.onchange = conditional.length ? sync : null;
+  if (conditional.length) sync();
 }
 function closeGenericModal() { document.getElementById('genericModalOverlay').classList.remove('active'); }
 
@@ -3126,6 +3141,7 @@ document.getElementById('genericModalForm').addEventListener('submit', (e) => {
   const item = DATA[config.arrayName].find(x=>x.id===itemId);
   const prevStatus = item.status;
   config.fields.forEach(f => {
+    if (f.showIf && !f.showIf(fd)) { item[f.name] = ''; return; }
     let val = fd.get(f.name);
     if (f.type === 'number') val = parseFloat(val) || 0;
     if (f.transformIn) val = f.transformIn(val);
@@ -4692,11 +4708,29 @@ function renderUretimTakip() {
 }
 if (document.getElementById('uretimSearch')) document.getElementById('uretimSearch').addEventListener('input', renderUretimTakip);
 
+// Kordon / Astar yalnız ilgili ürün seçilince görünür; gizlenen alan boş kaydedilir.
+function uretimSyncOptionalFields() {
+  const form = document.getElementById('formUretim');
+  const els = form && form.elements;
+  if (!els || !els.product_type) return;
+  [['cord', URETIM_CORD_PRODUCTS], ['lining', URETIM_LINING_PRODUCTS]].forEach(([name, list]) => {
+    const el = els[name];
+    if (!el) return;
+    const show = list.includes(els.product_type.value);
+    const box = el.closest && el.closest('.field');
+    if (box) box.style.display = show ? '' : 'none';
+    if (!show) el.value = '';
+  });
+}
+const uretimProductSelect = document.querySelector('#formUretim [name="product_type"]');
+if (uretimProductSelect && uretimProductSelect.addEventListener) uretimProductSelect.addEventListener('change', uretimSyncOptionalFields);
+uretimSyncOptionalFields();
 document.getElementById('formUretim').addEventListener('submit', (e) => {
   e.preventDefault();
   const fd = new FormData(e.target);
-  DATA.uretimTakip.push({ id: nextId(DATA.uretimTakip), date: fd.get('date'), customer_name: fd.get('customer_name'), est_delivery: fd.get('est_delivery')||null, quantity: parseFloat(fd.get('quantity'))||0, status: fd.get('status')||URETIM_STATUSES[0], follow_up_date: fd.get('follow_up_date')||null, assigned_to: fd.get('assigned_to')||'', note: fd.get('note')||'', problem_note: fd.get('problem_note')||'', decoration: fd.get('decoration')||'', product_type: fd.get('product_type')||'', cord: fd.get('cord')||'', lining: fd.get('lining')||'' });
-  saveData(); e.target.reset(); document.querySelector('#formUretim [name="date"]').value = todayISO();
+  const productKey = fd.get('product_type') || '';
+  DATA.uretimTakip.push({ id: nextId(DATA.uretimTakip), date: fd.get('date'), customer_name: fd.get('customer_name'), est_delivery: fd.get('est_delivery')||null, quantity: parseFloat(fd.get('quantity'))||0, status: fd.get('status')||URETIM_STATUSES[0], follow_up_date: fd.get('follow_up_date')||null, assigned_to: fd.get('assigned_to')||'', note: fd.get('note')||'', problem_note: fd.get('problem_note')||'', decoration: fd.get('decoration')||'', product_type: productKey, cord: URETIM_CORD_PRODUCTS.includes(productKey) ? fd.get('cord')||'' : '', lining: URETIM_LINING_PRODUCTS.includes(productKey) ? fd.get('lining')||'' : '' });
+  saveData(); e.target.reset(); document.querySelector('#formUretim [name="date"]').value = todayISO(); uretimSyncOptionalFields();
   flash('Üretim kaydı eklendi.'); renderUretimTakip();
 });
 

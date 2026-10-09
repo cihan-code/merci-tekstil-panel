@@ -250,3 +250,27 @@ test('daily plan shows materials with the action and lists preparations separate
   assert.match(ctx.todo(row, true), /Malzeme.*Tam fermuar temini teyit edilsin\.$/);
   assert.equal(ctx.todo({ action: 'Kesimi yap.', recipe: null }, true), 'Kesimi yap.');
 });
+test('Kordon is asked only for sweat, tam fermuarlı, şort and eşofman; Astar only for hooded products', () => {
+  const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+  const between = (a, b) => html.slice(html.indexOf(a), html.indexOf(b, html.indexOf(a)));
+  const pick = name => { const start = html.indexOf('function ' + name + '('); let depth = 0, i = html.indexOf('{', start);
+    for (; i < html.length; i++) { if (html[i] === '{') depth++; else if (html[i] === '}' && !--depth) break; }
+    return html.slice(start, i + 1); };
+  const labels = html.match(/const OPPLAN_PRODUCT_LABEL = (\{[^}]*\});/)[1];
+  const ctx = vm.createContext({});
+  vm.runInContext('const OPPLAN_PRODUCT_LABEL = ' + labels + ';\n' + between('const URETIM_CORD_PRODUCTS', 'function openGenericEditModal') +
+    '\n' + pick('uretimSyncOptionalFields').replace("document.getElementById('formUretim')", 'this.form') +
+    '\nthis.fields = ENTITY_CONFIGS.uretim.fields; this.sync = uretimSyncOptionalFields;', ctx);
+  const show = (name, label) => ctx.fields.find(f => f.name === name).showIf({ get: () => label });
+  assert.deepEqual(['Sweatshirt', 'Tam fermuarlı', 'Şort', 'Eşofman', 'Tişört', 'Polo yaka', 'Yarım fermuarlı', 'Polar', '— Belirtilmedi —'].map(l => [show('cord', l), show('lining', l)]),
+    [[true, true], [true, true], [true, false], [true, false], [false, false], [false, false], [false, false], [false, false], [false, false]]);
+  const field = value => { const box = { style: {} }; return { value, box, closest: () => box }; };
+  for (const [product, cordShown, liningShown] of [['tisort', false, false], ['sort', true, false], ['sweat', true, true]]) {
+    ctx.form = { elements: { product_type: { value: product }, cord: field('yok'), lining: field('yok') } };
+    ctx.sync();
+    const { cord, lining } = ctx.form.elements;
+    assert.equal(cord.box.style.display, cordShown ? '' : 'none'); assert.equal(cord.value, cordShown ? 'yok' : '');
+    assert.equal(lining.box.style.display, liningShown ? '' : 'none'); assert.equal(lining.value, liningShown ? 'yok' : '');
+  }
+  assert.match(html, /if \(f\.showIf && !f\.showIf\(fd\)\) \{ item\[f\.name\] = ''; return; \}/);
+});

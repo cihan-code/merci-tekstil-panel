@@ -109,7 +109,12 @@ and synthetic browser checks of both product selectors and shared capacity outpu
 
 Üretim Takip has two optional selects next to Baskı/Nakış: **Kordon (ilik için)**
 and **Astar (kesim için)**, stored as `cord` / `lining` = `var`, `yok` or empty.
-They only refine recipe notes; empty keeps a conditional note.
+They only refine recipe notes; empty keeps a conditional note. User decision
+2026-10-09: Kordon is shown only for Sweatshirt, Tam fermuarlı (kapüşon), Şort and
+Eşofman (kemer); Astar only for Sweatshirt and Tam fermuarlı. A hidden field is saved
+empty (new-record form and edit dialog, via the generic `showIf` field option).
+`URETIM_CORD_PRODUCTS` / `URETIM_LINING_PRODUCTS` must match the API recipe's
+`cord_part` / `lining`.
 
 The server's final plan decisions may carry a `recipe` object (material need in
 ≈kg, product-specific steps, zipper/yaka-kol confirmations). The panel validates
