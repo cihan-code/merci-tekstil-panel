@@ -349,3 +349,27 @@ function operationsRecipeValid(r) {
     Array.isArray(r.preparations) && r.preparations.every(p => p && text(p.text) && text(p.label)) &&
     (r.materials === null || !!r.materials && text(r.materials.message) && Array.isArray(r.materials.items));
 }
+
+// The shared briefing is a view of validated decisions; it cannot change them.
+function operationsBriefing(rows) {
+  const view = operationsState?.briefing, plan = operationsState?.plan;
+  if (!view || operationsLocalPlanStale || operationsCloudBusy() || !['ready', 'fallback', 'empty'].includes(plan?.status) ||
+      view.version !== 1 || view.date !== plan.date || view.state_hash !== plan.state_hash || view.generated_at !== plan.generated_at ||
+      !Array.isArray(view.items) || view.items.length !== plan.decisions.length ||
+      !Array.isArray(view.notices) || !view.notices.every(x => typeof x === 'string')) return null;
+  const ordered = plan.decisions.slice().sort((a,b) => a.priority-b.priority);
+  for (let n=0; n<ordered.length; n++) {
+    const item=view.items[n], d=ordered[n], saved=operationsState.records.find(r=>String(r.record_id)===String(d.record_id));
+    const row=rows.find(r=>String(r.u.id)===String(d.record_id));
+    if (!item || !saved || String(item.record_id)!==String(d.record_id) || item.priority!==d.priority || item.action!==d.action ||
+        item.disposition!==d.disposition || item.quantity!==(saved.basis.quantity ?? null) || item.status!==(saved.revision?.status || saved.basis.status) ||
+        item.customer!==(String(saved.basis.customer || '').trim() || '(adsız kayıt)') || item.delivery_date!==(saved.basis.est_delivery || null) ||
+        typeof item.summary_action!=='string' || !item.summary_action || !d.action.startsWith(item.summary_action.replace(/…$/,'')) ||
+        JSON.stringify(item.capacity)!==JSON.stringify(d.capacity || null) || JSON.stringify(item.recipe)!==JSON.stringify(d.recipe || null) ||
+        !Array.isArray(item.details) || !item.details.length || item.details[0].text!==d.action ||
+        !item.details.every(x=>x && typeof x.label==='string' && typeof x.text==='string') ||
+        !Array.isArray(item.expectations) || !item.expectations.every(x=>x && typeof x.text==='string' && ['due','overdue','upcoming'].includes(x.status)) ||
+        row && (!row.planApplied || row.action!==item.action)) return null;
+  }
+  return view;
+}

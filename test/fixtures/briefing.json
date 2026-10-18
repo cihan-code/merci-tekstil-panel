@@ -1,0 +1,739 @@
+{
+  "data": {
+    "jobs": [],
+    "uretimTakip": [
+      {
+        "id": 1,
+        "customer_name": "Sentetik Atölye A",
+        "quantity": 250,
+        "status": "Dikimde",
+        "decoration": "nakis",
+        "product_type": "sweat",
+        "assigned_to": "Erdem",
+        "est_delivery": "2026-10-19",
+        "note": "Astarı ve kordonu teyit et.",
+        "cord": "var",
+        "lining": "var"
+      },
+      {
+        "id": 2,
+        "customer_name": "Sentetik Atölye B",
+        "quantity": 250,
+        "status": "Dikimde",
+        "decoration": "yok",
+        "product_type": "sweat",
+        "assigned_to": "Cihan",
+        "est_delivery": "2026-10-18"
+      },
+      {
+        "id": 3,
+        "customer_name": "Sentetik Fermuar",
+        "quantity": 150,
+        "status": "Kumaş Geldi",
+        "decoration": "baski",
+        "product_type": "tam_fermuar",
+        "assigned_to": "Cihan",
+        "est_delivery": "2026-10-22",
+        "cord": "var",
+        "lining": "yok",
+        "problem_note": "Fermuar ölçüsünü teyit et."
+      },
+      {
+        "id": 4,
+        "customer_name": "Sentetik Polo",
+        "quantity": 100,
+        "status": "Baskı/Nakışta",
+        "decoration": "nakis",
+        "product_type": "polo",
+        "assigned_to": "Erdem",
+        "est_delivery": "2026-10-21"
+      }
+    ]
+  },
+  "snapshot": {
+    "version": 1,
+    "revision": 3,
+    "records": [
+      {
+        "record_id": 1,
+        "fingerprint": "792867e1c15ff945c1bd3d348b7602501a50063ee2bcb16fa7194990e17c2b1a",
+        "entries": [],
+        "basis": {
+          "status": "Dikimde",
+          "quantity": 250,
+          "customer": "Sentetik Atölye A",
+          "decoration": "nakis",
+          "est_delivery": "2026-10-19"
+        },
+        "planning_basis": {
+          "assigned_to": "Erdem",
+          "follow_up_date": null,
+          "note": "Astarı ve kordonu teyit et.",
+          "problem_note": "",
+          "product_type": "sweat"
+        },
+        "stage_sync": null,
+        "reminders": [],
+        "expectations": [],
+        "revision": null,
+        "stale": false,
+        "history": []
+      },
+      {
+        "record_id": 2,
+        "fingerprint": "3d7c69342fe7200134a5773d2569839d42a315f1e063c8394b6e3c09943aec06",
+        "entries": [],
+        "basis": {
+          "status": "Dikimde",
+          "quantity": 250,
+          "customer": "Sentetik Atölye B",
+          "decoration": "yok",
+          "est_delivery": "2026-10-18"
+        },
+        "planning_basis": {
+          "assigned_to": "Cihan",
+          "follow_up_date": null,
+          "note": "",
+          "problem_note": "",
+          "product_type": "sweat"
+        },
+        "stage_sync": null,
+        "reminders": [],
+        "expectations": [],
+        "revision": null,
+        "stale": false,
+        "history": []
+      },
+      {
+        "record_id": 3,
+        "fingerprint": "f220567178565796700d78d7f9eba03a7709ca10dc930cab331db52edd04f9ee",
+        "entries": [],
+        "basis": {
+          "status": "Kumaş Geldi",
+          "quantity": 150,
+          "customer": "Sentetik Fermuar",
+          "decoration": "baski",
+          "est_delivery": "2026-10-22"
+        },
+        "planning_basis": {
+          "assigned_to": "Cihan",
+          "follow_up_date": null,
+          "note": "",
+          "problem_note": "Fermuar ölçüsünü teyit et.",
+          "product_type": "tam_fermuar"
+        },
+        "stage_sync": null,
+        "reminders": [],
+        "expectations": [],
+        "revision": null,
+        "stale": false,
+        "history": []
+      },
+      {
+        "record_id": 4,
+        "fingerprint": "05cd063d205f233e48f66ae0dfa3796b37c20373bc11b878176654270bd1ee8d",
+        "entries": [],
+        "basis": {
+          "status": "Baskı/Nakışta",
+          "quantity": 100,
+          "customer": "Sentetik Polo",
+          "decoration": "nakis",
+          "est_delivery": "2026-10-21"
+        },
+        "planning_basis": {
+          "assigned_to": "Erdem",
+          "follow_up_date": null,
+          "note": "",
+          "problem_note": "",
+          "product_type": "polo"
+        },
+        "stage_sync": null,
+        "reminders": [],
+        "expectations": [
+          {
+            "op": "embroidery",
+            "due_date": "2026-10-19",
+            "status": "due",
+            "text": "Nakış bugün bitecek."
+          }
+        ],
+        "revision": null,
+        "stale": false,
+        "history": []
+      }
+    ],
+    "knowledge": [],
+    "sewing_setup": {
+      "product_type": null,
+      "date": null,
+      "source": "unknown"
+    },
+    "build": null,
+    "configured": true,
+    "model": "claude-haiku-4-5",
+    "state_hash": "937e556759875ed71cba2e0e7d043d159bea1419f280987e627beb23f3180ffe",
+    "jev": {
+      "configured": true
+    },
+    "plan": {
+      "version": 1,
+      "status": "ready",
+      "source": "jev",
+      "date": "2026-10-19",
+      "state_hash": "937e556759875ed71cba2e0e7d043d159bea1419f280987e627beb23f3180ffe",
+      "generated_at": "2026-10-19T05:00:00Z",
+      "model": "synthetic",
+      "record_count": 4,
+      "considered_count": 4,
+      "decisions": [
+        {
+          "record_id": 1,
+          "task_key": "finish_sewing",
+          "action": "Bugün dikilecek ≈200 adet; kalan ≈50 adet; tahmini dikim bitiş 20.10. Teslim 19.10, tahmini bitiş 20.10 → ≈1 gün gecikme riski. Alternatif: zorlanmış kapasite (+%15), bugün ≈230 adet; tahmini dikim bitiş 20.10. Asgari plan değiştirilmedi.",
+          "disposition": "do",
+          "priority": 1,
+          "urgent": false,
+          "confidence": 0.9,
+          "source": "jev",
+          "recipe": {
+            "version": 1,
+            "product_type": "sweat",
+            "label": "Sweatshirt",
+            "cord": "var",
+            "lining": "var",
+            "materials": null,
+            "preparations": [],
+            "hints": [],
+            "text": ""
+          },
+          "model_disposition": "do",
+          "capacity": {
+            "version": 1,
+            "station": "sewing",
+            "queue": "existing",
+            "product_type": "sweat",
+            "product_label": "Sweatshirt",
+            "quantity": 250,
+            "order_quantity": 250,
+            "delivery_date": "2026-10-19",
+            "daily_minimum": 200,
+            "required_hours": 12.5,
+            "required_workdays": 1.25,
+            "blocked": false,
+            "reason": "",
+            "status": "scheduled",
+            "today_quantity": 200,
+            "remaining_after_today": 50,
+            "estimated_finish": "2026-10-20",
+            "risk_days": 1,
+            "boost": {
+              "label": "zorlanmış kapasite (+%15)",
+              "factor": 1.15,
+              "today_quantity": 230,
+              "remaining_after_today": 20,
+              "estimated_finish": "2026-10-20",
+              "risk_days": 1
+            },
+            "message": "Bugün dikilecek ≈200 adet; kalan ≈50 adet; tahmini dikim bitiş 20.10. Teslim 19.10, tahmini bitiş 20.10 → ≈1 gün gecikme riski. Alternatif: zorlanmış kapasite (+%15), bugün ≈230 adet; tahmini dikim bitiş 20.10. Asgari plan değiştirilmedi."
+          }
+        },
+        {
+          "record_id": 2,
+          "task_key": "finish_sewing",
+          "action": "Bugün dikilecek ≈0 adet; kalan ≈250 adet; tahmini dikim bitiş 21.10. Teslim 18.10, tahmini bitiş 21.10 → ≈3 gün gecikme riski. Alternatif: zorlanmış kapasite (+%15), bugün ≈0 adet; tahmini dikim bitiş 21.10. Asgari plan değiştirilmedi.",
+          "disposition": "defer",
+          "priority": 2,
+          "urgent": false,
+          "confidence": 0.9,
+          "source": "jev",
+          "recipe": {
+            "version": 1,
+            "product_type": "sweat",
+            "label": "Sweatshirt",
+            "cord": null,
+            "lining": null,
+            "materials": null,
+            "preparations": [],
+            "hints": [],
+            "text": ""
+          },
+          "model_disposition": "do",
+          "capacity": {
+            "version": 1,
+            "station": "sewing",
+            "queue": "existing",
+            "product_type": "sweat",
+            "product_label": "Sweatshirt",
+            "quantity": 250,
+            "order_quantity": 250,
+            "delivery_date": "2026-10-18",
+            "daily_minimum": 200,
+            "required_hours": 12.5,
+            "required_workdays": 1.25,
+            "blocked": false,
+            "reason": "",
+            "status": "scheduled",
+            "today_quantity": 0,
+            "remaining_after_today": 250,
+            "estimated_finish": "2026-10-21",
+            "risk_days": 3,
+            "boost": {
+              "label": "zorlanmış kapasite (+%15)",
+              "factor": 1.15,
+              "today_quantity": 0,
+              "remaining_after_today": 250,
+              "estimated_finish": "2026-10-21",
+              "risk_days": 3
+            },
+            "message": "Bugün dikilecek ≈0 adet; kalan ≈250 adet; tahmini dikim bitiş 21.10. Teslim 18.10, tahmini bitiş 21.10 → ≈3 gün gecikme riski. Alternatif: zorlanmış kapasite (+%15), bugün ≈0 adet; tahmini dikim bitiş 21.10. Asgari plan değiştirilmedi."
+          }
+        },
+        {
+          "record_id": 3,
+          "task_key": "cut",
+          "action": "Bugün kesilecek ≈150 adet; kalan ≈0 adet; tahmini kesim bitiş 19.10. Teslim 22.10, tahmini bitiş 19.10 → dikim/kesim bitişi teslim tarihini aşmıyor.",
+          "disposition": "do",
+          "priority": 3,
+          "urgent": false,
+          "confidence": 0.9,
+          "source": "jev",
+          "recipe": {
+            "version": 1,
+            "product_type": "tam_fermuar",
+            "label": "Tam fermuarlı",
+            "cord": "var",
+            "lining": "yok",
+            "materials": {
+              "status": "calculated",
+              "quantity": 150,
+              "items": [
+                {
+                  "key": "kumas",
+                  "label": "kumaş",
+                  "g_per_unit": 720,
+                  "kg": 108,
+                  "condition": null,
+                  "text": "≈108 kg kumaş"
+                },
+                {
+                  "key": "kaskorse",
+                  "label": "kaşkorse",
+                  "g_per_unit": 125,
+                  "kg": 19,
+                  "condition": null,
+                  "text": "≈19 kg kaşkorse"
+                }
+              ],
+              "message": "Malzeme (fire hariç): ≈108 kg kumaş, ≈19 kg kaşkorse."
+            },
+            "preparations": [
+              {
+                "op": "zipper",
+                "label": "Tam fermuar temini",
+                "condition": null,
+                "status": "unconfirmed",
+                "reason": "",
+                "text": "Tam fermuar temini teyit edilsin."
+              }
+            ],
+            "hints": [
+              "Kesimden sonra kapüşonu ilikçiye gönder."
+            ],
+            "text": "Kesimden sonra kapüşonu ilikçiye gönder. Malzeme (fire hariç): ≈108 kg kumaş, ≈19 kg kaşkorse. Tam fermuar temini teyit edilsin."
+          },
+          "model_disposition": "do",
+          "capacity": {
+            "version": 1,
+            "station": "cut",
+            "queue": null,
+            "product_type": "tam_fermuar",
+            "product_label": "Tam fermuarlı",
+            "quantity": 150,
+            "order_quantity": 150,
+            "delivery_date": "2026-10-22",
+            "daily_minimum": 150,
+            "required_hours": 10,
+            "required_workdays": 1,
+            "blocked": false,
+            "reason": "",
+            "status": "scheduled",
+            "today_quantity": 150,
+            "remaining_after_today": 0,
+            "estimated_finish": "2026-10-19",
+            "risk_days": 0,
+            "boost": null,
+            "message": "Bugün kesilecek ≈150 adet; kalan ≈0 adet; tahmini kesim bitiş 19.10. Teslim 22.10, tahmini bitiş 19.10 → dikim/kesim bitişi teslim tarihini aşmıyor."
+          }
+        },
+        {
+          "record_id": 4,
+          "task_key": "confirm_outsourced",
+          "action": "Baskı/nakış işleminin tamamlandığını teyit et; tamamlanmışsa dikime götür.",
+          "disposition": "confirm",
+          "priority": 4,
+          "urgent": false,
+          "confidence": 0.9,
+          "source": "jev",
+          "recipe": {
+            "version": 1,
+            "product_type": "polo",
+            "label": "Polo yaka",
+            "cord": null,
+            "lining": null,
+            "materials": null,
+            "preparations": [
+              {
+                "op": "collar",
+                "label": "Yaka-kol siparişi",
+                "condition": null,
+                "status": "unconfirmed",
+                "reason": "",
+                "text": "Yaka-kol siparişi teyit edilsin."
+              }
+            ],
+            "hints": [],
+            "text": "Yaka-kol siparişi teyit edilsin."
+          }
+        }
+      ],
+      "capacity": {
+        "version": 1,
+        "config_hash": "b5af52162a0e2f7596203b802b022c79c4937dcc98817ab384a433583db58e6e",
+        "workday": {
+          "start": "09:00",
+          "end": "19:00",
+          "hours": 10,
+          "closed_weekdays": [
+            0
+          ]
+        },
+        "transitions_today": [],
+        "notes": [
+          "Önceki dikilen ürün bilinmiyor; ilk ürün geçişi süresi hariç tahmin yapıldı."
+        ]
+      }
+    },
+    "briefing": {
+      "version": 1,
+      "date": "2026-10-19",
+      "state_hash": "937e556759875ed71cba2e0e7d043d159bea1419f280987e627beb23f3180ffe",
+      "revision": 3,
+      "generated_at": "2026-10-19T05:00:00Z",
+      "source": "jev",
+      "summary": {
+        "total": 4,
+        "overdue": 1,
+        "do": 2,
+        "confirm": 1,
+        "defer": 1
+      },
+      "notices": [
+        "Önceki dikilen ürün bilinmiyor; ilk ürün geçişi süresi hariç tahmin yapıldı."
+      ],
+      "items": [
+        {
+          "record_id": 1,
+          "priority": 1,
+          "disposition": "do",
+          "customer": "Sentetik Atölye A",
+          "quantity": 250,
+          "status": "Dikimde",
+          "decoration": "nakis",
+          "product_type": "sweat",
+          "assigned_to": "Erdem",
+          "delivery_date": "2026-10-19",
+          "days_late": 0,
+          "follow_up_due": false,
+          "action": "Bugün dikilecek ≈200 adet; kalan ≈50 adet; tahmini dikim bitiş 20.10. Teslim 19.10, tahmini bitiş 20.10 → ≈1 gün gecikme riski. Alternatif: zorlanmış kapasite (+%15), bugün ≈230 adet; tahmini dikim bitiş 20.10. Asgari plan değiştirilmedi.",
+          "summary_action": "Bugün dikilecek ≈200 adet",
+          "source": "jev",
+          "confidence": 0.9,
+          "capacity": {
+            "version": 1,
+            "station": "sewing",
+            "queue": "existing",
+            "product_type": "sweat",
+            "product_label": "Sweatshirt",
+            "quantity": 250,
+            "order_quantity": 250,
+            "delivery_date": "2026-10-19",
+            "daily_minimum": 200,
+            "required_hours": 12.5,
+            "required_workdays": 1.25,
+            "blocked": false,
+            "reason": "",
+            "status": "scheduled",
+            "today_quantity": 200,
+            "remaining_after_today": 50,
+            "estimated_finish": "2026-10-20",
+            "risk_days": 1,
+            "boost": {
+              "label": "zorlanmış kapasite (+%15)",
+              "factor": 1.15,
+              "today_quantity": 230,
+              "remaining_after_today": 20,
+              "estimated_finish": "2026-10-20",
+              "risk_days": 1
+            },
+            "message": "Bugün dikilecek ≈200 adet; kalan ≈50 adet; tahmini dikim bitiş 20.10. Teslim 19.10, tahmini bitiş 20.10 → ≈1 gün gecikme riski. Alternatif: zorlanmış kapasite (+%15), bugün ≈230 adet; tahmini dikim bitiş 20.10. Asgari plan değiştirilmedi."
+          },
+          "recipe": {
+            "version": 1,
+            "product_type": "sweat",
+            "label": "Sweatshirt",
+            "cord": "var",
+            "lining": "var",
+            "materials": null,
+            "preparations": [],
+            "hints": [],
+            "text": ""
+          },
+          "expectations": [],
+          "details": [
+            {
+              "label": "Tam aksiyon",
+              "text": "Bugün dikilecek ≈200 adet; kalan ≈50 adet; tahmini dikim bitiş 20.10. Teslim 19.10, tahmini bitiş 20.10 → ≈1 gün gecikme riski. Alternatif: zorlanmış kapasite (+%15), bugün ≈230 adet; tahmini dikim bitiş 20.10. Asgari plan değiştirilmedi."
+            },
+            {
+              "label": "Üretim notu",
+              "text": "Astarı ve kordonu teyit et."
+            }
+          ]
+        },
+        {
+          "record_id": 2,
+          "priority": 2,
+          "disposition": "defer",
+          "customer": "Sentetik Atölye B",
+          "quantity": 250,
+          "status": "Dikimde",
+          "decoration": "yok",
+          "product_type": "sweat",
+          "assigned_to": "Cihan",
+          "delivery_date": "2026-10-18",
+          "days_late": 1,
+          "follow_up_due": false,
+          "action": "Bugün dikilecek ≈0 adet; kalan ≈250 adet; tahmini dikim bitiş 21.10. Teslim 18.10, tahmini bitiş 21.10 → ≈3 gün gecikme riski. Alternatif: zorlanmış kapasite (+%15), bugün ≈0 adet; tahmini dikim bitiş 21.10. Asgari plan değiştirilmedi.",
+          "summary_action": "Bugün dikilecek ≈0 adet",
+          "source": "jev",
+          "confidence": 0.9,
+          "capacity": {
+            "version": 1,
+            "station": "sewing",
+            "queue": "existing",
+            "product_type": "sweat",
+            "product_label": "Sweatshirt",
+            "quantity": 250,
+            "order_quantity": 250,
+            "delivery_date": "2026-10-18",
+            "daily_minimum": 200,
+            "required_hours": 12.5,
+            "required_workdays": 1.25,
+            "blocked": false,
+            "reason": "",
+            "status": "scheduled",
+            "today_quantity": 0,
+            "remaining_after_today": 250,
+            "estimated_finish": "2026-10-21",
+            "risk_days": 3,
+            "boost": {
+              "label": "zorlanmış kapasite (+%15)",
+              "factor": 1.15,
+              "today_quantity": 0,
+              "remaining_after_today": 250,
+              "estimated_finish": "2026-10-21",
+              "risk_days": 3
+            },
+            "message": "Bugün dikilecek ≈0 adet; kalan ≈250 adet; tahmini dikim bitiş 21.10. Teslim 18.10, tahmini bitiş 21.10 → ≈3 gün gecikme riski. Alternatif: zorlanmış kapasite (+%15), bugün ≈0 adet; tahmini dikim bitiş 21.10. Asgari plan değiştirilmedi."
+          },
+          "recipe": {
+            "version": 1,
+            "product_type": "sweat",
+            "label": "Sweatshirt",
+            "cord": null,
+            "lining": null,
+            "materials": null,
+            "preparations": [],
+            "hints": [],
+            "text": ""
+          },
+          "expectations": [],
+          "details": [
+            {
+              "label": "Tam aksiyon",
+              "text": "Bugün dikilecek ≈0 adet; kalan ≈250 adet; tahmini dikim bitiş 21.10. Teslim 18.10, tahmini bitiş 21.10 → ≈3 gün gecikme riski. Alternatif: zorlanmış kapasite (+%15), bugün ≈0 adet; tahmini dikim bitiş 21.10. Asgari plan değiştirilmedi."
+            }
+          ]
+        },
+        {
+          "record_id": 3,
+          "priority": 3,
+          "disposition": "do",
+          "customer": "Sentetik Fermuar",
+          "quantity": 150,
+          "status": "Kumaş Geldi",
+          "decoration": "baski",
+          "product_type": "tam_fermuar",
+          "assigned_to": "Cihan",
+          "delivery_date": "2026-10-22",
+          "days_late": 0,
+          "follow_up_due": false,
+          "action": "Bugün kesilecek ≈150 adet; kalan ≈0 adet; tahmini kesim bitiş 19.10. Teslim 22.10, tahmini bitiş 19.10 → dikim/kesim bitişi teslim tarihini aşmıyor.",
+          "summary_action": "Bugün kesilecek ≈150 adet",
+          "source": "jev",
+          "confidence": 0.9,
+          "capacity": {
+            "version": 1,
+            "station": "cut",
+            "queue": null,
+            "product_type": "tam_fermuar",
+            "product_label": "Tam fermuarlı",
+            "quantity": 150,
+            "order_quantity": 150,
+            "delivery_date": "2026-10-22",
+            "daily_minimum": 150,
+            "required_hours": 10,
+            "required_workdays": 1,
+            "blocked": false,
+            "reason": "",
+            "status": "scheduled",
+            "today_quantity": 150,
+            "remaining_after_today": 0,
+            "estimated_finish": "2026-10-19",
+            "risk_days": 0,
+            "boost": null,
+            "message": "Bugün kesilecek ≈150 adet; kalan ≈0 adet; tahmini kesim bitiş 19.10. Teslim 22.10, tahmini bitiş 19.10 → dikim/kesim bitişi teslim tarihini aşmıyor."
+          },
+          "recipe": {
+            "version": 1,
+            "product_type": "tam_fermuar",
+            "label": "Tam fermuarlı",
+            "cord": "var",
+            "lining": "yok",
+            "materials": {
+              "status": "calculated",
+              "quantity": 150,
+              "items": [
+                {
+                  "key": "kumas",
+                  "label": "kumaş",
+                  "g_per_unit": 720,
+                  "kg": 108,
+                  "condition": null,
+                  "text": "≈108 kg kumaş"
+                },
+                {
+                  "key": "kaskorse",
+                  "label": "kaşkorse",
+                  "g_per_unit": 125,
+                  "kg": 19,
+                  "condition": null,
+                  "text": "≈19 kg kaşkorse"
+                }
+              ],
+              "message": "Malzeme (fire hariç): ≈108 kg kumaş, ≈19 kg kaşkorse."
+            },
+            "preparations": [
+              {
+                "op": "zipper",
+                "label": "Tam fermuar temini",
+                "condition": null,
+                "status": "unconfirmed",
+                "reason": "",
+                "text": "Tam fermuar temini teyit edilsin."
+              }
+            ],
+            "hints": [
+              "Kesimden sonra kapüşonu ilikçiye gönder."
+            ],
+            "text": "Kesimden sonra kapüşonu ilikçiye gönder. Malzeme (fire hariç): ≈108 kg kumaş, ≈19 kg kaşkorse. Tam fermuar temini teyit edilsin."
+          },
+          "expectations": [],
+          "details": [
+            {
+              "label": "Tam aksiyon",
+              "text": "Bugün kesilecek ≈150 adet; kalan ≈0 adet; tahmini kesim bitiş 19.10. Teslim 22.10, tahmini bitiş 19.10 → dikim/kesim bitişi teslim tarihini aşmıyor."
+            },
+            {
+              "label": "Sorun notu",
+              "text": "Fermuar ölçüsünü teyit et."
+            },
+            {
+              "label": "Üretim adımı",
+              "text": "Kesimden sonra kapüşonu ilikçiye gönder."
+            },
+            {
+              "label": "Malzeme",
+              "text": "Malzeme (fire hariç): ≈108 kg kumaş, ≈19 kg kaşkorse."
+            },
+            {
+              "label": "Hazırlık teyidi",
+              "text": "Tam fermuar temini teyit edilsin."
+            }
+          ]
+        },
+        {
+          "record_id": 4,
+          "priority": 4,
+          "disposition": "confirm",
+          "customer": "Sentetik Polo",
+          "quantity": 100,
+          "status": "Baskı/Nakışta",
+          "decoration": "nakis",
+          "product_type": "polo",
+          "assigned_to": "Erdem",
+          "delivery_date": "2026-10-21",
+          "days_late": 0,
+          "follow_up_due": false,
+          "action": "Baskı/nakış işleminin tamamlandığını teyit et; tamamlanmışsa dikime götür.",
+          "summary_action": "Baskı/nakış işleminin tamamlandığını teyit et",
+          "source": "jev",
+          "confidence": 0.9,
+          "capacity": null,
+          "recipe": {
+            "version": 1,
+            "product_type": "polo",
+            "label": "Polo yaka",
+            "cord": null,
+            "lining": null,
+            "materials": null,
+            "preparations": [
+              {
+                "op": "collar",
+                "label": "Yaka-kol siparişi",
+                "condition": null,
+                "status": "unconfirmed",
+                "reason": "",
+                "text": "Yaka-kol siparişi teyit edilsin."
+              }
+            ],
+            "hints": [],
+            "text": "Yaka-kol siparişi teyit edilsin."
+          },
+          "expectations": [
+            {
+              "op": "embroidery",
+              "due_date": "2026-10-19",
+              "status": "due",
+              "text": "Nakış bugün bitecek."
+            }
+          ],
+          "details": [
+            {
+              "label": "Tam aksiyon",
+              "text": "Baskı/nakış işleminin tamamlandığını teyit et; tamamlanmışsa dikime götür."
+            },
+            {
+              "label": "Tarihli beklenti",
+              "text": "Nakış bugün bitecek."
+            },
+            {
+              "label": "Hazırlık teyidi",
+              "text": "Yaka-kol siparişi teyit edilsin."
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

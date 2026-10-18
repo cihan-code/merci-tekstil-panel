@@ -298,3 +298,26 @@ test('dated expectations reach the row note and Günün planı; delivery changes
   const sections = daily.daily({ today: '2026-10-12', groups: [['Baskı / Nakış', [{ ...rows[1], u: { ...rows[1].u, customer_name: 'B', quantity: 80 }, late: 0 }]]] });
   assert.deepEqual(sections.find(x => x.title === 'Bugün beklenenler').lines, ['B (≈80 adet): Bugün bekleniyor: Nakış — “pazartesi bitecek” (09.10 bildirimi).']);
 });
+
+test('structured briefing keeps exact priorities, capacity and complete details',()=>{
+ const fixture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/briefing.json')));
+ const {api,ctx}=harness();
+ ctx.Intl={DateTimeFormat:function(){return {format:()=>fixture.snapshot.plan.date};}};
+ api.setState(fixture.snapshot);
+ const rows=fixture.data.uretimTakip.map(u=>({u,deco:u.decoration}));api.apply(rows);
+ const view=vm.runInContext('operationsBriefing',ctx)(rows);
+ assert.equal(view.items.length,4);
+ assert.equal(view.items[0].action,rows[0].action);
+ assert.deepEqual(view.items.map(i=>i.priority),[1,2,3,4]);
+ assert.match(JSON.stringify(view.items[2].details),/Fermuar ölçüsünü/);
+ assert.equal(view.items[0].capacity.today_quantity,200);
+ assert.equal(view.items[1].capacity.today_quantity,0);
+});
+test('invalid briefing presentation never changes valid final decisions',()=>{
+ const fixture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/briefing.json')));
+ const {api,ctx}=harness();ctx.Intl={DateTimeFormat:function(){return {format:()=>fixture.snapshot.plan.date};}};
+ fixture.snapshot.briefing.items[0].action='Yanlış aksiyon';api.setState(fixture.snapshot);
+ const rows=fixture.data.uretimTakip.map(u=>({u,deco:u.decoration}));api.apply(rows);
+ assert.equal(vm.runInContext('operationsBriefing',ctx)(rows),null);
+ assert.equal(rows[0].action,fixture.snapshot.plan.decisions.find(d=>d.record_id===1).action);
+});

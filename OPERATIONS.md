@@ -134,3 +134,25 @@ and lists `due`/`overdue` in Günün planı under **Bugün beklenenler**. A stat
 delivery date updates Tahmini Teslimat on the server; the saved-report message shows
 `Tahmini teslimat: eski → yeni`, and the report history shows its expectations.
 Undo restores the date. No dates are computed in the browser.
+
+## Compact daily briefing (2026-10-18)
+
+**Bugünün Yapılacakları** now shows a summary and cards in the exact existing final
+priority order. Each card keeps ID/customer, quantity, stage, owner, due date,
+short action and available capacity/risk. **Detayları Gör** is a native, keyboard
+accessible disclosure with the full original action, report facts, notes, recipes,
+preparation reminders and dated expectations. Nothing is silently dropped.
+Critical cards have a colored border plus written overdue/risk labels; meaning
+does not depend on color. Existing form/report/undo/stale/sync flows are untouched.
+
+The API's versioned, dated/state-hashed `snapshot.briefing` is checked against
+validated final decisions. A malformed briefing affects only presentation;
+valid decisions are retained. Older servers retain a local view of the same
+existing rows. Owner filters affect visible cards, not planning. PDF printing
+remains A4 landscape but uses a compact repeated-header table; the daily agent's
+portrait PDF consumes the same items. Provider names remain absent in panel text.
+
+Run `node --test test/operations-ui.js` and all ten sync scenarios. Browser QA must
+check desktop/mobile, keyboard disclosure, all detail text, priority and capacity
+matching, no horizontal overflow, and the full landscape print output. No email
+is sent and no production data is written by the presentation change.
