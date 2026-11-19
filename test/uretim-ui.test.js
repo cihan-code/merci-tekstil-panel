@@ -108,9 +108,9 @@ test('cm values and piece counts share Turkish number formatting',()=>{
   assert.equal(ui.positionLabel('constructor'),'constructor');
 });
 test('workshop actions follow parked, failed and waiting states',()=>{
-  assert.deepEqual(ui.packageActions('manuel_bekliyor'),[['Gruba gönderildi','elle-gonderildi']]);
+  assert.deepEqual(ui.packageActions('manuel_bekliyor'),[['Gruba gönderildi olarak işaretle','elle-gonderildi']]);
   assert.deepEqual(ui.packageActions('basarisiz'),[['Tekrar dene','tekrar']]);
-  assert.deepEqual(ui.packageActions('bekliyor'),[['Elle gönderime al','manuel']]);
+  assert.deepEqual(ui.packageActions('bekliyor'),[['Elle gönderime al (otomatik gönderim kapalı)','manuel']]);
   for(const status of ['tamam','isleniyor','iptal',undefined])assert.deepEqual(ui.packageActions(status),[]);
 });
 test('cost status keeps queue errors visible before price entry',()=>{
@@ -126,4 +126,57 @@ test('cost price input carries explicit template sizes and application quantitie
   assert.deepEqual(ui.pricePayload('80.5',selected),{unitPrice:80.5,bnItems:[{type:'baski',area:'göğüs',qty:140,size:'Özel Boyut'}]});
   assert.deepEqual(ui.pricePayload('80.5'),{unitPrice:80.5});
   assert.deepEqual(ui.costApplications({}),[]);
+});
+
+
+test('Turkish decimal input accepts commas, grouped paste and legacy dots as API numbers',()=>{
+  for(const [input,expected] of [['80,50',80.5],['1.234,567',1234.567],['80.5',80.5],['0,001',.001],[' -2,5 ',-2.5],['0',0]])assert.equal(ui.parseNumber(input),expected);
+  assert.equal(ui.inputNumber(80.5),'80,5');assert.equal(ui.inputNumber(1234.567),'1234,567');
+  assert.equal(ui.inputNumber(''),'');assert.equal(ui.parseNumber(''),null);
+  assert.deepEqual(ui.pricePayload('80,50'),{unitPrice:80.5});
+  assert.equal(JSON.stringify(ui.pricePayload('80,50')),'{"unitPrice":80.5}');
+  for(const value of ['1,2,3','12.34,5','bad','NaN','Infinity',Infinity])assert.throws(()=>ui.parseNumber(value),RangeError);
+});
+test('localized number validation preserves required, bounds, integer and precision constraints',()=>{
+  assert.equal(ui.validateNumber('0',{step:1,required:true}),0);
+  assert.equal(ui.validateNumber('12,345',{step:.001}),12.345);
+  for(const value of ['-1','0,5','2,01'])assert.throws(()=>ui.validateNumber(value,{step:1}),RangeError);
+  assert.throws(()=>ui.validateNumber('',{required:true}),RangeError);
+  assert.throws(()=>ui.validateNumber('101',{min:1,max:100}),RangeError);
+  assert.throws(()=>ui.validateNumber('0,0001',{step:.001}),RangeError);
+  for(const price of ['0','-2','1,001',''])assert.throws(()=>ui.pricePayload(price),RangeError);
+});
+test('unmatched delivery summary counts only awaiting kg from the full invoice list',()=>{
+  const waiting={delivery_status:'teslim_bekliyor',unit:'kg',qty_milli:12500};
+  assert.equal(ui.unmatchedAwaitingKg([
+    {...waiting,match_status:'teyit',item_id:null},
+    {...waiting,qty_milli:250,match_status:'eslesmedi',item_id:null},
+    {...waiting,qty_milli:1000,match_status:'eslesti',item_id:null},
+    {...waiting,match_status:'eslesti',item_id:1},
+    {...waiting,delivery_status:'teslim_alindi',match_status:'teyit'},
+    {...waiting,unit:'adet',match_status:'teyit'},
+    {...waiting,unit:'m',match_status:'teyit'},
+  ]),13.75);
+  assert.equal(ui.unmatchedAwaitingKg([]),0);
+});
+test('confirmation text preserves server bullet lines and uses recipe and position labels',()=>{
+  assert.equal(ui.displayMessage('Maliyet aktarımı için eksik alanlar:\n\n• polo: gogus\n—\n• Birim fiyat., kontrol'),'Maliyet aktarımı için eksik alanlar:\n• Polo yaka: Göğüs\n• Birim fiyat; kontrol');
+  for(const value of [null,undefined,'','  ','—','\n—\n'])assert.equal(ui.displayMessage(value),'');
+  assert.equal(ui.PRODUCTS.polo,'Polo yaka');
+});
+test('read-only size summaries exclude zero sizes while preserving positive counts',()=>{
+  assert.equal(ui.positiveSizes({XS:0,S:5,M:0,L:12,'2XL':0}),'S: 5, L: 12');
+  assert.equal(ui.positiveSizes({XS:0}), '');
+});
+test('queue cards derive both basename and localized type from actual outbox payload',()=>{
+  assert.deepEqual(ui.queueFile({payload_json:JSON.stringify({file:{id:4,path:'/private/storage/order-4.pdf',kind:'kesim_formu'}})}),{name:'order-4.pdf',kind:'Kesim formu'});
+  assert.deepEqual(ui.queueFile({payload_json:{file:{filename:'dikim.pdf',kind:'dikim_formu'}}}),{name:'dikim.pdf',kind:'Dikim formu'});
+  assert.deepEqual(ui.queueFile({payload_json:'{}'}),{name:'',kind:''});
+});
+test('dark dialog selector matches body-mounted dialog and preserves mobile gutters',()=>{
+  const css=fs.readFileSync(path.join(__dirname,'../assets/uretim.css'),'utf8');
+  assert.match(css,/\.production\.p-dialog\{/);assert.doesNotMatch(css,/\.production \.p-dialog\{/);
+  assert.match(css,/width:calc\(100vw - 32px\)/);assert.match(css,/color-scheme:dark/);
+  assert.match(css,/select:disabled\{opacity:1/);
+  for(const file of ['uretim.html','stok.html'])assert.match(fs.readFileSync(path.join(__dirname,'..',file),'utf8'),/<html lang="tr">/);
 });
