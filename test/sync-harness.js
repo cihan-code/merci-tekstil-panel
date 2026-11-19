@@ -16,7 +16,7 @@ const path = require('path');
 const vm = require('vm');
 require(path.join(__dirname, 'dom-stub.js'));
 
-const ALL = ['normal', 'poll-race', 'save-during-response', 'net-fail', 'stale-autoheal', 'real-conflict', 'schema-422', 'quota', 'kanban-sync', 'kanban-race'];
+const ALL = ['normal', 'poll-race', 'save-during-response', 'net-fail', 'stale-autoheal', 'real-conflict', 'schema-422', 'quota', 'kanban-sync', 'kanban-race', 'oturumsuz-acilis', 'oturum-dustu'];
 const scenario = process.argv[2] || 'normal';
 const PANEL_HTML = process.argv[3] || path.join(__dirname, '..', 'index.html');
 
@@ -68,7 +68,18 @@ function serverGet() {
   // doğrudan mutasyona uğratır ve test yalan söyler).
   return jsonRes(200, JSON.parse(JSON.stringify({ data: server.data, auth: null, updatedAt: server.updatedAt })));
 }
+// --- kişi oturumu (uydurma): panel sabit anahtar taşımaz, eski uçlara Bearer ile gelir ---
+const API = 'https://erci-materials-api.onrender.com';
+const auth = { token: 'a1'.repeat(32), logins: 0 };
+const authorized = (opts) => { const h = opts.headers || {}; return !('x-api-key' in h) && h.Authorization === 'Bearer ' + auth.token; };
 globalThis.__fetchImpl = async (url, opts) => {
+  if (String(url) === API + '/api/siparis/giris') {
+    const b = JSON.parse(opts.body);
+    if (b.ad !== 'Deneme Kişi' || b.sifre !== 'uydurma-sifre') return jsonRes(401, { error: 'Giriş bilgileri geçersiz' });
+    auth.logins++;
+    return jsonRes(200, { token: auth.token, expiresAt: new Date(Date.now() + 3600e3).toISOString(), user: { id: 1, name: 'Deneme Kişi', role: 'ekip' } });
+  }
+  if (String(url).indexOf('/api/paneldata') !== -1 && !authorized(opts)) return jsonRes(401, { error: 'Yetkisiz', code: 'AUTH-401' });
   const isPost = (opts.method === 'POST');
   if (String(url).indexOf('/api/paneldata') !== -1 && !isPost) return serverGet();
   if (String(url).indexOf('/api/paneldata') !== -1 && isPost) {
@@ -87,6 +98,12 @@ if (scenario === 'stale-autoheal') server.getFails = 1;      // açılış çeki
 server.data = server.data || { customers: [], jobs: [], incomes: [], expenses: [], fixedExpenses: [], debts: [], pipeline: [], suppliers: [], hedefler: [], hedeflerAylik: [], uretimTakip: [], okulMail: [], okulTakip: [], tasks: [], invoices: [], supplierCategories: [], costTemplates: { products: [], baski: {}, nakis: {}, price_tiers: [], price_list: {}, meta: {} } };
 server.updatedAt = '2026-09-11T08:00:00.000Z';
 
+// Tarayıcıdaki gibi: assets/session.js satır içi betiklerden önce yüklenir; oturum (uretim.js girişi) sekmede hazır.
+vm.runInThisContext(fs.readFileSync(path.join(__dirname, '../assets/session.js'), 'utf8'), { filename: 'session.js' });
+if (scenario !== 'oturumsuz-acilis') {
+  sessionStorage.setItem('merci.production.session', JSON.stringify({ token: auth.token, expiresAt: new Date(Date.now() + 3600e3).toISOString(),
+    user: { id: 1, name: 'Deneme Kişi' }, endpoint: API }));
+}
 vm.runInThisContext(buildBundle(), { filename: 'panel-bundle.js' });
 const T = globalThis.__t;
 T.stubRender();
@@ -244,6 +261,57 @@ T.stubRender();
     check(T.errors.some(e => e.code === 'LOC-001'), 'hata kodu LOC-001 üretildi', T.errors.map(e => e.code).join(','));
     await wait(900);
     check(server.data.jobs.length === 1, 'kota dolu olsa da kayıt buluta gitti');
+  }
+
+  // Kişisel giriş penceresi (assets/session.js) DOM'da: alanları doldurup gönder.
+  const loginDialog = () => document.body.children.find(c => c.id === 'merciSessionLogin');
+  const walk = (n, fn) => fn(n) || (n.children || []).reduce((hit, c) => hit || walk(c, fn), null);
+  async function submitLogin(ad, sifre) {
+    const form = loginDialog().children[0];
+    walk(form, n => n.name === 'ad' && n).value = ad;
+    walk(form, n => n.name === 'sifre' && n).value = sifre;
+    await form._l.submit({ preventDefault() {} });
+    await wait(60);
+  }
+  const paneldataCalls = () => __fetchLog.filter(f => String(f.url).indexOf('/api/paneldata') !== -1);
+
+  if (scenario === 'oturumsuz-acilis') {
+    check(paneldataCalls().length === 0, 'oturum yokken bulut verisi istenmedi', 'çağrı=' + paneldataCalls().length);
+    check(!!loginDialog(), 'kişisel giriş penceresi açıldı');
+    check(T.ready === false, 'açılış girişi bekliyor');
+    await submitLogin('Deneme Kişi', 'yanlis-sifre');
+    const error = walk(loginDialog().children[0], n => n.textContent === 'Giriş bilgileri geçersiz' && n);
+    check(!!loginDialog() && !!error, 'yanlış şifrede pencere açık kaldı, hata gösterildi');
+    check(paneldataCalls().length === 0 && sessionStorage.getItem('merci.production.session') === null, 'yanlış şifrede oturum yazılmadı');
+    await submitLogin('Deneme Kişi', 'uydurma-sifre');
+    check(!loginDialog(), 'girişten sonra pencere kapandı');
+    const saved = JSON.parse(sessionStorage.getItem('merci.production.session') || 'null');
+    check(!!saved && saved.endpoint === API && saved.user.name === 'Deneme Kişi', 'oturum uretim.js kaydına yazıldı');
+    await wait(60);
+    check(T.ready === true && T.stamp === '2026-09-11T08:00:00.000Z', 'girişten sonra açılış senkronu tamamlandı', String(T.stamp));
+    T.data.jobs.push({ id: 11, title: 'GİRİŞ SONRASI İŞ' });
+    T.saveData();
+    await wait(900);
+    check(!T.dirty && server.data.jobs.length === 1, 'kayıt kişi oturumuyla sunucuya ulaştı');
+  }
+
+  if (scenario === 'oturum-dustu') {
+    check(T.ready === true && T.stamp === '2026-09-11T08:00:00.000Z', 'açılışta oturumla bulut verisi alındı');
+    auth.token = 'b2'.repeat(32);        // sunucuda oturum düştü (süre doldu / silindi); yeni girişte bu verilir
+    T.data.jobs.push({ id: 12, title: 'OTURUM DÜŞERKEN İŞ' });
+    T.saveData();
+    await wait(900);
+    check(T.dirty === true, '401 sonrası kayıt "gönderilmedi" olarak kaldı');
+    check(sessionStorage.getItem('merci.production.session') === null, '401 sonrası oturum silindi');
+    check(!!loginDialog(), '401 sonrası kişisel giriş istendi');
+    check(T.errors.some(e => e.code === 'SYNC-006'), 'hata kodu SYNC-006 üretildi', T.errors.map(e => e.code).join(','));
+    const posts = __fetchLog.filter(f => f.method === 'POST' && String(f.url).indexOf('/api/paneldata') !== -1).length;
+    T.saveData(); await T.tick(); await wait(900);
+    check(__fetchLog.filter(f => f.method === 'POST' && String(f.url).indexOf('/api/paneldata') !== -1).length === posts, 'giriş beklerken tekrar gönderim yapılmadı');
+    await submitLogin('Deneme Kişi', 'uydurma-sifre');
+    await wait(200);
+    check(!loginDialog() && T.dirty === false, 'girişten sonra bekleyen kayıt kendiliğinden gönderildi');
+    check(server.data.jobs.length === 1 && server.data.jobs[0].title === 'OTURUM DÜŞERKEN İŞ', 'kayıt kaybolmadı, sunucuya ulaştı');
   }
 
   if (ALL.indexOf(scenario) === -1) {

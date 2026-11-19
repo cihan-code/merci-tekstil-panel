@@ -1601,6 +1601,7 @@ footer { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px;
 
 <link rel="stylesheet" href="assets/operations.css">
 <script src="assets/operations.js"></script>
+<script src="assets/session.js"></script>
 </body>
 </html>
 
@@ -1625,7 +1626,14 @@ const SESSION_KEY = 'merciPanelSession_v1';
 // Bulut API bilgileri (saveData/saveAuth ilk veri yüklenirken de çağrılabildiği için bunlar
 // diğer her şeyden önce tanımlanmalı — aksi halde "const" henüz hazır değilken erişim hatası olur).
 const MATERIALS_API_BASE = 'https://erci-materials-api.onrender.com';
-const MATERIALS_API_KEY = '4AZx0XIQZIoCF8tCSUVH4rzLKbrr07Cnvg2fqi8For4';
+// Panel sabit API anahtarı TAŞIMAZ (depo herkese açık). Eski uçlar kişi oturumuyla açılır: uretim.js ile aynı
+// sessionStorage kaydı assets/session.js ile okunur; oturum yoksa ya da 401 gelirse kişisel giriş istenir.
+function panelAuthHeaders(extra) { return Object.assign(MerciSession.headers(MATERIALS_API_BASE), extra || {}); }
+function panelSessionReady() { return (!matBackendReady() || MerciSession.read(MATERIALS_API_BASE)) ? Promise.resolve() : MerciSession.requireLogin(MATERIALS_API_BASE); }
+function panelSessionLost() {
+  MerciSession.clear();
+  return MerciSession.requireLogin(MATERIALS_API_BASE, { message: 'Oturumunuz sona erdi. Kişisel hesabınızla tekrar giriş yapın; bekleyen kayıtlar sonra gönderilir.' });
+}
 let CLOUD_SYNC_READY = false;
 let CLOUD_SAVE_TIMER = null;
 // En son buluttan çekilen/buluta kaydedilen verinin "updatedAt" damgası. Her kaydetmede
@@ -1647,6 +1655,7 @@ let CLOUD_PENDING_AGAIN = false;   // uçuş sırasında yeni değişiklik geldi
 let CLOUD_RETRY_TIMER = null;
 let CLOUD_RETRY_N = 0;
 let CLOUD_RESOLVING = false;       // çakışma çözülürken ikinci gönderim başlamasın
+let CLOUD_AUTH_WAIT = false;       // 401 sonrası kişisel giriş bekleniyor; gönderim girişten sonra
 let CLOUD_BASE_JSON = null;        // CLOUD_LAST_KNOWN_UPDATED_AT damgasına karşılık gelen veri
 let BOOT_LOCAL_JSON = null;        // oturuma başlarken elimizdeki veri (çakışma teşhisi için)
 let SYNC_BADGE_STATE = 'init';
@@ -1934,7 +1943,7 @@ async function pullCloudPanelData(timeoutMs) {
   const timer = setTimeout(() => controller.abort(), timeoutMs || 6000);
   try {
     const res = await fetch(MATERIALS_API_BASE + '/api/paneldata', {
-      headers: { 'x-api-key': MATERIALS_API_KEY },
+      headers: panelAuthHeaders(),
       signal: controller.signal,
     });
     clearTimeout(timer);
@@ -1942,6 +1951,7 @@ async function pullCloudPanelData(timeoutMs) {
       let srv = '';
       try { const j = await res.json(); srv = (j && j.code) ? j.code : ''; } catch (e) {}
       panelError('PULL-002', 'Bulut verisi okunamadı (HTTP ' + res.status + ').', srv, { silent: true });
+      if (res.status === 401) panelSessionLost();
       return null;
     }
     return await res.json();
@@ -1962,7 +1972,7 @@ function pushCloudPanelData() {
 
 // Asıl kaydetme. Tek seferde TEK istek uçar (paralel iki POST birbirini 409'a düşürüyordu).
 async function runCloudPush() {
-  if (!matBackendReady() || CLOUD_CONFLICT || CLOUD_RESOLVING) return;
+  if (!matBackendReady() || CLOUD_CONFLICT || CLOUD_RESOLVING || CLOUD_AUTH_WAIT) return;
   if (CLOUD_INFLIGHT) { CLOUD_PENDING_AGAIN = true; return; }
   clearTimeout(CLOUD_RETRY_TIMER);
   CLOUD_INFLIGHT = true;
@@ -1977,7 +1987,7 @@ async function runCloudPush() {
   try {
     res = await fetch(MATERIALS_API_BASE + '/api/paneldata', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': MATERIALS_API_KEY },
+      headers: panelAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ data: DATA, auth: AUTH, expectedUpdatedAt: stampSent }),
       signal: controller.signal,
     });
@@ -2025,8 +2035,19 @@ async function runCloudPush() {
     return;   // aynı veri tekrar gönderilse yine reddedilir — otomatik tekrar yok
   }
 
-  if (res.status === 401 || res.status === 403) {
-    panelError('SYNC-006', 'Kaydetme reddedildi: sunucu yetkilendirmesi geçersiz (API anahtarı).', srvCode);
+  // 401: oturum yok ya da süresi dolmuş. Veri "gönderilmedi" kalır; kişisel girişten sonra kayıt
+  // kendiliğinden tekrar gönderilir (beklerken başka gönderim başlamaz).
+  if (res.status === 401) {
+    panelError('SYNC-006', 'Kaydetme reddedildi: oturum sona erdi. Değişiklikleriniz bu cihazda duruyor; kişisel girişten sonra kayıt tekrar gönderilecek.', srvCode);
+    setSyncBadge('error', 'SYNC-006');
+    if (!CLOUD_AUTH_WAIT) {
+      CLOUD_AUTH_WAIT = true;
+      panelSessionLost().then(() => { CLOUD_AUTH_WAIT = false; CLOUD_RETRY_N = 0; runCloudPush(); });
+    }
+    return;
+  }
+  if (res.status === 403) {
+    panelError('SYNC-006', 'Kaydetme reddedildi: bu işlem için yetki yok.', srvCode);
     setSyncBadge('error', 'SYNC-006');
     return;
   }
@@ -2210,7 +2231,7 @@ function adoptCloudSnapshot(cloud, opts) {
 }
 async function matApi(path, opts) {
   opts = opts || {};
-  const headers = Object.assign({ 'x-api-key': MATERIALS_API_KEY }, opts.headers || {});
+  const headers = panelAuthHeaders(opts.headers);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs || 90000);
   let res;
@@ -2227,6 +2248,7 @@ async function matApi(path, opts) {
     let msg = 'İstek başarısız (' + res.status + ')';
     let srv = '';
     try { const j = await res.json(); if (j && j.error) msg = j.error; if (j && j.code) srv = j.code; } catch (e) {}
+    if (res.status === 401) { msg = 'Oturum sona erdi; kişisel hesabınızla tekrar giriş yapıp işlemi yineleyin'; panelSessionLost(); }
     const code = 'API-' + res.status;
     panelError(code, msg + ' — ' + path, srv, { silent: true });
     throw new Error(msg + ' [' + code + (srv ? ('/' + srv) : '') + ']');
@@ -7580,6 +7602,7 @@ document.getElementById('loginForm').addEventListener('submit', (e) => {
 
 document.getElementById('logoutBtn').addEventListener('click', () => {
   sessionStorage.removeItem(SESSION_KEY);
+  MerciSession.clear();   // sonraki kişinin kayıtları öncekinin adına yazılmasın
   location.reload();
 });
 
@@ -7605,7 +7628,14 @@ function applyCloudSnapshot(cloud) { return adoptCloudSnapshot(cloud); }
   // yalnız damga eksik) bununla ayırt edip kullanıcıyı rahatsız etmeden kendiliğinden düzeltiriz.
   BOOT_LOCAL_JSON = JSON.stringify(DATA);
   const hadUnsynced = hasRescueMark();
-  const cloud = await pullCloudPanelData(8000);
+  // Kişi oturumu yoksa önce kişisel giriş; bulut verisi oturumsuz istenmez.
+  await panelSessionReady();
+  let cloud = await pullCloudPanelData(8000);
+  if (!cloud && matBackendReady() && !MerciSession.read(MATERIALS_API_BASE)) {
+    // Açılış çekişi 401 aldı (oturum sunucuda geçersiz, silindi): girişten sonra bir kez daha dene.
+    await panelSessionReady();
+    cloud = await pullCloudPanelData(8000);
+  }
   let ok = false;
   if (cloud && cloud.data) {
     const cloudJson = JSON.stringify(cloud.data);

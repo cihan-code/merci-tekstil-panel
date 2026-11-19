@@ -156,3 +156,24 @@ Run `node --test test/operations-ui.js` and all ten sync scenarios. Browser QA m
 check desktop/mobile, keyboard disclosure, all detail text, priority and capacity
 matching, no horizontal overflow, and the full landscape print output. No email
 is sent and no production data is written by the presentation change.
+
+## Personal session instead of the fixed API key (2026-11-20)
+
+The panel repository is public, so `index.html` and `stok.html` no longer carry the
+server `API_KEY`. They call the legacy routes (`/api/paneldata`, `/api/stokdata`,
+materials, agent, SDR) with the personal session `Authorization: Bearer …`.
+`assets/session.js` reads it from the same `sessionStorage` record as
+`assets/uretim.js` (`merci.production.session`, scoped to the API address).
+Without a session the page shows a personal login dialog before any request. A 401
+clears the session and asks again; unsaved panel or sample data stays marked unsaved
+and is sent after login, never reloaded away. `index.html` keeps its own panel login
+after the personal one; its Çıkış also clears the personal session.
+
+Release order: 1) the API, which accepts Bearer on legacy routes; 2) this panel;
+3) rotate `API_KEY` on Render, because the old value is in the public git history;
+4) give the new key to server-to-server clients: Finans Ajanı (`PANEL_API_KEY`),
+the daily briefing (`MERCI_API_KEY`) and any Excel link to `/api/costtemplates`.
+Deploying the panel before the API locks everyone out of panel data.
+
+Tests: `node --test test/operations-ui.js test/uretim-ui.test.js test/panel-oturum.test.js`
+and all twelve `test/sync-harness.js` scenarios (new: `oturumsuz-acilis`, `oturum-dustu`).
