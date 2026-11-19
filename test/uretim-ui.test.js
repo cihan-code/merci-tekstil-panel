@@ -310,3 +310,30 @@ test('G25 unmeasured applications read "Ölçü bekleniyor" and confirmation is 
   assert.equal(ui.applicationLabel({kind:'baski',position:'sirt',width_mm:null,height_mm:null,needs_confirmation:1}),'Baskı · Sırt: teyit gerekli');
   assert.equal(ui.applicationLabel({kind:'baski',position:'sirt',width_mm:100,height_mm:50,needs_confirmation:1}),'Baskı · Sırt: 10 × 5 cm · teyit gerekli');
 });
+
+test('G28 color-only automatic measurements preserve cm, reference and fractional confidence',()=>{
+  const app={width_mm:240,height_mm:100,measure_source:{method:'otomatik_renk',refBeden:'L',confidence:.87}};
+  assert.equal(ui.measureSummary(app),'Otomatik ölçü: 24 × 10 cm · desen dosyası olmadan, görseldeki renkten · L bedene göre · güven %87');
+});
+test('G28 snapshot measurement source reconciles retries before the legacy link',async()=>{
+  const application={id:9,measure_source:JSON.stringify({desenFileId:22,desenDosyaId:23})};
+  assert.equal(ui.designApplication({applications:[application]},22),application);
+  assert.equal(ui.designApplication({applications:[application]},23),undefined);
+  const job={versionId:3,lineId:11,kind:'desen_kaynak',uploaded:{id:22}};
+  ui.reconcileJobs([job],{id:3,lines:[{id:11,applications:[application]}]});
+  let calls=0;await ui.uploadJobs([job],()=>{calls++;},()=>{calls++;});
+  assert.equal(calls,0);assert.equal(job.application,application);assert.equal(job.done,true);
+});
+test('G28 quality waiting is neutral and independent of a downloadable ready vector',()=>{
+  const row={status:'hazir',quality:'beklemede',previewFileId:7};
+  assert.deepEqual(ui.vectorQuality(row),{label:'Kalite ölçüden sonra değerlendirilecek',tone:''});
+  assert.equal(ui.vectorBadge(row).downloadable,true);
+  assert.equal(ui.vectorQuality({quality:'iyi'}).tone,'good');
+  assert.equal(ui.vectorQuality({quality:'teyit'}).tone,'warn');
+});
+test('G28 measurement and vector reasons read arrays, text and confirmation report messages',()=>{
+  assert.equal(ui.reasonText(['Göğüs referansı eksik.','Ölçüyü teyit edin.']),'Göğüs referansı eksik. Ölçüyü teyit edin.');
+  assert.equal(ui.reasonText('Ölçüyü teyit edin.'),'Ölçüyü teyit edin.');
+  assert.equal(ui.reasonText('Vektör teyidi: {"reasons":[]}'),'Vektör teyidi');
+  assert.equal(ui.reasonText('Vektör kalitesi görsel teyit gerektiriyor: {"quality":"teyit","reasons":["Detay kaybı var."]}'),'Detay kaybı var.');
+});
