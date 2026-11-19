@@ -147,6 +147,9 @@ table.data-table tr:hover td { background:#fbfbfe; }
 
 footer.appfoot { text-align:center; font-size:11.5px; color:var(--muted); padding: 20px; }
 </style>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/uretim.css">
+<script defer src="assets/uretim.js"></script>
 </head>
 <body>
 
@@ -185,63 +188,9 @@ footer.appfoot { text-align:center; font-size:11.5px; color:var(--muted); paddin
   </aside>
 
   <main>
-    <!-- KUMAŞ STOK -->
+    <!-- Kumaşın tek kaynağı yeni defterdir; numune eski stokdata akışını kullanır. -->
     <div class="view active" id="view-stok">
-      <div class="page-header">
-        <div><h2>🧵 Kumaş Stok</h2><p class="sub-desc">Elinizdeki kumaşı bir kere tanımlayın; sonrasında sadece "Ekle" veya "Kullan" ile stoğu güncelleyin.</p></div>
-      </div>
-
-      <div class="panel-box">
-        <h3>Yeni Kumaş Tanımla</h3>
-        <p class="desc">Bu bilgiler bir kere girilir. Sonraki her giriş/çıkış için sadece miktar yazmanız yeterli olacak.</p>
-        <div class="form-row">
-          <div><label>Kumaş Adı</label><input type="text" id="f-name" placeholder="örn. Lacivert Polar"></div>
-          <div><label>Birim</label><select id="f-unit"><option value="metre">metre</option><option value="kg">kg</option></select></div>
-          <div><label>Birim Maliyet (TL, ops.)</label><input type="number" id="f-cost" placeholder="0" min="0" step="0.01"></div>
-          <div><label>Tedarikçi (varsayılan, ops.)</label><input type="text" id="f-supplier" placeholder="örn. Akın Tekstil"></div>
-        </div>
-
-        <label>Kartela Grubu</label>
-        <select id="f-kartela-group" style="max-width:420px;margin-bottom:14px;">
-          <option value="standart">Standart Kartela — Şort / Polar / Sweatshirt-Hoodie / Eşofman</option>
-          <option value="tisort">Tişört Kartelası</option>
-          <option value="polo">Polo Yaka Kartelası</option>
-        </select>
-        <label>Renk (kartelanızdan seçin — isteğe bağlı)</label>
-        <div class="swatch-picker" id="f-swatch-picker"></div>
-        <div class="selected-color-label" id="f-selected-color">Renk seçilmedi</div>
-        <div class="form-row">
-          <div><label>Renk Adı (kendiniz yazabilirsiniz)</label><input type="text" id="f-color-name" placeholder="örn. Lacivert, ya da kendi tabiriniz"></div>
-        </div>
-        <button class="btn" id="add-fabric">Kumaşı Ekle</button>
-      </div>
-
-      <div class="kpi-grid">
-        <div class="kpi-card"><div class="label">Toplam Kumaş Çeşidi</div><div class="value" id="tot-count">0</div></div>
-        <div class="kpi-card"><div class="label">Toplam Stok Değeri</div><div class="value" id="tot-value">0 TL</div></div>
-      </div>
-
-      <div class="panel-box">
-        <h3 style="margin-bottom:14px;">Stok Durumu</h3>
-        <div class="table-wrap">
-        <table class="data-table">
-          <thead><tr><th>Kumaş</th><th>Tedarikçi</th><th>Renk</th><th class="num">Kalan Stok</th><th class="num">Toplam Değer</th><th>İşlem</th></tr></thead>
-          <tbody id="fabric-rows"></tbody>
-        </table>
-        </div>
-        <div id="fabric-empty" class="empty" style="display:none;">Henüz kumaş eklenmedi. Yukarıdan ilk kumaşınızı tanımlayın.</div>
-      </div>
-
-      <div class="panel-box">
-        <h3 style="margin-bottom:14px;">Hareket Geçmişi</h3>
-        <div class="table-wrap">
-        <table class="data-table">
-          <thead><tr><th>Tarih</th><th>Kumaş</th><th>İşlem</th><th class="num">Miktar</th><th>Kaynak / İş</th><th>Not</th><th></th></tr></thead>
-          <tbody id="move-rows"></tbody>
-        </table>
-        </div>
-        <div id="move-empty" class="empty" style="display:none;">Henüz hareket kaydedilmedi.</div>
-      </div>
+      <div id="production-root" class="production" data-mode="stock"></div>
     </div>
 
     <!-- NUMUNE TAKİBİ -->
@@ -291,28 +240,6 @@ footer.appfoot { text-align:center; font-size:11.5px; color:var(--muted); paddin
 
     <footer class="appfoot">Mercitex Stok Paneli</footer>
   </main>
-</div>
-
-<!-- MODAL: Kumaş hızlı hareket -->
-<div class="modal-overlay" id="modal-kumas">
-  <div class="modal-box">
-    <h3 id="km-title">Stok Ekle</h3>
-    <div class="modal-sub" id="km-sub"></div>
-    <div class="form-row" style="grid-template-columns:1fr;">
-      <div><label>Miktar</label><input type="number" id="km-qty" min="0" step="0.1" placeholder="0"></div>
-      <div id="km-source-wrap">
-        <label id="km-source-label">Kaynak</label>
-        <input type="text" id="km-source" list="km-source-list" placeholder="Tedarikçi adı veya 'İş Artığı: ...'">
-        <datalist id="km-source-list"></datalist>
-      </div>
-      <div><label>Tarih</label><input type="date" id="km-date"></div>
-      <div><label>Not (ops.)</label><input type="text" id="km-note"></div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn" id="km-save">Kaydet</button>
-      <button class="btn ghost" id="km-cancel">İptal</button>
-    </div>
-  </div>
 </div>
 
 <!-- MODAL: Numune hızlı hareket -->
@@ -507,203 +434,6 @@ document.getElementById('hamburgerBtn').addEventListener('click', openSidebar);
 document.getElementById('sidebarCloseBtn').addEventListener('click', closeSidebar);
 document.getElementById('sidebarBackdrop').addEventListener('click', closeSidebar);
 
-/* ---------- KUMAŞ: swatch picker ---------- */
-function renderFabricSwatchPicker(){
-  const group = document.getElementById('f-kartela-group').value;
-  const colors = PALETTES[group];
-  const wrap = document.getElementById('f-swatch-picker');
-  wrap.innerHTML = "";
-  colors.forEach((hex, idx) => {
-    const div = document.createElement('div');
-    div.className = 'swatch-opt';
-    div.style.background = '#' + hex;
-    div.dataset.hex = hex;
-    div.dataset.no = idx+1;
-    div.title = `Renk ${idx+1}`;
-    if(selectedFabricColor && selectedFabricColor.hex === hex && selectedFabricColor.no === idx+1) div.classList.add('selected');
-    wrap.appendChild(div);
-  });
-  updateSelectedFabricColorLabel();
-}
-function updateSelectedFabricColorLabel(){
-  const label = document.getElementById('f-selected-color');
-  label.textContent = selectedFabricColor ? `Seçili: Renk ${selectedFabricColor.no} (#${selectedFabricColor.hex})` : "Renk seçilmedi";
-}
-document.getElementById('f-kartela-group').addEventListener('change', ()=>{ selectedFabricColor = null; renderFabricSwatchPicker(); });
-document.getElementById('f-swatch-picker').addEventListener('click', (e)=>{
-  const opt = e.target.closest('.swatch-opt');
-  if(!opt) return;
-  const already = selectedFabricColor && selectedFabricColor.hex === opt.dataset.hex && selectedFabricColor.no === parseInt(opt.dataset.no);
-  selectedFabricColor = already ? null : { hex: opt.dataset.hex, no: parseInt(opt.dataset.no) };
-  renderFabricSwatchPicker();
-});
-
-/* ---------- KUMAŞ: list + kpi ---------- */
-function renderFabrics(){
-  const tbody = document.getElementById('fabric-rows');
-  const empty = document.getElementById('fabric-empty');
-  tbody.innerHTML = "";
-  empty.style.display = state.fabrics.length === 0 ? "block" : "none";
-  let totalValue = 0;
-  state.fabrics.forEach(f => {
-    const remain = remainingStock(f.id);
-    const value = remain * (f.cost || 0);
-    totalValue += value;
-    const low = remain <= 0;
-    const kartelaTxt = f.colorNo ? `${KARTELA_LABELS[f.kartelaGroup] || 'Kartela'} · Renk ${f.colorNo}` : null;
-    const colorLabel = [kartelaTxt, f.colorName || null].filter(Boolean).join(' — ') || '—';
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td><span class="swatch-name">${escapeHtml(f.name)}</span></td>
-      <td>${escapeHtml(f.supplier || "—")}</td>
-      <td><span class="color-cell"><span class="swatch-dot ${low?'low':''}" style="background:${f.colorHex ? '#'+f.colorHex : '#ccc'};"></span>${escapeHtml(colorLabel)}</span></td>
-      <td class="num">${fmtNum(remain)} ${f.unit}</td>
-      <td class="num">${fmtTL(value)}</td>
-      <td>
-        <div class="actions-cell">
-          <button class="btn small green" data-add="${f.id}">+ Ekle</button>
-          <button class="btn small danger" data-use="${f.id}">− Kullan</button>
-          <button class="del-btn" data-del-fabric="${f.id}" title="Kumaşı sil">✕</button>
-        </div>
-      </td>`;
-    tbody.appendChild(tr);
-  });
-  document.getElementById('tot-count').textContent = state.fabrics.length;
-  document.getElementById('tot-value').textContent = fmtTL(totalValue);
-}
-
-document.getElementById('add-fabric').addEventListener('click', async ()=>{
-  const name = document.getElementById('f-name').value.trim();
-  const unit = document.getElementById('f-unit').value;
-  const cost = parseFloat(document.getElementById('f-cost').value) || 0;
-  const supplier = document.getElementById('f-supplier').value.trim();
-  const colorName = document.getElementById('f-color-name').value.trim();
-  if(!name){ document.getElementById('f-name').focus(); return; }
-  if(state.fabrics.some(f=>f.name.toLowerCase() === name.toLowerCase())){
-    alert("Bu isimde bir kumaş zaten var. Farklı bir isim kullanın.");
-    return;
-  }
-  state.fabrics.push({
-    id: uid(), name, unit, cost, supplier,
-    colorHex: selectedFabricColor ? selectedFabricColor.hex : null,
-    colorNo: selectedFabricColor ? selectedFabricColor.no : null,
-    kartelaGroup: selectedFabricColor ? document.getElementById('f-kartela-group').value : null,
-    colorName
-  });
-  document.getElementById('f-name').value = "";
-  document.getElementById('f-cost').value = "";
-  document.getElementById('f-supplier').value = "";
-  document.getElementById('f-color-name').value = "";
-  selectedFabricColor = null;
-  renderFabricSwatchPicker();
-  renderAll();
-  await saveState();
-});
-
-document.getElementById('fabric-rows').addEventListener('click', async (e)=>{
-  const delId = e.target.getAttribute('data-del-fabric');
-  const addId = e.target.getAttribute('data-add');
-  const useId = e.target.getAttribute('data-use');
-  if(delId){
-    const f = state.fabrics.find(f=>f.id===delId);
-    if(!confirm(`"${f.name}" kumaşını silmek istediğinize emin misiniz? Hareket kayıtları da etkilenir.`)) return;
-    state.fabrics = state.fabrics.filter(f=>f.id!==delId);
-    state.movements = state.movements.filter(m=>m.fabricId!==delId);
-    renderAll();
-    await saveState();
-    return;
-  }
-  if(addId) openKumasModal(addId, "Giriş");
-  if(useId) openKumasModal(useId, "Çıkış");
-});
-
-/* ---------- KUMAŞ: hızlı hareket modalı ---------- */
-function openKumasModal(fabricId, type){
-  const f = getFabric(fabricId);
-  if(!f) return;
-  kmContext = { fabricId, type };
-  document.getElementById('km-title').textContent = (type === "Giriş" ? "Stok Ekle — " : "Stok Kullan — ") + f.name;
-  document.getElementById('km-sub').textContent = `Şu an elinizde: ${fmtNum(remainingStock(fabricId))} ${f.unit}`;
-  document.getElementById('km-qty').value = "";
-  document.getElementById('km-note').value = "";
-  document.getElementById('km-date').value = today();
-  const sourceLabel = document.getElementById('km-source-label');
-  const sourceInput = document.getElementById('km-source');
-  sourceInput.value = "";
-  const dl = document.getElementById('km-source-list');
-  if(type === "Giriş"){
-    sourceLabel.textContent = "Kaynak (tedarikçi ya da 'İş Artığı: ...')";
-    sourceInput.placeholder = f.supplier ? `örn. ${f.supplier}` : "örn. Akın Tekstil ya da İş Artığı: İTÜ Hoodie";
-    if(f.supplier) sourceInput.value = f.supplier;
-    const set = new Set();
-    state.fabrics.forEach(x=> x.supplier && set.add(x.supplier));
-    state.movements.filter(m=>m.type==='Giriş' && m.ref).forEach(m=> set.add(m.ref));
-    dl.innerHTML = [...set].map(s=>`<option value="${escapeHtml(s)}">`).join('');
-  } else {
-    sourceLabel.textContent = "Hangi iş için kullanıldı";
-    sourceInput.placeholder = "örn. İTÜ Store - Hoodie Partisi 2";
-    const set = new Set();
-    state.movements.filter(m=>m.type==='Çıkış' && m.ref).forEach(m=> set.add(m.ref));
-    dl.innerHTML = [...set].map(s=>`<option value="${escapeHtml(s)}">`).join('');
-  }
-  document.getElementById('modal-kumas').classList.add('active');
-  document.getElementById('km-qty').focus();
-}
-function closeKumasModal(){ document.getElementById('modal-kumas').classList.remove('active'); kmContext = null; }
-document.getElementById('km-cancel').addEventListener('click', closeKumasModal);
-document.getElementById('modal-kumas').addEventListener('click', (e)=>{ if(e.target.id === 'modal-kumas') closeKumasModal(); });
-
-document.getElementById('km-save').addEventListener('click', async ()=>{
-  if(!kmContext) return;
-  const { fabricId, type } = kmContext;
-  const f = getFabric(fabricId);
-  const qty = parseFloat(document.getElementById('km-qty').value);
-  const ref = document.getElementById('km-source').value.trim();
-  const date = document.getElementById('km-date').value || today();
-  const note = document.getElementById('km-note').value.trim();
-  if(!qty || qty <= 0){ document.getElementById('km-qty').focus(); return; }
-  if(type === "Çıkış"){
-    const remain = remainingStock(fabricId);
-    if(qty > remain){
-      const proceed = confirm(`Dikkat: elinizde ${fmtNum(remain)} ${f.unit} var, ${fmtNum(qty)} kullanmak üzeresiniz. Yine de devam edilsin mi?`);
-      if(!proceed) return;
-    }
-  }
-  state.movements.push({ id: uid(), date, fabricId, type, qty, ref, note });
-  closeKumasModal();
-  renderAll();
-  await saveState();
-});
-
-/* ---------- KUMAŞ: hareket geçmişi ---------- */
-function renderMovements(){
-  const tbody = document.getElementById('move-rows');
-  const empty = document.getElementById('move-empty');
-  tbody.innerHTML = "";
-  const sorted = [...state.movements].sort((a,b)=> (b.date||"").localeCompare(a.date||""));
-  empty.style.display = sorted.length === 0 ? "block" : "none";
-  sorted.forEach(m => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${m.date || "—"}</td>
-      <td>${escapeHtml(fabricName(m.fabricId))}</td>
-      <td><span class="badge ${m.type==='Giriş'?'green':'red'}">${m.type}</span></td>
-      <td class="num">${fmtNum(m.qty)} ${fabricUnit(m.fabricId)}</td>
-      <td>${escapeHtml(m.ref || "—")}</td>
-      <td>${escapeHtml(m.note || "—")}</td>
-      <td><button class="del-btn" data-del-move="${m.id}" title="Hareketi sil">✕</button></td>`;
-    tbody.appendChild(tr);
-  });
-}
-document.getElementById('move-rows').addEventListener('click', async (e)=>{
-  const id = e.target.getAttribute('data-del-move');
-  if(!id) return;
-  if(!confirm("Bu hareketi silmek istediğinize emin misiniz?")) return;
-  state.movements = state.movements.filter(m=>m.id!==id);
-  renderAll();
-  await saveState();
-});
-
 /* ---------- NUMUNE ---------- */
 function sampleStatus(sampleId){
   const moves = state.sampleMovements.filter(m=>m.sampleId===sampleId).sort((a,b)=> (a.date||"").localeCompare(b.date||"") || 0);
@@ -846,13 +576,10 @@ document.getElementById('sample-move-rows').addEventListener('click', async (e)=
 
 /* ---------- INIT ---------- */
 function renderAll(){
-  renderFabrics();
-  renderMovements();
   renderSamples();
   renderSampleMovements();
 }
 document.getElementById('s-date').value = today();
-renderFabricSwatchPicker();
 document.getElementById('refreshBtn').addEventListener('click', ()=> loadState({ force: !STOK_DIRTY }));
 setInterval(()=> loadState(), 20000);
 loadState({ force: true });
