@@ -38,8 +38,33 @@
     if (!lineFilesList.some(f=>f.kind==='desen_kaynak' || f.kind==='desen_kaynak_vektor')) return {code:'desen_eksik',text:'Desen eksik'};
     return {code:'olculebilir',text:'Ölçü bekleniyor'};
   }
-  const VECTOR_BADGES={hazirlaniyor:['Vektör hazırlanıyor…','warn'],hazir:['Vektörel PDF hazır','good'],teyit:['Kalite teyidi gerekli','warn'],hata:['Vektör hazırlanamadı','warn']};
-  function vectorBadge(row) { const b=row && VECTOR_BADGES[row.status]; return b ? {label:b[0],tone:b[1],downloadable:!!row.previewFileId && ['hazir','teyit'].includes(row.status)} : null; }
+  const NO_VECTORIZER=/^Vektörleştirme bu sunucuda yok:?\s*/;
+  // Every source shows a stated vector state; a missing row means the server record is still being created.
+  function vectorBadge(row,file) {
+    if(!row)return {label:'Vektör kaydı bekleniyor…',tone:'warn',downloadable:false};
+    const downloadable=!!row.previewFileId && ['hazir','teyit'].includes(row.status);
+    if(row.status==='hazirlaniyor')return {label:'Vektör hazırlanıyor…',tone:'warn',downloadable:false};
+    if(row.status==='hazir'){
+      // Previews made before the server stated the source kind: only raster files are known to be traced.
+      const traced=row.sourceKind ? row.sourceKind==='raster' : /\.(png|jpe?g)$/i.test(file?.path || '');
+      return {label:traced?'Vektöre çevrildi':row.sourceKind==='vector'?'Vektörel':'Vektörel PDF hazır',tone:'good',downloadable};
+    }
+    if(row.status==='teyit')return {label:'Teyit gerekli',tone:'warn',downloadable};
+    if(row.status==='hata')return {label:NO_VECTORIZER.test(row.message || '')?'Vektörleştirme bu sunucuda yok':'Vektör hazırlanamadı',tone:'warn',downloadable:false};
+    if(row.status==='yok')return {label:'Vektör kaydı yok',tone:'warn',downloadable:false};
+    return {label:'Vektör durumu: '+String(row.status),tone:'warn',downloadable:false};
+  }
+  // Server quality codes become Turkish sentences; full sentences pass through unchanged.
+  const VECTOR_REASONS={raster_detay_ve_metin_gorsel_teyidi:'Görselden çevrildi; ince detay ve yazılar gözle kontrol edilmeli.',karma_sayfada_raster_korundu:'PDF içindeki piksel görsel vektöre çevrilmedi.',cok_yol:'Çok sayıda yol var (2000 üstü).',ince_cizgi:'0,2 mm’den ince çizgi var.',metin:'PDF yazı içeriyor; yazılar eğriye çevrilmeli.',dolgu_detay_kalinligi_olculemedi:'Dolgu detaylarının kalınlığı ölçülemedi.',supheli_oran:'Desenin en-boy oranı olağan dışı.',oran_bozuldu:'Hedef ölçü desenin en-boy oranını değiştiriyor.'};
+  function vectorDetail(row,confirmationMessage) {
+    if(!row)return '';
+    if(row.status==='teyit' || row.quality==='teyit'){
+      const codes=(row.reasons || []).map(r=>VECTOR_REASONS[r] ?? r);
+      return reasonText(codes) || reasonText(confirmationMessage) || reasonText(row.message);
+    }
+    if(['hata','yok'].includes(row.status))return String(row.message || '').replace(NO_VECTORIZER,'');
+    return '';
+  }
   function reasonText(value) {
     if (Array.isArray(value)) return value.map(reasonText).filter(Boolean).join(' ');
     const raw=String(value ?? '').trim();
@@ -55,8 +80,9 @@
     return null;
   }
   const VECTOR_POLL_MS=4000, VECTOR_POLL_MAX_MS=120000;
-  function vectorPollNext(rows,elapsedMs) {
-    if (!(rows||[]).some(r=>r.status==='hazirlaniyor')) return 'dur';
+  function vectorPollNext(rows,elapsedMs,sourceIds=[]) {
+    const known=new Set((rows||[]).map(r=>Number(r.sourceFileId)));
+    if (!(rows||[]).some(r=>r.status==='hazirlaniyor') && sourceIds.every(id=>known.has(Number(id)))) return 'dur';
     return elapsedMs>=VECTOR_POLL_MAX_MS ? 'yenile' : 'bekle';
   }
   function packageActions(status) { return status==='manuel_bekliyor' ? [['Gruba gönderildi olarak işaretle','elle-gonderildi']] : status==='basarisiz' ? [['Tekrar dene','tekrar']] : status==='bekliyor' ? [['Elle gönderime al (otomatik gönderim kapalı)','manuel']] : []; }
@@ -84,76 +110,53 @@
   function costApplications(c) { return (c.computation?.applications || []).map(a=>({type:a.type,area:a.area,qty:a.units,size:(c.bnItems || c.computation?.baskiNakisItems || []).find(i=>i.type===a.type&&i.area===a.area)?.size || ''})); }
   function pricePayload(price,items=[]) { return {unitPrice:validateNumber(price,{min:.01,step:.01,required:true}),...(items.length?{bnItems:items}:{})}; }
   function sizeTotal(sizes) { return SIZES.reduce((n,k) => { const q=Number(sizes?.[k] ?? 0); if (!Number.isSafeInteger(q) || q<0) throw new RangeError('Beden adetleri sıfır veya pozitif tam sayı olmalı.'); return n+q; },0); }
-  function pixelBox(box, rendered, natural) {
-    for (const value of [box.x,box.y,box.w,box.h,rendered.w,rendered.h,natural.w,natural.h]) if (!Number.isFinite(value)) throw new RangeError('Geçersiz piksel kutusu.');
-    if ([box.w,box.h,rendered.w,rendered.h,natural.w,natural.h].some(v=>v<=0) || box.x<0 || box.y<0 || box.x+box.w>rendered.w+.01 || box.y+box.h>rendered.h+.01) throw new RangeError('Ölçü kutusu görselin içinde olmalı.');
-    return {x:box.x*natural.w/rendered.w,y:box.y*natural.h/rendered.h,w:box.w*natural.w/rendered.w,h:box.h*natural.h/rendered.h};
+  // Inline manual size: cm with one decimal on screen, integer mm on the wire.
+  function designFileId(a) { const m=measureSource(a);return a.desenDosyaId ?? m.desenFileId ?? m.desenDosyaId ?? null; }
+  function designAspect(a,vectorRow) {
+    const m=measureSource(a),box=vectorRow?.designBox;
+    for(const ratio of [Number(m.designAspectRatio),box?Number(box.w)/Number(box.h):NaN])if(Number.isFinite(ratio)&&ratio>0)return ratio;
+    return null;
   }
-  function designRatio(w,h,source) {
-    if(!Number.isFinite(w)||!Number.isFinite(h)||w<=0||h<=0)throw new RangeError('Desen oranı okunamadı.');
-    return {w,h,ratio:w/h,source};
+  function lockedSize(changed,value,ratio) {
+    const n=parseNumber(value);
+    if(n==null || n<=0 || !(ratio>0))return null;
+    return changed==='width' ? {width:n,height:Math.round(n*10/ratio)/10} : {width:Math.round(n*10*ratio)/10,height:n};
   }
-  function contentBounds(width,height,data,ignoreWhite=false) {
-    if(!Number.isSafeInteger(width)||!Number.isSafeInteger(height)||width<=0||height<=0||data.length!==width*height*4)throw new RangeError('Desen pikselleri okunamadı.');
-    let left=width,top=height,right=-1,bottom=-1;
-    for(let y=0;y<height;y++)for(let x=0;x<width;x++){
-      const i=(y*width+x)*4;
-      if(!data[i+3]||(ignoreWhite&&data[i]>=250&&data[i+1]>=250&&data[i+2]>=250))continue;
-      left=Math.min(left,x);top=Math.min(top,y);right=Math.max(right,x);bottom=Math.max(bottom,y);
-    }
-    return right<0?null:{x:left,y:top,w:right-left+1,h:bottom-top+1};
+  function manualSaveBody(width,height) {
+    const w=validateNumber(width,{min:.1,step:.1,required:true}),h=validateNumber(height,{min:.1,step:.1,required:true});
+    return {width_mm:Math.round(w*10),height_mm:Math.round(h*10),elleTeyit:true};
   }
-  function fitDesignBox(width,ratio,natural,left=30,top=30) {
-    if(!Number.isFinite(width)||!Number.isFinite(ratio)||ratio<=0||!natural||natural.w<=0||natural.h<=0)throw new RangeError('Önce ürün görselini ve desen oranını belirleyin.');
-    const factor=natural.w/natural.h/ratio;
-    const w=Math.max(Math.min(1,100/factor),Math.min(width,100,100/factor)),h=w*factor;
-    return {w,h,left:Math.max(0,Math.min(left,100-w)),top:Math.max(0,Math.min(top,100-h))};
+  // The automatically found box as percentages of the product image; null when there is nothing real to show.
+  function previewBox(a,files=[]) {
+    const m=measureSource(a),box=m.designBoxPx || m.candidateBoxPx,w=Number(m.rasterWidth),h=Number(m.rasterHeight);
+    const image=files.find(f=>Number(f.id)===Number(m.gorselFileId) && f.kind==='urun_gorsel');
+    if(!image || !/\.(png|jpe?g)$/i.test(image.path || '') || !box || !(w>0 && h>0) || ![box.x,box.y,box.w,box.h].every(Number.isFinite) || box.w<=0 || box.h<=0)return null;
+    return {fileId:image.id,left:box.x/w*100,top:box.y/h*100,width:box.w/w*100,height:box.h/h*100,aspect:w/h,confirmed:!!m.designBoxPx,mmPerPx:Number(m.mmPerPx)>0?Number(m.mmPerPx):null,rasterWidth:w,rasterHeight:h};
   }
-  // Geometry is expressed in image percentages; the product's natural aspect is essential.
-  function bindDesignBox(overlay,stage,width,height,getNatural,getRatio) {
-    let drag=null;
-    if(!overlay.style.left)overlay.style.left='30%';if(!overlay.style.top)overlay.style.top='30%';
-    const apply=()=>{
-      const natural=getNatural(),ratio=getRatio();if(!natural||!ratio)return false;
-      let box;try{box=fitDesignBox(parseNumber(width.value),ratio.ratio,natural,parseFloat(overlay.style.left)||0,parseFloat(overlay.style.top)||0);}catch{return false;}
-      for(const key of ['width','height','left','top'])overlay.style[key]=box[{width:'w',height:'h',left:'left',top:'top'}[key]]+'%';
-      width.value=inputNumber(box.w);height.value=inputNumber(box.h);return true;
-    };
-    width.addEventListener('input',apply);
-    overlay.addEventListener('pointerdown',e=>{
-      if(!getRatio()||!getNatural())return;e.preventDefault();overlay.setPointerCapture(e.pointerId);
-      const r=stage.getBoundingClientRect(),b=overlay.getBoundingClientRect();
-      drag={id:e.pointerId,x:e.clientX,y:e.clientY,left:b.left-r.left,top:b.top-r.top,w:b.width,h:b.height,r,resize:e.target.classList.contains('p-resize')};
-    });
-    overlay.addEventListener('pointermove',e=>{
-      if(!drag||drag.id!==e.pointerId)return;
-      const d=drag,dx=e.clientX-d.x,dy=e.clientY-d.y;
-      if(d.resize){width.value=inputNumber((d.w+dx)/d.r.width*100);apply();}
-      else{overlay.style.left=Math.max(0,Math.min(d.r.width-d.w,d.left+dx))/d.r.width*100+'%';overlay.style.top=Math.max(0,Math.min(d.r.height-d.h,d.top+dy))/d.r.height*100+'%';}
-    });
-    for(const event of ['pointerup','pointercancel','lostpointercapture'])overlay.addEventListener(event,()=>drag=null);
-    overlay.addEventListener('keydown',e=>{
-      if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)||!getRatio()||!getNatural())return;
-      e.preventDefault();const dx=e.key==='ArrowLeft'?-1:e.key==='ArrowRight'?1:0,dy=e.key==='ArrowUp'?-1:e.key==='ArrowDown'?1:0;
-      if(e.shiftKey){width.value=inputNumber(parseNumber(width.value)+dx+dy);apply();}
-      else{overlay.style.left=((parseFloat(overlay.style.left)||0)+dx)+'%';overlay.style.top=((parseFloat(overlay.style.top)||0)+dy)+'%';apply();}
-    });
-    return {apply,cancel(){drag=null;}};
+  const GENERIC_REASONS=['Uygulama ölçüsü teyit edilmeli','Ölçü kaynağı yok; ekip teyidi gerekli'];
+  // Applications the automatic measurement has never processed (registered before G24 or still waiting).
+  function unmeasuredApps(version) { return (version?.lines || []).flatMap(l=>l.applications || []).filter(a=>a.width_mm==null && !measureSource(a).method); }
+  const UPLOAD_FIELDS={urun_gorsel:['gorunum'],desen_kaynak:['applicationKind','position']};
+  function uploadFields(kind) { return UPLOAD_FIELDS[kind] || []; }
+  function guessUpload(name,applications=[]) {
+    const raw=String(name || '').toLocaleLowerCase('tr').replace(/[ıİ]/g,'i').replace(/ş/g,'s').replace(/ğ/g,'g').replace(/ü/g,'u').replace(/ö/g,'o').replace(/ç/g,'c');
+    const ext=(/\.([a-z0-9]+)$/.exec(raw) || [])[1] || '',stem=raw.replace(/\.[a-z0-9]+$/,'');
+    const has=(...words)=>words.some(word=>new RegExp('(^|[^a-z])'+word+'([^a-z]|$)').test(stem));
+    const guess={};
+    const view=has('arka','back')?'arka':has('kol','sleeve')?'kol':has('on','front')?'on':null;
+    const kind=has('nakis','embroidery','brode')?'nakis':has('baski','print','dtf','serigraf')?'baski':null;
+    const position=has('gogus','chest')?'gogus':has('sirt','back','arka')?'sirt':has('kol','sleeve')?'kol':has('ense','neck')?'ense':has('kapuson','hood')?'kapuson':null;
+    if(['pdf','svg'].includes(ext) || kind || has('desen','logo','vektor','vector'))guess.kind='desen_kaynak';
+    else if(view || has('urun','mockup','gorsel'))guess.kind='urun_gorsel';
+    if(guess.kind==='urun_gorsel'){if(view)guess.gorunum=view;return guess;}
+    // A design without hints takes the first application of the line that still has no design.
+    const open=(applications || []).find(a=>!designFileId(a) && (!position || a.position===position) && (!kind || a.kind===kind));
+    if(kind || open)guess.applicationKind=kind || open.kind;
+    if(position || open)guess.position=position || open.position;
+    return guess;
   }
-  // Never accept a page-size or target-size field as a report of source artwork bounds.
-  function reportDesignRatio(file) {
-    let report;try{report=parseObject(file?.vector_report ?? file?.report_json ?? file?.report);}catch{return null;}
-    const box=report?.sourceBounds;
-    if(!box)return null;
-    try{return {...designRatio(box.w,box.h,'Sunucu vektör raporu'),box};}catch{return null;}
-  }
-  async function readDesignAsset(blob,{decode,pdf,report}={}) {
-    const isPdf=blob.type==='application/pdf'||new TextDecoder().decode(await blob.slice(0,5).arrayBuffer())==='%PDF-';
-    if(isPdf){
-      try{return await pdf(blob);}catch(error){const fallback=reportDesignRatio(report);if(fallback)return fallback;throw Error('PDF oranı okunamadı. Oran bilinmiyor; desenin en ve boyunu teyit edin.');}
-    }
-    return decode(blob);
-  }
+  // An existing application at this kind and position without a design receives the upload instead of a duplicate.
+  function linkTarget(line,kind,position) { return (line?.applications || []).find(a=>a.kind===kind && a.position===position && !designFileId(a)) || null; }
   function parseObject(value, fallback={}) { if (value==null) return fallback; return typeof value==='string' ? JSON.parse(value) : value; }
   // All endpoint shape boundaries live here. Absent fields remain unknown, never zero.
   function adapt(kind, value) {
@@ -224,7 +227,7 @@
     return [...groups].map(([label,items])=>({label,items}));
   }
   function kartelaCaption(s){const no=s.kartela?.no ?? s.color_no;return no==null||no===''?'':'Kartela No '+no;}
-  const pure={reasonText,vectorQuality,designRatio,contentBounds,fitDesignBox,bindDesignBox,reportDesignRatio,readDesignAsset,reconcileJobs,designApplication,measurementWarning,lineFiles,missingImages,uploadJobs,parseNumber,inputNumber,validateNumber,displayMessage,positiveSizes,unmatchedAwaitingKg,queueFile,SIZES,PRODUCTS,POSITIONS,positionLabel,applicationLabel,measureSource,measureSummary,measureGap,vectorBadge,vectorPollNext,VECTOR_POLL_MS,packageActions,costApplications,pricePayload,escapeHtml,formatNumber,formatKg,formatDate,statusLabel,sizeTotal,pixelBox,adapt,safeHex,hexLight,hexInk,kartelaFabrics,colorLabel,stockLabel,stockGroups,kartelaCaption};
+  const pure={reasonText,vectorQuality,vectorDetail,designAspect,lockedSize,manualSaveBody,previewBox,unmeasuredApps,uploadFields,guessUpload,linkTarget,reconcileJobs,designApplication,measurementWarning,lineFiles,missingImages,uploadJobs,parseNumber,inputNumber,validateNumber,displayMessage,positiveSizes,unmatchedAwaitingKg,queueFile,SIZES,PRODUCTS,POSITIONS,positionLabel,applicationLabel,measureSource,measureSummary,measureGap,vectorBadge,vectorPollNext,VECTOR_POLL_MS,packageActions,costApplications,pricePayload,escapeHtml,formatNumber,formatKg,formatDate,statusLabel,sizeTotal,adapt,safeHex,hexLight,hexInk,kartelaFabrics,colorLabel,stockLabel,stockGroups,kartelaCaption};
   if (typeof module!=='undefined' && module.exports) module.exports=pure;
   global.MerciProduction=pure;
   if (typeof document==='undefined') return;
@@ -239,10 +242,12 @@
   // Scope cached sessions to the API to avoid sending a token to a changed override.
   if (session && session.endpoint!==endpoint) session=null;
   if (!session) sessionStorage.removeItem(storageKey);
-  const state={tab:'orders',kartela:null,highlight:null,stocks:[],flats:[],orders:[],outbox:[],confirmations:[],activeOrder:null,version:null,pending:[]};
+  const state={tab:'orders',kartela:null,highlight:null,stocks:[],orders:[],outbox:[],confirmations:[],activeOrder:null,version:null,pending:[]};
   let fileMetadata={},vectorRows={},vectorTimer=null;
+  // Versions whose never-measured applications were already sent to automatic measurement in this page session.
+  const autoMeasured=new Set();
   function rememberFile(file,job){fileMetadata[file.id]={lineId:job.lineId,gorunum:job.gorunum,name:job.file.name};}
-  async function sendJobs(jobs){reconcileJobs(jobs,state.version);for(const versionId of new Set(jobs.filter(job=>job.uploaded&&job.kind==='desen_kaynak'&&!job.application&&!job.done).map(job=>job.versionId))){try{reconcileJobs(jobs,await api('surumler/'+versionId));}catch(error){for(const job of jobs.filter(job=>job.versionId===versionId&&!job.done))job.error=error.message;return jobs.filter(job=>!job.done);}}const failed=await uploadJobs(jobs,async job=>{const data=new FormData();data.append('file',job.file);data.append('kind',job.kind);data.append('lineId',job.lineId);if(job.gorunum)data.append('gorunum',job.gorunum);const file=await api('surumler/'+job.versionId+'/dosyalar',data);rememberFile(file,job);return file;},job=>api('satirlar/'+job.lineId+'/uygulamalar',{kind:job.applicationKind,position:job.position,desenDosyaId:job.uploaded.id,measure_source:JSON.stringify({desenDosyaId:job.uploaded.id,dosyaAdi:job.file.name}),needs_confirmation:1}));for(const job of jobs){if(job.done && job.uploaded){const warning=job.application?.olcuHatasi ?? job.uploaded.olcuHatasi;if(warning)fileMetadata[job.uploaded.id]={...fileMetadata[job.uploaded.id],olcuHatasi:warning};}}state.pending=state.pending.filter(job=>!job.done);return failed;}
+  async function sendJobs(jobs){reconcileJobs(jobs,state.version);for(const versionId of new Set(jobs.filter(job=>job.uploaded&&job.kind==='desen_kaynak'&&!job.application&&!job.done).map(job=>job.versionId))){try{reconcileJobs(jobs,await api('surumler/'+versionId));}catch(error){for(const job of jobs.filter(job=>job.versionId===versionId&&!job.done))job.error=error.message;return jobs.filter(job=>!job.done);}}const failed=await uploadJobs(jobs,async job=>{const data=new FormData();data.append('file',job.file);data.append('kind',job.kind);data.append('lineId',job.lineId);if(job.gorunum)data.append('gorunum',job.gorunum);if(job.applicationId)data.append('applicationId',job.applicationId);const file=await api('surumler/'+job.versionId+'/dosyalar',data);rememberFile(file,job);return file;},job=>api('satirlar/'+job.lineId+'/uygulamalar',{kind:job.applicationKind,position:job.position,desenDosyaId:job.uploaded.id,measure_source:JSON.stringify({desenDosyaId:job.uploaded.id,dosyaAdi:job.file.name}),needs_confirmation:1}));for(const job of jobs){if(job.done && job.uploaded){const warning=job.application?.olcuHatasi ?? job.uploaded.olcuHatasi;if(warning)fileMetadata[job.uploaded.id]={...fileMetadata[job.uploaded.id],olcuHatasi:warning};}}state.pending=state.pending.filter(job=>!job.done);return failed;}
   function focusMedia(){document.getElementById('order-media')?.scrollIntoView({block:'start'});}
   const objectUrls=new Set(); let pageUrls=new Set(), content, notice;
   const el=(tag,attrs,...children)=>{
@@ -331,7 +336,7 @@
     catch(e){state.kartela=null;if(typeof console!=='undefined')console.info('Kartela yüklenemedi, serbest renk alanı kullanılacak:',e.message);}
   }
   async function loadStocks(){state.stocks=adapt('list',await api('stok')).map(s=>adapt('stock',s));}
-  async function loadCommon(){await loadStocks();await loadKartela();if(mode==='production'){const f=await optional('duz-cizimler');state.flats=f.data?adapt('list',f.data):[];}}
+  async function loadCommon(){await loadStocks();await loadKartela();}
   async function logout(){session=null;sessionStorage.removeItem(storageKey);clearUrls();state.stocks=[];state.orders=[];state.activeOrder=null;state.version=null;state.pending=[];fileMetadata={};renderFrame();}
   function renderFrame(){
     clearUrls();root.replaceChildren();
@@ -431,12 +436,28 @@
     else content.append(card(el('h3',{},'Atölye paketi'),text('Atölye paketi için müşteri onayını kaydedin.')));
     renderCost(costs,id,v);
   }
+  // Re-render the order without moving the reader to another part of the page.
+  async function refreshInPlace(v){const y=global.scrollY || 0;await openOrder(state.activeOrder.id,v.id);global.scrollTo?.(0,y);}
   function uploadForm(v,line){
     const kind=opts([['urun_gorsel','Ürün görseli'],['desen_kaynak','Desen (PNG / PDF)']],'urun_gorsel');kind.name='kind';
-    const view=opts([['on','Ön'],['arka','Arka']],'on');view.name='gorunum';
-    const applicationKind=opts([['baski','Baskı'],['nakis','Nakış']],'baski'),position=opts(['gogus','sirt','kol','ense','kapuson'].map(key=>[key,positionLabel(key)]),'gogus');
+    const view=opts([['on','Ön'],['arka','Arka'],['kol','Kol']],'on');view.name='gorunum';
+    const applicationKind=opts([['baski','Baskı'],['nakis','Nakış']],'baski');applicationKind.name='applicationKind';
+    const position=opts(['gogus','sirt','kol','ense','kapuson'].map(key=>[key,positionLabel(key)]),'gogus');position.name='position';
     const file=input('file',{type:'file',accept:'.png,.jpg,.jpeg,.pdf',required:true});
-    return form(async()=>{const job={versionId:v.id,lineId:line.id,file:file.files[0],kind:kind.value,...(kind.value==='urun_gorsel'?{gorunum:view.value}:{applicationKind:applicationKind.value,position:position.value})};state.pending.push(job);await sendJobs([job]);await openOrder(state.activeOrder.id,v.id);focusMedia();message(job.error || 'Dosya yüklendi.',!!job.error);},el('div',{class:'p-grid'},field('Dosya türü',kind),field('Görünüm',view),field('Desen uygulaması',applicationKind),field('Desen konumu',position),field('Dosya',file)),submit('Dosyayı yükle'));
+    const fields={gorunum:field('Görünüm',view),applicationKind:field('Uygulama',applicationKind),position:field('Konum',position)};
+    const show=()=>{const visible=uploadFields(kind.value);for(const [key,node] of Object.entries(fields))node.hidden=!visible.includes(key);};
+    kind.addEventListener('change',show);
+    file.addEventListener('change',()=>{const guess=guessUpload(file.files[0]?.name,line.applications);for(const [node,key] of [[kind,'kind'],[view,'gorunum'],[applicationKind,'applicationKind'],[position,'position']])if(guess[key])node.value=guess[key];show();});
+    show();
+    const f=form(async()=>{
+      const design=kind.value==='desen_kaynak',target=design?linkTarget(line,applicationKind.value,position.value):null;
+      const job={versionId:v.id,lineId:line.id,file:file.files[0],kind:kind.value,...(design?{applicationKind:applicationKind.value,position:position.value,...(target?{applicationId:target.id,application:target}:{})}:{gorunum:view.value})};
+      state.pending.push(job);await sendJobs([job]);await refreshInPlace(v);message(job.error || 'Dosya yüklendi.',!!job.error);
+    },el('div',{class:'p-grid'},field('Dosya',file),field('Dosya türü',kind),fields.gorunum,fields.applicationKind,fields.position),submit('Yükle'));
+    f.hidden=true;f.classList.add('p-upload-form');
+    const toggle=el('button',{type:'button',class:'secondary','aria-expanded':'false'},'Dosya ekle');
+    toggle.addEventListener('click',()=>{f.hidden=!f.hidden;toggle.setAttribute('aria-expanded',String(!f.hidden));});
+    return el('div',{class:'p-upload'},toggle,f);
   }
   function renderMedia(v){
     const section=card(el('div',{class:'p-step'},'2 / Görsel, desen ve ölçü'),el('h3',{},'Ürün dosyaları'));section.id='order-media';
@@ -444,158 +465,103 @@
       const det=el('details',{},el('summary',{},PRODUCTS[l.product_key]+' / '+(l.color_name || '')+' · Dosya ve ölçü ',missingImages(v,fileMetadata).some(line=>line.id===l.id)?badge('Görsel eksik','warn'):null));det.open=true;
       const failed=state.pending.filter(job=>job.versionId===v.id&&job.lineId===l.id&&!job.done);
       for(const job of failed)det.append(el('div',{class:'p-notice error'},text(job.file.name+': '+job.error,'p-inline-error'),button('Yeniden yükle',async()=>{await sendJobs([job]);await openOrder(state.activeOrder.id,v.id);focusMedia();})));
-      const lf=lineFiles(v,l.id,fileMetadata),manual=el('details',{class:'p-manual'},el('summary',{},'Elle ölçü (yedek yol)'),measurementEditor(v,l));
-      det.append(renderFiles(lf.filter(file=>['urun_gorsel','desen_kaynak','desen_kaynak_vektor'].includes(file.kind))),autoMeasureBlock(v,l,lf,manual),uploadForm(v,l),manual);section.append(det);
-    }content.append(section);startVectorPolling(v);
+      const lf=lineFiles(v,l.id,fileMetadata);
+      det.append(renderFiles(lf.filter(file=>['urun_gorsel','desen_kaynak','desen_kaynak_vektor'].includes(file.kind))),autoMeasureBlock(v,l,lf),uploadForm(v,l));section.append(det);
+    }content.append(section);startVectorPolling(v);measureOnOpen(v);
   }
-  function autoMeasureBlock(v,line,lf,manual){
+  // Applications registered before automatic measurement existed are measured once when their draft is opened.
+  function measureOnOpen(v){
+    if(v.status!=='taslak' || autoMeasured.has(v.id) || !unmeasuredApps(v).length)return;
+    autoMeasured.add(v.id);
+    run(async()=>{const result=await api('surumler/'+v.id+'/otomatik-olc?degisen=1',{});if(result?.results?.length && state.version?.id===v.id && state.activeOrder)await refreshInPlace(v);});
+  }
+  function autoMeasureBlock(v,line,lf){
     const box=el('div',{class:'p-auto'});
-    const openManual=()=>{manual.open=true;manual.scrollIntoView?.({block:'center'});};
     for(const a of line.applications||[]){
       const row=el('div',{class:'p-auto-row'}),summary=measureSummary(a),gap=measureGap(v,line,lf,a),label=statusLabel(a.kind)+' · '+positionLabel(a.position);
+      const editorHost=el('div',{class:'p-manual-slot'});
+      // The editor opens inside this row; the page does not move.
+      const edit=()=>button('Elle düzelt',async()=>{if(editorHost.children.length){editorHost.replaceChildren();return;}editorHost.replaceChildren(manualEditor(v,line,a,lf,()=>editorHost.replaceChildren()));},'secondary');
       row.append(el('strong',{},label));
       if(summary)row.append(text(summary,'p-number'));
       const warning=measurementWarning(a,lf,fileMetadata);
+      const reason=reasonText(measureSource(a).reasons) || reasonText(state.confirmations.find(c=>c.kind==='olcu'&&c.ref_table==='applications'&&Number(c.ref_id)===Number(a.id))?.message);
+      const waiting=a.width_mm==null && !measureSource(a).method && (!reason || GENERIC_REASONS.includes(reason));
       if(warning){
-        row.append(el('div',{class:'p-notice warn'},'Otomatik ölçü yapılamadı: '+reasonText(warning)+' · ',button('Elle düzelt',async()=>openManual(),'secondary')));
+        row.append(el('div',{class:'p-notice warn'},'Otomatik ölçü yapılamadı: '+reasonText(warning)+' · ',edit()));
+      }else if(waiting){
+        row.append(el('div',{class:'p-notice warn'},'Otomatik ölçü henüz çalışmadı.'),el('div',{class:'p-actions'},button('Otomatik ölç',async()=>{await api('surumler/'+v.id+'/otomatik-olc?degisen=1',{});await refreshInPlace(v);message('Otomatik ölçü çalıştı.');}),edit()));
       }else if(a.needs_confirmation){
-        const reason=reasonText(measureSource(a).reasons) || reasonText(state.confirmations.find(c=>c.kind==='olcu'&&c.ref_table==='applications'&&Number(c.ref_id)===Number(a.id))?.message);
         row.append(el('div',{class:'p-notice warn'},'Ölçü teyit gerektiriyor.'+(reason?' '+reason:'')),el('div',{class:'p-actions'},
           a.width_mm!=null && a.height_mm!=null ? button('Ölçüyü onayla',async()=>{const list=adapt('list',await api('teyitler?status=acik')),c=list.find(c=>c.kind==='olcu'&&c.ref_table==='applications'&&Number(c.ref_id)===Number(a.id));
-            if(!c)throw Error('Açık ölçü teyidi bulunamadı; sayfayı yenileyin.');await api('teyitler/'+c.id+'/coz',{});await openOrder(state.activeOrder.id,v.id);message('Ölçü teyidi kaydedildi.');}) : null,
-          button('Elle düzelt',async()=>openManual(),'secondary')));
+            if(!c)throw Error('Açık ölçü teyidi bulunamadı; sayfayı yenileyin.');await api('teyitler/'+c.id+'/coz',{});await refreshInPlace(v);message('Ölçü teyidi kaydedildi.');}) : null,
+          edit()));
       }else if(gap){
         row.append(text(gap.text,'p-muted'));
-        if(gap.code==='olculebilir')row.append(button('Otomatik ölç',async()=>{await api('surumler/'+v.id+'/otomatik-olc',{});await openOrder(state.activeOrder.id,v.id);message('Otomatik ölçü çalıştı.');}));
-      }else row.append(el('div',{class:'p-actions'},button('Elle düzelt',async()=>openManual(),'secondary')));
-      box.append(row);
+        row.append(el('div',{class:'p-actions'},gap.code==='olculebilir'?button('Otomatik ölç',async()=>{await api('surumler/'+v.id+'/otomatik-olc',{});await refreshInPlace(v);message('Otomatik ölçü çalıştı.');}):null,edit()));
+      }else row.append(el('div',{class:'p-actions'},edit()));
+      row.append(editorHost);box.append(row);
     }
-    if(!(line.applications||[]).length){const gap=measureGap(v,line,lf,null);box.append(text(gap.text+(gap.code==='olculebilir'?' · Desen konumunu girin ya da elle ölçün.':''),'p-muted'));}
+    if(!(line.applications||[]).length){const gap=measureGap(v,line,lf,null);box.append(text(gap.text+(gap.code==='olculebilir'?' · Desen yükleyince uygulama eklenir.':''),'p-muted'));}
     return box;
+  }
+  function manualEditor(v,line,a,lf,close){
+    const label=statusLabel(a.kind)+' · '+positionLabel(a.position),ratio=designAspect(a,vectorRows[designFileId(a)]),shot=previewBox(a,lf);
+    const width=num('manual_w',a.width_mm==null?'':a.width_mm/10,{min:.1,step:.1,required:true}),height=num('manual_h',a.height_mm==null?'':a.height_mm/10,{min:.1,step:.1,required:true});
+    const lock=input('manual_lock',{type:'checkbox'});lock.checked=!!ratio;
+    const error=el('p',{class:'p-inline-error','aria-live':'polite'});
+    let preview=null,mark=null;
+    if(shot){
+      // Shown only once the product image has loaded: never an empty frame.
+      const image=el('img',{alt:'Ürün görseli; turuncu kutu otomatik bulunan desen yeri'});mark=el('div',{class:'p-mini-box'+(shot.confirmed?'':' candidate')});
+      preview=el('figure',{class:'p-mini'},el('div',{class:'p-mini-stage'},image,mark),el('figcaption',{},shot.confirmed?'Otomatik bulunan desen yeri':'Aday desen yeri (teyit edilmedi)'));preview.hidden=true;
+      mark.setAttribute('style','left:'+shot.left+'%;top:'+shot.top+'%;width:'+shot.width+'%;height:'+shot.height+'%');
+      image.addEventListener('load',()=>{preview.hidden=false;});
+      api('dosyalar/'+shot.fileId,undefined,undefined,true).then(blob=>{image.src=blobUrl(blob);}).catch(()=>preview.remove());
+    }
+    // With a known physical scale the box follows the entered size around its found centre.
+    const follow=()=>{if(!mark || !shot.mmPerPx)return;try{const w=readNumber(width),h=readNumber(height);if(!w||!h)return;
+      const bw=w*10/shot.mmPerPx/shot.rasterWidth*100,bh=h*10/shot.mmPerPx/shot.rasterHeight*100,cx=shot.left+shot.width/2,cy=shot.top+shot.height/2;
+      mark.setAttribute('style','left:'+(cx-bw/2)+'%;top:'+(cy-bh/2)+'%;width:'+bw+'%;height:'+bh+'%');}catch{}};
+    const sync=changed=>{error.textContent='';if(lock.checked && ratio){let pair=null;try{pair=lockedSize(changed,(changed==='width'?width:height).value,ratio);}catch{}
+      if(pair)(changed==='width'?height:width).value=inputNumber(changed==='width'?pair.height:pair.width);}follow();};
+    width.addEventListener('input',()=>sync('width'));height.addEventListener('input',()=>sync('height'));
+    lock.addEventListener('change',()=>sync('width'));
+    const save=button('Kaydet',async()=>{
+      let body;try{body=manualSaveBody(width.value,height.value);}catch(e){error.textContent=e.message;throw e;}
+      try{await api('uygulamalar/'+a.id,body,'PATCH');}catch(e){error.textContent=e.message;throw e;}
+      await refreshInPlace(v);message(label+': '+formatNumber(body.width_mm/10)+' × '+formatNumber(body.height_mm/10)+' cm, '+session.user.name+' adına kaydedildi; teyit kapandı.');
+    },'');
+    return el('div',{class:'p-manual-inline',role:'group','aria-label':label+' için elle ölçü'},
+      el('div',{class:'p-manual-fields'},field('En (cm)',width),field('Boy (cm)',height)),
+      ratio?field('Oranı koru (desen '+formatNumber(Math.round(ratio*100)/100)+' : 1)',lock):text('Desen oranı bilinmiyor; en ve boyu ayrı girin.','p-muted'),
+      preview,error,el('div',{class:'p-actions'},save,button('Vazgeç',async()=>close())));
   }
   function vectorHost(file){const host=el('div',{class:'p-vector','data-vector-source':String(file.id)});renderVector(host,file);return host;}
   function renderVector(host,file){
-    const row=vectorRows[file.id],b=vectorBadge(row);host.replaceChildren();
-    if(!b){host.append(text('Vektör durumu bilinmiyor','p-muted'));return;}
-    host.append(badge(b.label,b.tone));
+    const row=vectorRows[file.id],b=vectorBadge(row,file);host.replaceChildren(badge(b.label,b.tone));
     const quality=vectorQuality(row);
-    if(quality && quality.label!==b.label)host.append(badge(quality.label,quality.tone));
-    if(row.quality==='teyit' || row.status==='teyit'){
-      const confirmation=state.confirmations.find(c=>c.kind==='vektor_kalite'&&c.ref_table==='files'&&Number(c.ref_id)===Number(row.previewFileId));
-      const reason=reasonText(row.reasons) || reasonText(confirmation?.message) || reasonText(row.message);
-      if(reason)host.append(text(reason,'p-muted'));
-    }
-    if(row.status==='hata'&&row.message)host.append(text(row.message,'p-muted'));
+    if(quality && row.status!=='teyit')host.append(badge(quality.label,quality.tone));
+    const confirmation=row && state.confirmations.find(c=>c.kind==='vektor_kalite'&&c.ref_table==='files'&&Number(c.ref_id)===Number(row.previewFileId));
+    const detail=vectorDetail(row,confirmation?.message);
+    if(detail)host.append(el('span',{class:'p-vector-detail'},detail));
     if(b.downloadable)host.append(button('Vektörel PDF indir',()=>download({id:row.previewFileId,kind:'desen_vektor_onizleme',path:'desen-'+file.id+'-vektor.pdf'})));
-    if(vectorRows.timedOut&&row.status==='hazirlaniyor')host.append(button('Yenile',async()=>{vectorRows.timedOut=false;startVectorPolling(state.version);}));
+    if(vectorRows.timedOut&&(!row||row.status==='hazirlaniyor'))host.append(button('Yenile',async()=>{vectorRows.timedOut=false;startVectorPolling(state.version);}));
   }
   function startVectorPolling(v){
     clearTimeout(vectorTimer);if(!v||v.status!=='taslak'||!v.files.some(f=>f.kind==='desen_kaynak'||f.kind==='desen_kaynak_vektor'))return;
-    const started=Date.now(),versionId=v.id;
+    const started=Date.now(),versionId=v.id,sourceIds=v.files.filter(f=>f.kind==='desen_kaynak'||f.kind==='desen_kaynak_vektor').map(f=>f.id);
     const tick=async()=>{
       if(!session||state.version?.id!==versionId)return;
       let rows;try{rows=await api('surumler/'+versionId+'/vektor-durum');}catch{vectorTimer=setTimeout(tick,VECTOR_POLL_MS*2);return;}
       if(rows.some(r=>r.status==='teyit'||r.quality==='teyit')){try{state.confirmations=adapt('list',await api('teyitler?status=acik'));}catch{}}
       if(!session||state.version?.id!==versionId)return;
       vectorRows=Object.fromEntries(rows.map(r=>[r.sourceFileId,r]));
-      const next=vectorPollNext(rows,Date.now()-started);vectorRows.timedOut=next==='yenile';
+      const next=vectorPollNext(rows,Date.now()-started,sourceIds);vectorRows.timedOut=next==='yenile';
       for(const host of document.querySelectorAll('[data-vector-source]')){const file=v.files.find(f=>String(f.id)===host.dataset.vectorSource);if(file)renderVector(host,file);}
       if(next==='bekle')vectorTimer=setTimeout(tick,VECTOR_POLL_MS);
     };
     tick();
-  }
-  function measurementEditor(v,line){
-    const host=el('section',{},el('h3',{},'Deseni yerleştir'));
-    const flat=opts(state.flats.filter(f=>f.urun===line.product_key).map(f=>[f.id,f.ad+' / '+f.gorunum]),null,'Yerel düz çizim / fotoğraf');flat.name='flatId';
-    const productImage=input('flatImage',{type:'file',accept:'.png,.jpg,.jpeg'});
-    const image=el('img',{alt:'Ölçü referansı olan ürün görseli',hidden:true}),overlay=el('div',{class:'p-box',tabindex:0,role:'group','aria-label':'Desen kutusu. Ok tuşlarıyla taşıyın; Shift ve oklarla boyutlandırın.'});
-    const handle=el('span',{class:'p-resize','aria-hidden':'true'},'↘');overlay.append(handle);
-    const stage=el('div',{class:'p-stage'},image,overlay);let natural=null,ratio=null,selectedDesign='',selection=0,productSelection=0;
-    const boxWidth=num('box_width',30,{max:100,min:0.000001,required:true}),boxHeight=num('box_height','',{max:100,min:0.000001});boxHeight.readOnly=true;overlay.hidden=true;boxWidth.disabled=true;
-    const referencePx=num('refLengthPx','',{min:.1,step:.1}),referenceCm=num('refLengthCm','',{min:.1,step:.1}),refNote=input('refAciklama',{placeholder:'Örn. Ön beden eni'});
-    const kind=opts([['baski','Baskı'],['nakis','Nakış']],'baski'),position=opts(Object.entries(POSITIONS),'gogus');
-    const imageKind=opts([['flat','Düz çizim'],['photo','Fotoğraf / belirsiz görsel']],'flat');
-    const source=opts(v.files.filter(f=>f.kind==='desen_kaynak'&&(lineFiles(v,line.id,fileMetadata).includes(f)||designApplication(line,f.id))).map(f=>[f.id,fileMetadata[f.id]?.name || 'Desen #'+f.id]),null,'Yüklenmiş desen seçin');source.required=true;
-    const result=el('div',{'aria-live':'polite'});
-    const ratioNote=text('Oran bilinmiyor. Yüklenmiş desen seçin.','p-ratio-note'),ratioConfirmation=el('div',{class:'p-ratio-confirm'});
-    const sizing=bindDesignBox(overlay,stage,boxWidth,boxHeight,()=>natural,()=>ratio);
-    function setRatio(value){ratio=value;overlay.hidden=!value;boxWidth.disabled=!value;ratioNote.textContent=value?'Oran desenden · '+value.source+' ('+formatNumber(value.w)+' × '+formatNumber(value.h)+')':'Oran bilinmiyor. Desenin en ve boyunu teyit edin.';sizing.apply();}
-    function cropPreview(canvas,box){const crop=document.createElement('canvas');crop.width=box.w;crop.height=box.h;crop.getContext('2d').drawImage(canvas,box.x,box.y,box.w,box.h,0,0,box.w,box.h);return crop.toDataURL('image/png');}
-    async function decodeDesign(blob){
-      const img=el('img',{src:blobUrl(blob),alt:'Desen'});await img.decode();
-      let value=designRatio(img.naturalWidth,img.naturalHeight,'Doğal görsel boyutu');
-      if(blob.type==='image/png'){
-        const canvas=document.createElement('canvas');canvas.width=img.naturalWidth;canvas.height=img.naturalHeight;
-        const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.drawImage(img,0,0);
-        const box=contentBounds(canvas.width,canvas.height,ctx.getImageData(0,0,canvas.width,canvas.height).data);
-        if(!box)throw Error('Desen tamamen saydam. Oran bilinmiyor; en ve boyu teyit edin.');
-        value={...designRatio(box.w,box.h,'PNG saydamlık kutusu'),preview:cropPreview(canvas,box)};
-      }
-      return {...value,preview:value.preview||img.src};
-    }
-    async function decodePdf(blob){
-      // Pinned pdf.js is loaded only for PDF sources. A network/library failure stays unknown.
-      const lib=global.pdfjsLib||await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.min.mjs');
-      if(!global.pdfjsLib)lib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.worker.min.mjs';
-      const task=lib.getDocument({data:new Uint8Array(await blob.arrayBuffer())});let doc;
-      try{
-        doc=await task.promise;const page=await doc.getPage(1),base=page.getViewport({scale:1});
-        const viewport=page.getViewport({scale:Math.min(2,2400/Math.max(base.width,base.height))}),canvas=document.createElement('canvas');
-        canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);const ctx=canvas.getContext('2d',{willReadFrequently:true});
-        await page.render({canvasContext:ctx,viewport,background:'rgb(255,255,255)'}).promise;
-        const box=contentBounds(canvas.width,canvas.height,ctx.getImageData(0,0,canvas.width,canvas.height).data,true)||{x:0,y:0,w:canvas.width,h:canvas.height};
-        return {...designRatio(box.w,box.h,'PDF ilk sayfa içerik kutusu'),preview:cropPreview(canvas,box)};
-      }finally{await task.destroy();}
-    }
-    productImage.addEventListener('change',()=>run(async()=>{
-      const ticket=++productSelection;natural=null;sizing.cancel();overlay.hidden=true;
-      if(!productImage.files[0])return;
-      const next=el('img',{src:blobUrl(productImage.files[0])});await next.decode();if(ticket!==productSelection)return;
-      image.src=next.src;image.hidden=false;natural={w:next.naturalWidth,h:next.naturalHeight};stage.style.aspectRatio=natural.w+'/'+natural.h;overlay.hidden=!ratio;sizing.apply();
-    }));
-    source.addEventListener('change',()=>run(async()=>{
-      const ticket=++selection,id=source.value;selectedDesign='';sizing.cancel();setRatio(null);boxHeight.value='';ratioConfirmation.replaceChildren();overlay.querySelectorAll('img,object').forEach(n=>n.remove());
-      if(!id)return;
-      const app=designApplication(line,id);if(app){kind.value=app.kind;position.value=app.position;}
-      let blob;
-      try{
-        blob=await api('dosyalar/'+id,undefined,undefined,true);
-        const value=await readDesignAsset(blob,{decode:decodeDesign,pdf:decodePdf,report:v.files.find(file=>String(file.id)===id)});
-        if(ticket!==selection)return;selectedDesign=id;
-        if(value.preview)overlay.prepend(el('img',{src:value.preview,alt:'Seçili desen'}));
-        else overlay.prepend(el('object',{data:blobUrl(blob),type:'application/pdf','aria-label':'Seçili PDF desen'}));
-        setRatio(value);
-      }catch(error){
-        if(ticket!==selection)return;ratioNote.textContent=error.message+' Oran bilinmiyor; en ve boyu teyit edin.';
-        const w=num('ratio_confirm_w','',{min:.000001,required:true}),h=num('ratio_confirm_h','',{min:.000001,required:true});
-        ratioConfirmation.replaceChildren(field('Teyit edilen desen eni (aynı birim)',w),field('Teyit edilen desen boyu (aynı birim)',h),button('Desen oranını teyit et',()=>{
-          if(ticket!==selection||!blob)throw Error('Önce desen dosyasını seçin.');
-          const value=designRatio(readNumber(w),readNumber(h),'Kullanıcı teyidi');selectedDesign=id;
-          overlay.prepend(blob.type==='application/pdf'?el('object',{data:blobUrl(blob),type:'application/pdf','aria-label':'Teyit edilen desen önizlemesi'}):el('img',{src:blobUrl(blob),alt:'Teyit edilen desen'}));setRatio(value);ratioConfirmation.replaceChildren();
-        }));
-      }
-    }));
-    // A library record contains a filesystem path, not a browser-readable URL.
-    flat.addEventListener('change',()=>{const f=state.flats.find(f=>f.id===flat.value);if(f){referencePx.value=inputNumber(f.refLengthPx);referenceCm.value=inputNumber(f.refLengthCm);refNote.value=f.refAciklama || '';}});
-    const f=form(async()=>{
-      if(!natural)throw Error('Ölçü için ürünün düz çizimini veya fotoğrafını seçin.');if(!source.value)throw Error('Önce bu satıra bir desen yükleyin ve seçin.');if(!ratio||selectedDesign!==source.value)throw Error('Oran bilinmiyor. Seçili desenin en ve boyunu teyit edin.');if(!sizing.apply())throw Error('Geçerli bir kutu eni girin.');
-      if(flat.value){await api('duz-cizimler/'+encodeURIComponent(flat.value)+'/referans',{refLengthPx:readNumber(referencePx),refLengthCm:readNumber(referenceCm),refAciklama:refNote.value.trim()},'PUT');}
-      const r=stage.getBoundingClientRect(),b=overlay.getBoundingClientRect(),designBoxPx=pixelBox({x:b.left-r.left,y:b.top-r.top,w:b.width,h:b.height},{w:r.width,h:r.height},natural);designBoxPx.h=designBoxPx.w/ratio.ratio;
-      const existing=designApplication(line,source.value);const measured=adapt('measurement',await api(existing?'uygulamalar/'+existing.id:'uygulamalar/olc',{lineId:line.id,kind:kind.value,position:position.value,desenDosyaId:Number(source.value),...(flat.value?{flatId:flat.value}:{refLengthPx:readNumber(referencePx),refLengthCm:readNumber(referenceCm)}),designBoxPx,imageKind:imageKind.value},existing?'PATCH':'POST'));
-      result.replaceChildren(text('Ölçü: '+formatNumber(measured.widthCm)+' × '+formatNumber(measured.heightCm)+' cm','p-number'));
-      if(measured.needsConfirmation){const width=num('confirm_w',measured.widthCm ?? '',{min:.1,step:.1,required:true}),height=num('confirm_h',measured.heightCm ?? '',{min:.1,step:.1,required:true});const alert=el('div',{class:'p-notice'},measured.reason || 'Ölçüyü elle teyit edin.');
-        // Keep changed manual confirmation values in the existing revision flow.
-        result.append(alert,field('Teyit edilen en (cm)',width),field('Teyit edilen boy (cm)',height),button('Cm değerlerini teyit et',async()=>{
-          if(!width.value||!height.value)throw Error('En ve boy değerlerini doldurun.');
-          if(readNumber(width)!==measured.widthCm || readNumber(height)!==measured.heightCm){await openOrder(state.activeOrder.id,v.id);renderWizard(true);message('Ölçü değişikliği için uygulamanın cm alanlarını düzenleyip yeni sürüm açın.');return;}
-          if(!measured.confirmationId)throw Error('Sunucu teyit kimliğini vermedi.');await api('teyitler/'+measured.confirmationId+'/coz',{});await openOrder(state.activeOrder.id,v.id);message('Ölçü teyidi kaydedildi.');
-        },''));
-      }else{await openOrder(state.activeOrder.id,v.id);message('Ölçü kaydedildi: '+formatNumber(measured.widthCm)+' × '+formatNumber(measured.heightCm)+' cm.');}
-    },field('Düz çizim kütüphanesi',flat),text('Kütüphane kayıtlarının görsel indirme ucu henüz yok. Önizleme için aynı düz çizim dosyasını aşağıdan seçin; referans değerleri kütüphaneden gelir.'),el('div',{class:'p-grid'},field('Ürün önizleme dosyası',productImage),field('Yüklenmiş desen',source),field('Görsel türü',imageKind)),ratioNote,ratioConfirmation,stage,el('div',{class:'p-grid'},field('Kutu eni (%)',boxWidth),field('Kutu boyu (%) · Oran desenden',boxHeight),field('Referans uzunluğu (orijinal piksel)',referencePx),field('Referans uzunluğu (cm)',referenceCm),field('Referans açıklaması',refNote),field('Uygulama',kind),field('Konum',position)),submit('Ölçüyü hesapla ve kaydet'));
-    const libraryFile=input('libraryFile',{type:'file',accept:'.png,.jpg,.jpeg',required:true}),libraryName=input('libraryName',{required:true}),libraryView=opts([['on','Ön'],['arka','Arka']],'on');
-    const library=el('details',{id:'flat-library-'+line.id},el('summary',{},'Kütüphaneye düz çizim yükle'),form(async()=>{const data=new FormData();data.append('file',libraryFile.files[0]);data.append('ad',libraryName.value);data.append('urun',line.product_key);data.append('gorunum',libraryView.value);await api('duz-cizimler',data);await loadCommon();await openOrder(state.activeOrder.id,v.id);},field('Çizim adı',libraryName),field('Görünüm',libraryView),field('PNG / JPG',libraryFile),submit('Kütüphaneye ekle')));
-    if(!state.flats.some(flat=>flat.urun===line.product_key))host.append(el('div',{class:'p-notice'},text('Önce düz çizim ekleyin.'),el('a',{href:'#flat-library-'+line.id,onclick:()=>{library.open=true;}},'Düz çizim yükleme / referans ekranını aç')));
-    host.append(f,result,library);return host;
   }
   function renderFiles(files,previews=false){
     const grid=el('div',{class:'p-files'});

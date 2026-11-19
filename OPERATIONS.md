@@ -177,3 +177,23 @@ Deploying the panel before the API locks everyone out of panel data.
 
 Tests: `node --test test/operations-ui.js test/uretim-ui.test.js test/panel-oturum.test.js`
 and all twelve `test/sync-harness.js` scenarios (new: `oturumsuz-acilis`, `oturum-dustu`).
+
+## Inline size correction and folded upload form (2026-11-20)
+
+"Elle düzelt" opens a small En/Boy editor inside the measurement row. The ratio
+lock is on when the design ratio is known (automatic measurement or the server's
+vector content box). "Kaydet" sends `PATCH /api/siparis/uygulamalar/:id` with
+`{width_mm, height_mm, elleTeyit: true}`; the server stores the size for the
+signed-in person and closes that confirmation. The old placement section (flat
+library, product preview file, pixel reference) is gone; its API routes stay for
+the CLI tools. The upload form folds behind "Dosya ekle" and shows only the
+fields of the chosen type (Görünüm: Ön/Arka/Kol; Desen: Uygulama and Konum).
+Every design source shows a stated vector state; the panel keeps polling while a
+source has no server row yet. Opening a draft with applications that were never
+measured runs `otomatik-olc?degisen=1` once.
+
+Release order: the API first (it accepts `elleTeyit`, `gorunum=kol` and repairs
+missing vector records), then this panel.
+
+Tests: `node --test test/operations-ui.js test/uretim-ui.test.js test/uretim-olcu-sade.test.js test/panel-oturum.test.js`
+and all `test/sync-harness.js` scenarios.
