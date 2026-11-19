@@ -178,8 +178,13 @@
     throw new TypeError('Bilinmeyen adaptör: '+kind);
   }
   function designApplication(line,fileId) {
-    // The snapshot does not expose document_application_sources.file_id yet.
-    return (line.applications || []).find(a=>{const m=measureSource(a);return Number(m.desenFileId ?? m.desenDosyaId)===Number(fileId);});
+    // Prefer the snapshot source link; retain provenance fallbacks for older snapshots.
+    return (line.applications || []).find(a=>{const m=measureSource(a);return Number(a.desenDosyaId ?? m.desenFileId ?? m.desenDosyaId)===Number(fileId);});
+  }
+  function measurementWarning(a,files,metadata={}) {
+    const file=files.find(file=>designApplication({applications:[a]},file.id));
+    return a.olcuHatasi ?? file?.olcuHatasi ?? metadata[file?.id]?.olcuHatasi ??
+      files.filter(file=>file.kind==='urun_gorsel').map(file=>file.olcuHatasi ?? metadata[file.id]?.olcuHatasi).find(Boolean);
   }
   function lineFiles(version,lineId,metadata={}) {
     return (version.files || []).filter(file=>Number(file.line_id ?? metadata[file.id]?.lineId)===Number(lineId) || (version.lines.length===1 && file.line_id==null && !metadata[file.id]?.lineId));
@@ -202,7 +207,7 @@
     }
     return jobs.filter(job=>!job.done);
   }
-  const pure={reasonText,vectorQuality,designRatio,contentBounds,fitDesignBox,bindDesignBox,reportDesignRatio,readDesignAsset,reconcileJobs,designApplication,lineFiles,missingImages,uploadJobs,parseNumber,inputNumber,validateNumber,displayMessage,positiveSizes,unmatchedAwaitingKg,queueFile,SIZES,PRODUCTS,POSITIONS,positionLabel,applicationLabel,measureSource,measureSummary,measureGap,vectorBadge,vectorPollNext,VECTOR_POLL_MS,packageActions,costApplications,pricePayload,escapeHtml,formatNumber,formatKg,formatDate,statusLabel,sizeTotal,pixelBox,adapt};
+  const pure={reasonText,vectorQuality,designRatio,contentBounds,fitDesignBox,bindDesignBox,reportDesignRatio,readDesignAsset,reconcileJobs,designApplication,measurementWarning,lineFiles,missingImages,uploadJobs,parseNumber,inputNumber,validateNumber,displayMessage,positiveSizes,unmatchedAwaitingKg,queueFile,SIZES,PRODUCTS,POSITIONS,positionLabel,applicationLabel,measureSource,measureSummary,measureGap,vectorBadge,vectorPollNext,VECTOR_POLL_MS,packageActions,costApplications,pricePayload,escapeHtml,formatNumber,formatKg,formatDate,statusLabel,sizeTotal,pixelBox,adapt};
   if (typeof module!=='undefined' && module.exports) module.exports=pure;
   global.MerciProduction=pure;
   if (typeof document==='undefined') return;
@@ -220,7 +225,7 @@
   const state={tab:'orders',stocks:[],flats:[],orders:[],outbox:[],confirmations:[],activeOrder:null,version:null,pending:[]};
   let fileMetadata={},vectorRows={},vectorTimer=null;
   function rememberFile(file,job){fileMetadata[file.id]={lineId:job.lineId,gorunum:job.gorunum,name:job.file.name};}
-  async function sendJobs(jobs){reconcileJobs(jobs,state.version);for(const versionId of new Set(jobs.filter(job=>job.uploaded&&job.kind==='desen_kaynak'&&!job.application&&!job.done).map(job=>job.versionId))){try{reconcileJobs(jobs,await api('surumler/'+versionId));}catch(error){for(const job of jobs.filter(job=>job.versionId===versionId&&!job.done))job.error=error.message;return jobs.filter(job=>!job.done);}}const failed=await uploadJobs(jobs,async job=>{const data=new FormData();data.append('file',job.file);data.append('kind',job.kind);data.append('lineId',job.lineId);if(job.gorunum)data.append('gorunum',job.gorunum);const file=await api('surumler/'+job.versionId+'/dosyalar',data);rememberFile(file,job);return file;},job=>api('satirlar/'+job.lineId+'/uygulamalar',{kind:job.applicationKind,position:job.position,desenDosyaId:job.uploaded.id,measure_source:JSON.stringify({desenDosyaId:job.uploaded.id,dosyaAdi:job.file.name}),needs_confirmation:1}));state.pending=state.pending.filter(job=>!job.done);return failed;}
+  async function sendJobs(jobs){reconcileJobs(jobs,state.version);for(const versionId of new Set(jobs.filter(job=>job.uploaded&&job.kind==='desen_kaynak'&&!job.application&&!job.done).map(job=>job.versionId))){try{reconcileJobs(jobs,await api('surumler/'+versionId));}catch(error){for(const job of jobs.filter(job=>job.versionId===versionId&&!job.done))job.error=error.message;return jobs.filter(job=>!job.done);}}const failed=await uploadJobs(jobs,async job=>{const data=new FormData();data.append('file',job.file);data.append('kind',job.kind);data.append('lineId',job.lineId);if(job.gorunum)data.append('gorunum',job.gorunum);const file=await api('surumler/'+job.versionId+'/dosyalar',data);rememberFile(file,job);return file;},job=>api('satirlar/'+job.lineId+'/uygulamalar',{kind:job.applicationKind,position:job.position,desenDosyaId:job.uploaded.id,measure_source:JSON.stringify({desenDosyaId:job.uploaded.id,dosyaAdi:job.file.name}),needs_confirmation:1}));for(const job of jobs){if(job.done && job.uploaded){const warning=job.application?.olcuHatasi ?? job.uploaded.olcuHatasi;if(warning)fileMetadata[job.uploaded.id]={...fileMetadata[job.uploaded.id],olcuHatasi:warning};}}state.pending=state.pending.filter(job=>!job.done);return failed;}
   function focusMedia(){document.getElementById('order-media')?.scrollIntoView({block:'start'});}
   const objectUrls=new Set(); let pageUrls=new Set(), content, notice;
   const el=(tag,attrs,...children)=>{
@@ -407,11 +412,14 @@
       const row=el('div',{class:'p-auto-row'}),summary=measureSummary(a),gap=measureGap(v,line,lf,a),label=statusLabel(a.kind)+' · '+positionLabel(a.position);
       row.append(el('strong',{},label));
       if(summary)row.append(text(summary,'p-number'));
-      if(a.needs_confirmation){
+      const warning=measurementWarning(a,lf,fileMetadata);
+      if(warning){
+        row.append(el('div',{class:'p-notice warn'},'Otomatik ölçü yapılamadı: '+reasonText(warning)+' · ',button('Elle düzelt',async()=>openManual(),'secondary')));
+      }else if(a.needs_confirmation){
         const reason=reasonText(measureSource(a).reasons) || reasonText(state.confirmations.find(c=>c.kind==='olcu'&&c.ref_table==='applications'&&Number(c.ref_id)===Number(a.id))?.message);
         row.append(el('div',{class:'p-notice warn'},'Ölçü teyit gerektiriyor.'+(reason?' '+reason:'')),el('div',{class:'p-actions'},
-          button('Ölçüyü onayla',async()=>{const list=adapt('list',await api('teyitler?status=acik')),c=list.find(c=>c.kind==='olcu'&&c.ref_table==='applications'&&Number(c.ref_id)===Number(a.id));
-            if(!c)throw Error('Açık ölçü teyidi bulunamadı; sayfayı yenileyin.');await api('teyitler/'+c.id+'/coz',{});await openOrder(state.activeOrder.id,v.id);message('Ölçü teyidi kaydedildi.');}),
+          a.width_mm!=null && a.height_mm!=null ? button('Ölçüyü onayla',async()=>{const list=adapt('list',await api('teyitler?status=acik')),c=list.find(c=>c.kind==='olcu'&&c.ref_table==='applications'&&Number(c.ref_id)===Number(a.id));
+            if(!c)throw Error('Açık ölçü teyidi bulunamadı; sayfayı yenileyin.');await api('teyitler/'+c.id+'/coz',{});await openOrder(state.activeOrder.id,v.id);message('Ölçü teyidi kaydedildi.');}) : null,
           button('Elle düzelt',async()=>openManual(),'secondary')));
       }else if(gap){
         row.append(text(gap.text,'p-muted'));

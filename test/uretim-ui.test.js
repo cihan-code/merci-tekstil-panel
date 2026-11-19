@@ -337,3 +337,59 @@ test('G28 measurement and vector reasons read arrays, text and confirmation repo
   assert.equal(ui.reasonText('Vektör teyidi: {"reasons":[]}'),'Vektör teyidi');
   assert.equal(ui.reasonText('Vektör kalitesi görsel teyit gerektiriyor: {"quality":"teyit","reasons":["Detay kaybı var."]}'),'Detay kaybı var.');
 });
+
+test('G32 source links precede both legacy measurement provenance fields',()=>{
+  const application={desenDosyaId:7,measure_source:'{"flatId":null}'};
+  assert.equal(ui.designApplication({applications:[application]},7),application);
+  const conflicting={...application,measure_source:{desenFileId:8,desenDosyaId:9}};
+  assert.equal(ui.designApplication({applications:[conflicting]},7),conflicting);
+  assert.equal(ui.designApplication({applications:[conflicting]},8),undefined);
+  assert.equal(ui.designApplication({applications:[{...conflicting,desenDosyaId:null}]},8).measure_source.desenFileId,8);
+});
+
+function measurementCardHarness(responses=[]) {
+  class Element {
+    constructor(tag){this.tag=tag;this.children=[];this.dataset={};}
+    append(...children){this.children.push(...children);}
+    setAttribute(){}
+    addEventListener(event,handler){this[event]=handler;}
+    get textContent(){return this.children.map(child=>child.textContent ?? child).join('');}
+  }
+  const root=new Element('root');
+  const context={Node:Element,document:{getElementById:()=>root,createElement:tag=>new Element(tag),createTextNode:text=>({textContent:text})},sessionStorage:{getItem:()=>null,removeItem(){}},location:{search:''},URL,URLSearchParams,FormData:class{append(){}},fetch:async()=>({ok:true,json:async()=>responses.shift()})};
+  const source=fs.readFileSync(path.join(__dirname,'../assets/uretim.js'),'utf8').replace("  renderFrame();if(session)run(async()=>{await loadCommon();await renderTab();});",'  global.testCards={autoMeasureBlock,sendJobs,state};').replace("  window.addEventListener('pagehide'", "  global.addEventListener('pagehide'");
+  context.addEventListener=()=>{};
+  require('node:vm').runInNewContext(source,context);
+  return context.testCards;
+}
+
+test('G32 confirmation requires both dimensions and keeps manual correction available',()=>{
+  const harness=measurementCardHarness();
+  for(const [width_mm,height_mm] of [[null,null],[100,null],[null,100],[100,50]]){
+    const manual={open:false},card=harness.autoMeasureBlock({id:1},{applications:[{id:2,kind:'baski',needs_confirmation:1,width_mm,height_mm}]},[],manual);
+    assert.equal(card.textContent.includes('Ölçüyü onayla'),width_mm!=null&&height_mm!=null);
+    assert.match(card.textContent,/Elle düzelt/);
+  }
+});
+
+test('G32 upload and application measurement failures finish successfully and survive snapshot refresh',async()=>{
+  for(const stage of ['upload','application']){
+    const warning='Referans bulunamadı',application={id:4,desenDosyaId:7,kind:'baski',position:'gogus',needs_confirmation:1,width_mm:null,height_mm:null};
+    const harness=measurementCardHarness([{id:7,...(stage==='upload'?{olcuHatasi:warning}:{})},{...application,...(stage==='application'?{olcuHatasi:warning}:{})}]);
+    const job={versionId:1,lineId:2,kind:'desen_kaynak',file:{name:'logo.pdf'},applicationKind:'baski',position:'gogus'};
+    assert.equal((await harness.sendJobs([job])).length,0);
+    assert.equal(job.done,true);assert.equal(job.error,'');assert.equal(harness.state.pending.length,0);
+    const manual={open:false},card=harness.autoMeasureBlock({id:1},{applications:[application]},[{id:7,kind:'desen_kaynak'}],manual);
+    assert.equal(card.textContent,'Baskı · GöğüsOtomatik ölçü yapılamadı: '+warning+' · Elle düzelt');
+    const action=card.children[0].children[1].children[1];
+    await action.click();assert.equal(manual.open,true);
+    assert.doesNotMatch(card.textContent,/Ölçüyü onayla|Yeniden yükle/);
+  }
+});
+
+test('G32 snapshot measurement warnings stay on the matching application',()=>{
+  const files=[{id:7,kind:'desen_kaynak'},{id:8,kind:'desen_kaynak'}],metadata={7:{olcuHatasi:'Ölçü yok'}};
+  assert.equal(ui.measurementWarning({desenDosyaId:7},files,metadata),'Ölçü yok');
+  assert.equal(ui.measurementWarning({desenDosyaId:8},files,metadata),undefined);
+  assert.equal(ui.measurementWarning({olcuHatasi:'Sunucu uyarısı'},[],{}),'Sunucu uyarısı');
+});
