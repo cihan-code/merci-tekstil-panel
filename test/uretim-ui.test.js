@@ -221,3 +221,58 @@ test('retry reconciles an application measured after its initial registration fa
   assert.equal(job.application,application);assert.equal(uploads,0);assert.equal(applications,0);assert.equal(job.done,true);
   const other={...job,application:undefined};ui.reconcileJobs([other],{id:4,lines:[{id:11,applications:[application]}]});assert.equal(other.application,undefined);
 });
+
+function boxHarness(natural={w:700,h:1000},dimensions=ui.designRatio(140,60,'test')){
+  const node=()=>({value:'',style:{},listeners:{},addEventListener(type,fn){this.listeners[type]=fn;},fire(type,values={}){this.listeners[type]?.({preventDefault(){},...values});}});
+  const overlay=node(),width=node(),height=node();width.value='20';overlay.style={left:'30%',top:'30%'};overlay.setPointerCapture=()=>{};
+  const stage={getBoundingClientRect:()=>({left:10,top:20,width:350,height:500})};
+  overlay.getBoundingClientRect=()=>({left:10+parseFloat(overlay.style.left)*3.5,top:20+parseFloat(overlay.style.top)*5,width:parseFloat(overlay.style.width)*3.5,height:parseFloat(overlay.style.height)*5});
+  const binding=ui.bindDesignBox(overlay,stage,width,height,()=>natural,()=>dimensions);binding.apply();
+  return {overlay,width,height,binding,setRatio(value){dimensions=value;},pixels(){return ui.pixelBox({x:parseFloat(overlay.style.left)*3.5,y:parseFloat(overlay.style.top)*5,w:parseFloat(overlay.style.width)*3.5,h:parseFloat(overlay.style.height)*5},{w:350,h:500},natural);}};
+}
+const close=(actual,expected)=>assert.ok(Math.abs(actual-expected)<1e-8,`${actual} != ${expected}`);
+test('pointer resize changes only width and preserves a 140:60 design on a portrait product',()=>{
+  const h=boxHarness(),o=h.overlay;close(h.pixels().w,140);close(h.pixels().h,60);
+  o.fire('pointerdown',{pointerId:1,clientX:100,clientY:100,target:{classList:{contains:()=>true}}});
+  o.fire('pointermove',{pointerId:2,clientX:200,clientY:300});close(h.pixels().w,140);
+  o.fire('pointermove',{pointerId:1,clientX:135,clientY:400});close(h.pixels().w,210);close(h.pixels().h,90);
+  o.fire('pointerup');o.fire('pointermove',{pointerId:1,clientX:200,clientY:400});close(h.pixels().w,210);
+});
+test('pointer move clamps inside the product without changing the artwork dimensions',()=>{
+  const h=boxHarness(),o=h.overlay;
+  o.fire('pointerdown',{pointerId:1,clientX:100,clientY:100,target:{classList:{contains:()=>false}}});
+  o.fire('pointermove',{pointerId:1,clientX:10000,clientY:-10000});
+  close(parseFloat(o.style.left),80);close(parseFloat(o.style.top),0);close(h.pixels().w,140);close(h.pixels().h,60);
+});
+test('all Shift arrows resize width with locked height; ordinary arrows only move',()=>{
+  const h=boxHarness(),o=h.overlay;
+  for(const key of ['ArrowRight','ArrowDown'])o.fire('keydown',{key,shiftKey:true});close(h.pixels().w,154);close(h.pixels().h,66);
+  for(const key of ['ArrowLeft','ArrowUp'])o.fire('keydown',{key,shiftKey:true});close(h.pixels().w,140);close(h.pixels().h,60);
+  o.fire('keydown',{key:'ArrowRight'});o.fire('keydown',{key:'ArrowDown'});close(parseFloat(o.style.left),31);close(parseFloat(o.style.top),31);close(h.pixels().h,60);
+});
+test('width number input derives height, preserves commas and fits tall designs without ratio drift',()=>{
+  const h=boxHarness();h.width.value='40,5';h.width.fire('input');close(h.pixels().w,283.5);close(h.pixels().h,121.5);
+  h.setRatio(ui.designRatio(10,100,'tall'));h.width.value='100';h.width.fire('input');close(h.pixels().h,1000);close(h.pixels().w,100);
+  h.width.value='bad';const before=h.overlay.style.width;h.width.fire('input');assert.equal(h.overlay.style.width,before);
+  h.setRatio(null);h.width.value='50';assert.equal(h.binding.apply(),false);assert.equal(h.overlay.style.width,before);
+});
+test('alpha bounds ignore transparent margins while preserving opaque white artwork',()=>{
+  const pixels=new Uint8ClampedArray(200*100*4);
+  for(let y=20;y<80;y++)for(let x=30;x<170;x++){const i=(y*200+x)*4;pixels.set([255,255,255,255],i);}
+  assert.deepEqual(ui.contentBounds(200,100,pixels),{x:30,y:20,w:140,h:60});
+  assert.equal(ui.contentBounds(200,100,pixels,true),null);assert.equal(ui.contentBounds(2,2,new Uint8Array(16)),null);
+  assert.throws(()=>ui.contentBounds(2,2,new Uint8Array(4)),RangeError);
+});
+test('ratio loading uses decoded raster dimensions and PDF content before server bounds',async()=>{
+  const raster=ui.designRatio(140,60,'naturalWidth/Height'),pdf=ui.designRatio(280,120,'PDF first page');
+  assert.equal(await ui.readDesignAsset(new Blob(['png'],{type:'image/png'}),{decode:async()=>raster,pdf:()=>assert.fail('PDF parser used on PNG')}),raster);
+  assert.equal(await ui.readDesignAsset(new Blob(['%PDF-'],{type:'application/octet-stream'}),{decode:()=>assert.fail('raster parser used on PDF'),pdf:async()=>pdf,report:{report:{sourceBounds:{w:1,h:1}}}}),pdf);
+  const fallback=await ui.readDesignAsset(new Blob(['%PDF-'],{type:'application/pdf'}),{pdf:async()=>{throw Error('unavailable');},report:{report_json:'{"sourceBounds":{"w":140,"h":60}}'}});
+  close(fallback.ratio,140/60);assert.equal(fallback.source,'Sunucu vektör raporu');
+});
+test('missing, invalid and target-only PDF reports require explicit confirmation without a guessed ratio',async()=>{
+  for(const report of [undefined,{report_json:'bad'},{report:{sourceBounds:{w:0,h:60}}},{report:{width:140,height:60,targetMm:{w:140,h:60}}}]){
+    await assert.rejects(ui.readDesignAsset(new Blob(['%PDF-'],{type:'application/pdf'}),{pdf:async()=>{throw Error('broken PDF');},report}),/Oran bilinmiyor.*teyit/);
+  }
+  for(const [w,h] of [[0,60],[140,NaN],[Infinity,60],[-1,2]])assert.throws(()=>ui.designRatio(w,h,'invalid'),RangeError);
+});
