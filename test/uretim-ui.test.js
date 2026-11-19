@@ -83,7 +83,7 @@ test('production client keeps credentials in session storage and avoids HTML sin
   const js=fs.readFileSync(path.join(__dirname,'../assets/uretim.js'),'utf8');
   assert.doesNotMatch(js,/localStorage|innerHTML|insertAdjacentHTML|x-api-key/i);
   assert.match(js,/sessionStorage\.setItem/);assert.match(js,/res.status===401/);
-  assert.match(js,/Authorization='Bearer '/);assert.match(js,/kdvDahil:false/);
+  assert.match(js,/Authorization='Bearer '/);assert.doesNotMatch(js,/kdvDahil/);
 });
 test('stock page mounts the shared ledger and removes legacy fabric mutations',()=>{
   const html=fs.readFileSync(path.join(__dirname,'../stok.html'),'utf8');
@@ -98,4 +98,32 @@ test('size boundary translates UI 2XL to documented PDF XXL and back',()=>{
 
 test('cm values and piece counts share Turkish number formatting',()=>{
   assert.equal(ui.formatNumber(12.5),'12,5');assert.equal(ui.formatNumber(1234),'1.234');assert.equal(ui.formatNumber(null),'—');
+});
+
+ test('application labels use a shared Turkish position dictionary and decimal commas',()=>{
+  assert.equal(ui.applicationLabel({kind:'baski',position:'gogus',width_mm:186,height_mm:200}),'Baskı · Göğüs: 18,6 × 20 cm');
+  assert.equal(ui.applicationLabel({kind:'nakis',position:'sol_gogus',width_mm:105,height_mm:55}),'Nakış · Sol göğüs: 10,5 × 5,5 cm');
+  for(const [key,label] of Object.entries(ui.POSITIONS))assert.equal(ui.positionLabel(key),label);
+  assert.equal(ui.positionLabel('yeni_konum'),'yeni_konum');
+  assert.equal(ui.positionLabel('constructor'),'constructor');
+});
+test('workshop actions follow parked, failed and waiting states',()=>{
+  assert.deepEqual(ui.packageActions('manuel_bekliyor'),[['Gruba gönderildi','elle-gonderildi']]);
+  assert.deepEqual(ui.packageActions('basarisiz'),[['Tekrar dene','tekrar']]);
+  assert.deepEqual(ui.packageActions('bekliyor'),[['Elle gönderime al','manuel']]);
+  for(const status of ['tamam','isleniyor','iptal',undefined])assert.deepEqual(ui.packageActions(status),[]);
+});
+test('cost status keeps queue errors visible before price entry',()=>{
+  assert.equal(ui.adapt('cost',{status:'basarisiz',unitPrice:null}).label,'Başarısız');
+  assert.equal(ui.adapt('cost',{status:'bekliyor',unitPrice:null}).label,'Bekliyor');
+  assert.equal(ui.adapt('cost',{}).label,'Onay bekleniyor');
+});
+
+test('cost price input carries explicit template sizes and application quantities without VAT flag',()=>{
+  const items=ui.costApplications({computation:{applications:[{type:'baski',area:'göğüs',units:140}],baskiNakisItems:[{type:'baski',area:'göğüs',size:null}]}});
+  assert.deepEqual(items,[{type:'baski',area:'göğüs',qty:140,size:''}]);
+  const selected=ui.costApplications({bnItems:[{type:'baski',area:'göğüs',size:'Özel Boyut'}],computation:{applications:[{type:'baski',area:'göğüs',units:140}]}});
+  assert.deepEqual(ui.pricePayload('80.5',selected),{unitPrice:80.5,bnItems:[{type:'baski',area:'göğüs',qty:140,size:'Özel Boyut'}]});
+  assert.deepEqual(ui.pricePayload('80.5'),{unitPrice:80.5});
+  assert.deepEqual(ui.costApplications({}),[]);
 });
