@@ -180,3 +180,44 @@ test('dark dialog selector matches body-mounted dialog and preserves mobile gutt
   assert.match(css,/select:disabled\{opacity:1/);
   for(const file of ['uretim.html','stok.html'])assert.match(fs.readFileSync(path.join(__dirname,'..',file),'utf8'),/<html lang="tr">/);
 });
+
+test('image warnings and design lists follow persisted line metadata across products',()=>{
+  const version={lines:[{id:11},{id:22}],files:[{id:1,kind:'urun_gorsel',line_id:11,gorunum:'on'},{id:2,kind:'desen_kaynak',line_id:22},{id:3,kind:'urun_gorsel',line_id:11,gorunum:'arka'}]};
+  assert.deepEqual(ui.missingImages(version).map(line=>line.id),[22]);
+  assert.deepEqual(ui.lineFiles(version,22).map(file=>file.id),[2]);
+  assert.deepEqual(ui.lineFiles(version,11).map(file=>file.id),[1,3]);
+  assert.deepEqual(ui.missingImages({...version,files:[...version.files,{id:4,kind:'urun_gorsel',line_id:22}]}),[]);
+});
+test('unknown product file ownership never makes all rows appear complete',()=>{
+  const file={id:1,kind:'urun_gorsel'},version={lines:[{id:11},{id:22}],files:[file]};
+  assert.equal(ui.missingImages(version).length,2);
+  assert.deepEqual(ui.missingImages(version,{1:{lineId:22}}).map(line=>line.id),[11]);
+  assert.equal(ui.missingImages({lines:[{id:11}],files:[file]}).length,0);
+});
+test('each persisted design finds its own application without parsing invalid legacy provenance',()=>{
+  const first={id:1,kind:'nakis',position:'sirt',measure_source:'{"desenDosyaId":7}'},second={id:2,kind:'baski',position:'gogus',measure_source:'{"desenDosyaId":8}'};
+  const line={applications:[{measure_source:'old free text'},first,second]};
+  assert.equal(ui.designApplication(line,'7'),first);assert.equal(ui.designApplication(line,8),second);assert.equal(ui.designApplication(line,9),undefined);
+});
+test('uploads run sequentially, retain each failed filename, continue and retry only unfinished stages',async()=>{
+  const jobs=[{file:{name:'on.png'},kind:'urun_gorsel'},{file:{name:'logo.pdf'},kind:'desen_kaynak',applicationKind:'nakis',position:'sirt'},{file:{name:'arka.png'},kind:'urun_gorsel'},{file:{name:'ikinci.png'},kind:'desen_kaynak',applicationKind:'baski',position:'gogus'}];
+  const calls=[];let failUpload=true,failApplication=true,inFlight=0;
+  const send=async job=>{assert.equal(inFlight++,0);await Promise.resolve();calls.push('upload:'+job.file.name);inFlight--;if(job.file.name==='on.png'&&failUpload)throw Error('PNG yüklenemedi');return {id:job.file.name};};
+  const save=async job=>{calls.push('application:'+job.file.name+':'+job.applicationKind+':'+job.position);if(job.file.name==='logo.pdf'&&failApplication)throw Error('Uygulama kaydedilemedi');return {id:job.uploaded.id};};
+  const failed=await ui.uploadJobs(jobs,send,save);
+  assert.deepEqual(failed.map(job=>[job.file.name,job.error]),[['on.png','PNG yüklenemedi'],['logo.pdf','Uygulama kaydedilemedi']]);
+  assert.equal(jobs[2].done,true);assert.equal(jobs[3].done,true);assert.equal(jobs[1].uploaded.id,'logo.pdf');
+  failUpload=false;failApplication=false;calls.length=0;
+  assert.deepEqual(await ui.uploadJobs(jobs,send,save),[]);
+  assert.deepEqual(calls,['upload:on.png','application:logo.pdf:nakis:sirt']);
+  assert.ok(jobs.every(job=>job.done&&!job.error));
+});
+
+test('retry reconciles an application measured after its initial registration failed',async()=>{
+  const application={id:42,kind:'baski',position:'gogus',measure_source:'{"desenDosyaId":7}'},job={versionId:3,lineId:11,kind:'desen_kaynak',uploaded:{id:7},error:'İlk uygulama kaydı başarısız'};
+  ui.reconcileJobs([job],{id:3,lines:[{id:11,applications:[application]}]});
+  let uploads=0,applications=0;
+  assert.deepEqual(await ui.uploadJobs([job],()=>{uploads++;},()=>{applications++;}),[]);
+  assert.equal(job.application,application);assert.equal(uploads,0);assert.equal(applications,0);assert.equal(job.done,true);
+  const other={...job,application:undefined};ui.reconcileJobs([other],{id:4,lines:[{id:11,applications:[application]}]});assert.equal(other.application,undefined);
+});
