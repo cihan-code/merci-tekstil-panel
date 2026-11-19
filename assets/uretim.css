@@ -65,3 +65,17 @@ body:has(#view-stok.active)>.top .header-right{display:none}
 .production .p-vector{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:8px 0}
 .production .p-thumb{width:72px;height:72px;object-fit:contain;border-radius:7px;background:#F1EEE4}
 .production .p-manual{margin:14px 0}
+/* Kartela: numbered colour circles */
+.production .p-kd{position:relative;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;width:30px;height:30px;border-radius:50%;border:1px solid rgba(127,127,127,.45);background:#888;font:600 12px 'IBM Plex Mono',monospace;line-height:1;vertical-align:middle}
+.production .p-kd.light{border:1.5px solid #6F7A90}
+.production .p-kd.dokulu{background-image:repeating-linear-gradient(45deg,rgba(0,0,0,.16) 0 2px,transparent 2px 5px)}
+.production .p-kd-warn{position:absolute;top:-5px;right:-5px;width:15px;height:15px;border-radius:50%;background:#F2BA8D;color:#12213B;font:700 10px/15px Inter,sans-serif;text-align:center}
+.production .p-kgrid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin:14px 0}
+.production .p-kgrid .p-kcell{flex-direction:column;gap:6px;padding:8px 4px;min-height:84px;min-width:0;font-weight:500}
+.production .p-kgrid .p-kcell .p-kd{width:40px;height:40px;font-size:14px}
+.production .p-kname{font-size:11px;line-height:1.25;text-align:center;overflow-wrap:anywhere;color:var(--p-muted)}
+.production .p-kinfo{display:flex;align-items:center;gap:8px;margin:-8px 0 14px;min-height:0;color:var(--p-muted);font-size:13px}.production .p-kinfo:empty{display:none}
+.production .p-kinline{display:inline-flex;align-items:center;gap:6px;margin-top:4px;color:var(--p-muted);font-size:12px}.production .p-kinline .p-kd{width:18px;height:18px;font-size:0}
+.production .p-picked{outline:2px solid var(--p-teal);outline-offset:6px;border-radius:6px}
+@media(max-width:700px){.production .p-kgrid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:340px){.production .p-kgrid{grid-template-columns:repeat(3,minmax(0,1fr))}}

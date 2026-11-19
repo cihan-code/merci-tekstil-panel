@@ -393,3 +393,91 @@ test('G32 snapshot measurement warnings stay on the matching application',()=>{
   assert.equal(ui.measurementWarning({desenDosyaId:8},files,metadata),undefined);
   assert.equal(ui.measurementWarning({olcuHatasi:'Sunucu uyarısı'},[],{}),'Sunucu uyarısı');
 });
+
+// G34: kartela grid, picking, fallback and grouped fabric options (invented data).
+const KARTELA={surum:1,kartelalar:[
+  {id:'test_a',ad:'Deneme Süprem',not:'Deneme notu',kumaslar:[{tur:'deneme_suprem',ad:'Deneme Süprem'}],renkler:[
+    {no:1,renk:'Kırmızı',renkKey:'kirmizi',hex:'#A80010'},{no:2,renk:'Beyaz',renkKey:'beyaz',hex:'#FFFFFF'},
+    {no:3,renk:'Gri Melanj',renkKey:'gri_melanj',hex:'#C8C8C8',dokulu:true},{no:4,renk:'Mavi',renkKey:'mavi',hex:'#00388C',teyit:'Renk adı teyit bekliyor'}]},
+  {id:'test_b',ad:'Deneme Polar',kumaslar:[{tur:'deneme_polar',ad:'Deneme Polar'}],renkler:[{no:14,renk:'Lacivert',renkKey:'lacivert',hex:'#101040'}]}]};
+
+function kartelaHarness({kartela=KARTELA,kalemler=null,stocks=[]}={}) {
+  class Element {
+    constructor(tag){this.tag=tag;this.children=[];this.dataset={};this.attrs={};this.listeners={};}
+    append(...c){this.children.push(...c);}
+    replaceChildren(...c){this.children=c;}
+    setAttribute(k,v){this.attrs[k]=String(v);}
+    hasAttribute(k){return k in this.attrs;}
+    addEventListener(e,h){this.listeners[e]=h;}
+    get textContent(){return this.children.map(c=>c.textContent ?? c).join('');}
+    find(pred,out=[]){if(pred(this))out.push(this);for(const c of this.children)if(c instanceof Element)c.find(pred,out);return out;}
+  }
+  const root=new Element('root'),calls=[];
+  const context={Node:Element,console:{info(){}},document:{getElementById:()=>root,createElement:t=>new Element(t),createTextNode:t=>({textContent:t})},sessionStorage:{getItem:()=>null,removeItem(){}},location:{search:''},URL,URLSearchParams,FormData:class{append(){}},
+    fetch:async(url,init)=>{
+      calls.push({url:String(url),method:init.method,body:init.body?JSON.parse(init.body):undefined});
+      if(String(url).endsWith('/kartela'))return kartela?{ok:true,status:200,json:async()=>kartela}:{ok:false,status:404,json:async()=>({})};
+      if(String(url).endsWith('/stok/kalemler'))return {ok:true,status:200,json:async()=>kalemler};
+      return {ok:true,status:200,json:async()=>stocks};
+    }};
+  const source=fs.readFileSync(path.join(__dirname,'../assets/uretim.js'),'utf8').replace("  renderFrame();if(session)run(async()=>{await loadCommon();await renderTab();});",'  global.k={kartelaGrid,stockOptions,swatch,loadKartela,state};').replace("  window.addEventListener('pagehide'","  global.addEventListener('pagehide'");
+  context.addEventListener=()=>{};
+  require('node:vm').runInNewContext(source,context);
+  return {...context.k,calls,root};
+}
+
+test('kartela grid draws one accessible button per colour with white outline, melange and confirm hints',()=>{
+  const h=kartelaHarness();
+  const grid=h.kartelaGrid(KARTELA.kartelalar[0],async()=>{});
+  const cells=grid.find(n=>n.tag==='button');
+  assert.equal(cells.length,4);
+  assert.deepEqual(cells.map(c=>c.attrs['aria-label']),['1 Kırmızı','2 Beyaz','3 Gri Melanj, melanj','4 Mavi, teyit gerekli']);
+  const circles=grid.find(n=>/p-kd( |$)/.test(n.className ?? ''));
+  assert.equal(circles.length,4);
+  assert.match(circles[1].className,/light/);assert.doesNotMatch(circles[0].className,/light/);
+  assert.match(circles[2].className,/dokulu/);
+  assert.equal(grid.find(n=>/p-kd-warn/.test(n.className ?? '')).length,1);
+  assert.match(circles[0].attrs.style,/background-color:#A80010/);
+});
+test('clicking a colour sends tur and kartelaNo; mevcut answer is passed through',async()=>{
+  const h=kartelaHarness({kalemler:{id:7,mevcut:true}});
+  const seen=[];
+  const grid=h.kartelaGrid(KARTELA.kartelalar[1],async c=>{seen.push(c.no);});
+  grid.find(n=>n.tag==='button')[0].listeners.click();
+  await new Promise(r=>setTimeout(r,0));
+  assert.deepEqual(seen,[14]);
+});
+test('ledger source posts { tur, kartelaNo, unit } and reports an existing item',()=>{
+  const js=fs.readFileSync(path.join(__dirname,'../assets/uretim.js'),'utf8');
+  assert.match(js,/api\('stok\/kalemler',\{tur:f\.tur,kartelaNo:c\.no,unit:'kg'\}\)/);
+  assert.match(js,/r\?\.mevcut/);assert.match(js,/Bu kalem zaten var/);
+});
+test('missing kartela endpoint falls back silently to the free colour field',async()=>{
+  const h=kartelaHarness({kartela:null});
+  await h.loadKartela();
+  assert.equal(h.state.kartela,null);
+  assert.deepEqual(ui.kartelaFabrics(h.state.kartela),[]);
+});
+test('loaded kartela lists fabrics by kartela name',async()=>{
+  const h=kartelaHarness();
+  await h.loadKartela();
+  assert.deepEqual(ui.kartelaFabrics(h.state.kartela).map(f=>[f.tur,f.ad]),[['deneme_suprem','Deneme Süprem'],['deneme_polar','Deneme Polar']]);
+});
+test('order line fabric select groups items by fabric with server names and a kartela caption',()=>{
+  const h=kartelaHarness();
+  h.state.stocks=[
+    {id:1,name:'Deneme Süprem 14 Lacivert',available:12.5,color_no:14,color_hex:'#101040',kartela:{id:'test_a',ad:'Deneme Süprem',no:14}},
+    {id:2,name:'Deneme Süprem 2 Beyaz',available:3,color_no:2,kartela:{id:'test_a',ad:'Deneme Süprem',no:2}},
+    {id:3,fabric_key:'serbest',name:'Serbest Kumaş',color_name:'Mor',available:1}];
+  const select=h.stockOptions(1);
+  const groups=select.find(n=>n.tag==='optgroup');
+  assert.deepEqual(groups.map(g=>g.attrs.label),['Deneme Süprem','Diğer kumaşlar']);
+  const opts=select.find(n=>n.tag==='option');
+  assert.equal(opts[1].textContent,'Deneme Süprem 14 Lacivert (12,5 kg)');
+  assert.equal(opts[3].textContent,'Serbest Kumaş / Mor (1 kg)');
+  assert.equal(ui.kartelaCaption(h.state.stocks[0]),'Kartela No 14');assert.equal(ui.kartelaCaption(h.state.stocks[2]),'');
+});
+test('hex values are validated before use and light colours are detected',()=>{
+  assert.equal(ui.safeHex('red;background:url(x)'),null);assert.equal(ui.safeHex('A80010'),'#A80010');
+  assert.equal(ui.hexLight('#FFFFFF'),true);assert.equal(ui.hexLight('#101040'),false);assert.equal(ui.hexLight(null),false);
+});

@@ -207,7 +207,24 @@
     }
     return jobs.filter(job=>!job.done);
   }
-  const pure={reasonText,vectorQuality,designRatio,contentBounds,fitDesignBox,bindDesignBox,reportDesignRatio,readDesignAsset,reconcileJobs,designApplication,measurementWarning,lineFiles,missingImages,uploadJobs,parseNumber,inputNumber,validateNumber,displayMessage,positiveSizes,unmatchedAwaitingKg,queueFile,SIZES,PRODUCTS,POSITIONS,positionLabel,applicationLabel,measureSource,measureSummary,measureGap,vectorBadge,vectorPollNext,VECTOR_POLL_MS,packageActions,costApplications,pricePayload,escapeHtml,formatNumber,formatKg,formatDate,statusLabel,sizeTotal,pixelBox,adapt};
+  // Kartela helpers: pure, so they can be tested without a DOM.
+  function safeHex(hex){const h=String(hex ?? '').trim();return /^#[0-9a-fA-F]{6}$/.test(h)?h:/^[0-9a-fA-F]{6}$/.test(h)?'#'+h:null;}
+  function hexLight(hex){const h=safeHex(hex);if(!h)return false;const [r,g,b]=[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));return (0.299*r+0.587*g+0.114*b)/255>0.82;}
+  function hexInk(hex){const h=safeHex(hex);if(!h)return '#12213B';const [r,g,b]=[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));return (0.299*r+0.587*g+0.114*b)/255>0.6?'#12213B':'#FFFFFF';}
+  function kartelaFabrics(data){
+    const out=[];
+    for(const k of data?.kartelalar || [])for(const f of (k.kumaslar?.length?k.kumaslar:[{tur:k.id,ad:k.ad}]))out.push({tur:f.tur,ad:k.kumaslar?.length>1?f.ad:k.ad,kartela:k});
+    return out;
+  }
+  function colorLabel(c){return c.no+' '+c.renk;}
+  function stockLabel(s){return s.color_no!=null&&s.name?s.name+' ('+formatKg(s.available)+')':(s.name || s.fabric_key)+' / '+(s.color_name || 'Renk yok')+' ('+formatKg(s.available)+')';}
+  function stockGroups(stocks){
+    const groups=new Map();
+    for(const s of stocks){const key=s.kartela?.ad || s.fabric_type || s.tur || 'Diğer kumaşlar';if(!groups.has(key))groups.set(key,[]);groups.get(key).push(s);}
+    return [...groups].map(([label,items])=>({label,items}));
+  }
+  function kartelaCaption(s){const no=s.kartela?.no ?? s.color_no;return no==null||no===''?'':'Kartela No '+no;}
+  const pure={reasonText,vectorQuality,designRatio,contentBounds,fitDesignBox,bindDesignBox,reportDesignRatio,readDesignAsset,reconcileJobs,designApplication,measurementWarning,lineFiles,missingImages,uploadJobs,parseNumber,inputNumber,validateNumber,displayMessage,positiveSizes,unmatchedAwaitingKg,queueFile,SIZES,PRODUCTS,POSITIONS,positionLabel,applicationLabel,measureSource,measureSummary,measureGap,vectorBadge,vectorPollNext,VECTOR_POLL_MS,packageActions,costApplications,pricePayload,escapeHtml,formatNumber,formatKg,formatDate,statusLabel,sizeTotal,pixelBox,adapt,safeHex,hexLight,hexInk,kartelaFabrics,colorLabel,stockLabel,stockGroups,kartelaCaption};
   if (typeof module!=='undefined' && module.exports) module.exports=pure;
   global.MerciProduction=pure;
   if (typeof document==='undefined') return;
@@ -222,7 +239,7 @@
   // Scope cached sessions to the API to avoid sending a token to a changed override.
   if (session && session.endpoint!==endpoint) session=null;
   if (!session) sessionStorage.removeItem(storageKey);
-  const state={tab:'orders',stocks:[],flats:[],orders:[],outbox:[],confirmations:[],activeOrder:null,version:null,pending:[]};
+  const state={tab:'orders',kartela:null,highlight:null,stocks:[],flats:[],orders:[],outbox:[],confirmations:[],activeOrder:null,version:null,pending:[]};
   let fileMetadata={},vectorRows={},vectorTimer=null;
   function rememberFile(file,job){fileMetadata[file.id]={lineId:job.lineId,gorunum:job.gorunum,name:job.file.name};}
   async function sendJobs(jobs){reconcileJobs(jobs,state.version);for(const versionId of new Set(jobs.filter(job=>job.uploaded&&job.kind==='desen_kaynak'&&!job.application&&!job.done).map(job=>job.versionId))){try{reconcileJobs(jobs,await api('surumler/'+versionId));}catch(error){for(const job of jobs.filter(job=>job.versionId===versionId&&!job.done))job.error=error.message;return jobs.filter(job=>!job.done);}}const failed=await uploadJobs(jobs,async job=>{const data=new FormData();data.append('file',job.file);data.append('kind',job.kind);data.append('lineId',job.lineId);if(job.gorunum)data.append('gorunum',job.gorunum);const file=await api('surumler/'+job.versionId+'/dosyalar',data);rememberFile(file,job);return file;},job=>api('satirlar/'+job.lineId+'/uygulamalar',{kind:job.applicationKind,position:job.position,desenDosyaId:job.uploaded.id,measure_source:JSON.stringify({desenDosyaId:job.uploaded.id,dosyaAdi:job.file.name}),needs_confirmation:1}));for(const job of jobs){if(job.done && job.uploaded){const warning=job.application?.olcuHatasi ?? job.uploaded.olcuHatasi;if(warning)fileMetadata[job.uploaded.id]={...fileMetadata[job.uploaded.id],olcuHatasi:warning};}}state.pending=state.pending.filter(job=>!job.done);return failed;}
@@ -286,9 +303,35 @@
   const submit=(label)=>el('button',{type:'submit'},label);
   const form=(fn,...children)=>{const f=el('form',{onsubmit:async e=>{e.preventDefault();if(f._busy)return;for(const node of f.querySelectorAll('[data-number]')){try{readNumber(node);node.setCustomValidity('');}catch(error){node.setCustomValidity(error.message);node.reportValidity();return;}}f._busy=true;try{await run(()=>fn(f),f.querySelector('[type=submit]'));}finally{f._busy=false;}}},...children);return f;};
   function table(headers,rows){const t=el('table',{class:'p-table'},el('thead',{},el('tr',{},headers.map(h=>el('th',{scope:'col'},h)))));const body=el('tbody',{});for(const row of rows)body.append(el('tr',{},row.map((c,i)=>el('td',{'data-label':headers[i]},c))));t.append(body);return rows.length?t:text('Henüz kayıt yok.');}
-  function stockOptions(selected){return opts(state.stocks.map(s=>[s.id,(s.name || s.fabric_key)+' / '+(s.color_name || 'Renk yok')+' ('+formatKg(s.available)+')']),selected,'Kumaş kalemi seçin');}
+  function stockOptions(selected){
+    const s=el('select',{});s.append(el('option',{value:''},'Kumaş kalemi seçin'));
+    for(const g of stockGroups(state.stocks)){const og=el('optgroup',{label:g.label});for(const item of g.items){const o=el('option',{value:item.id},stockLabel(item));o.selected=String(item.id)===String(selected);og.append(o);}s.append(og);}
+    return s;
+  }
+  // Colour circle: hex comes from the server and is validated before it reaches a style attribute.
+  function swatch(hex,{no,dokulu,teyit,label}={}){
+    const h=safeHex(hex),n=el('span',{class:'p-kd'+(hexLight(h)?' light':'')+(dokulu?' dokulu':''),'aria-hidden':label?null:'true'},no==null?'':String(no));
+    if(h)n.setAttribute('style','background-color:'+h+';color:'+hexInk(h));
+    if(teyit){n.append(el('span',{class:'p-kd-warn',title:typeof teyit==='string'?teyit:'Renk teyit bekliyor'},'!'));}
+    return n;
+  }
+  function kartelaGrid(kartela,onPick){
+    const grid=el('div',{class:'p-kgrid',role:'group','aria-label':kartela.ad+' kartelası'});
+    for(const c of kartela.renkler || []){
+      const hint=c.teyit?(typeof c.teyit==='string'?c.teyit:'Bu rengin teyidi bekliyor.'):'';
+      const b=el('button',{type:'button',class:'p-kcell secondary','aria-label':colorLabel(c)+(c.dokulu?', melanj':'')+(hint?', teyit gerekli':''),title:colorLabel(c)+(hint?' · '+hint:'')},swatch(c.hex,{no:c.no,dokulu:c.dokulu,teyit:c.teyit}),el('span',{class:'p-kname'},c.renk));
+      b.addEventListener('click',()=>run(()=>onPick(c),b));
+      grid.append(b);
+    }
+    return grid;
+  }
+  function stockBadge(s){const cap=kartelaCaption(s);return cap?el('span',{class:'p-kinline'},swatch(s.color_hex),' '+cap):null;}
+  async function loadKartela(){
+    try{const d=await api('kartela');state.kartela=Array.isArray(d?.kartelalar)?d:null;}
+    catch(e){state.kartela=null;if(typeof console!=='undefined')console.info('Kartela yüklenemedi, serbest renk alanı kullanılacak:',e.message);}
+  }
   async function loadStocks(){state.stocks=adapt('list',await api('stok')).map(s=>adapt('stock',s));}
-  async function loadCommon(){await loadStocks();if(mode==='production'){const f=await optional('duz-cizimler');state.flats=f.data?adapt('list',f.data):[];}}
+  async function loadCommon(){await loadStocks();await loadKartela();if(mode==='production'){const f=await optional('duz-cizimler');state.flats=f.data?adapt('list',f.data):[];}}
   async function logout(){session=null;sessionStorage.removeItem(storageKey);clearUrls();state.stocks=[];state.orders=[];state.activeOrder=null;state.version=null;state.pending=[];fileMetadata={};renderFrame();}
   function renderFrame(){
     clearUrls();root.replaceChildren();
@@ -326,8 +369,8 @@
     const line=adapt('line',source),box=card(el('div',{class:'p-row p-between'},el('h3',{},'Ürün satırı '+(index+1))));box.classList.add('p-line');box._source=line;
     const product=opts(Object.entries(PRODUCTS),line.product_key || 'tisort');product.name='product_key';
     const fabric=stockOptions(line.fabric_item_id);fabric.name='fabric_item_id';fabric.required=true;
-    const color=input('color_name',{value:line.color_name || '',required:true});fabric.addEventListener('change',()=>{const s=state.stocks.find(s=>String(s.id)===fabric.value);if(s?.color_name)color.value=s.color_name;});
-    box.append(el('div',{class:'p-grid'},field('Ürün',product),field('Kumaş kalemi',fabric),field('Renk',color),field('Astar',el('input',{name:'lining',type:'checkbox',checked:line.lining===1||line.lining===true}))));
+    const color=input('color_name',{value:line.color_name || '',required:true});const kinfo=el('div',{class:'p-kinfo','aria-live':'polite'});const showK=()=>{const s=state.stocks.find(s=>String(s.id)===fabric.value);kinfo.replaceChildren();const cap=s&&kartelaCaption(s);if(cap)kinfo.append(swatch(s.color_hex),cap);};showK();fabric.addEventListener('change',()=>{const s=state.stocks.find(s=>String(s.id)===fabric.value);if(s?.color_name)color.value=s.color_name;showK();});
+    box.append(el('div',{class:'p-grid'},field('Ürün',product),el('div',{},field('Kumaş kalemi',fabric),kinfo),field('Renk',color),field('Astar',el('input',{name:'lining',type:'checkbox',checked:line.lining===1||line.lining===true}))));
     const sizes=el('div',{class:'p-sizes'},SIZES.map(s=>field(s,num('size_'+s,line.sizes[s] || 0,{step:1,required:true}))));const total=text('Toplam: '+formatNumber(sizeTotal(line.sizes))+' adet','p-number');sizes.addEventListener('input',()=>{try{total.textContent='Toplam: '+formatNumber(sizeTotal(readSizes(box)))+' adet';}catch(e){total.textContent=e.message;}});box.append(sizes,total);
     const mat=el('details',{},el('summary',{},'Ek reçete malzemeleri (kaşkorse, ribana, astar)'),text('Ürünün reçetesindeki malzemeleri kaleme bağlayın. Eksik eşlemeler teyide düşer.'));
     for(const key of ['kaskorse','ribana','astar']){const s=stockOptions(line.material_items[key]);s.name='material_'+key;mat.append(field({kaskorse:'Kaşkorse',ribana:'Ribana',astar:'Astar'}[key],s));}box.append(mat);
@@ -590,7 +633,7 @@
     content.append(section);
   }
   async function movements(itemId,target){const rows=adapt('list',await api('stok/hareketler?itemId='+encodeURIComponent(itemId)));target.replaceChildren(table(['Tarih','İşlem','Miktar','Not'],rows.map(m=>[formatDate(m.created_at),statusLabel(m.type),formatKg(m.qty_milli==null?null:m.qty_milli/1000),m.note || '—'])));}
-  function stockTable(){return table(['Kumaş / renk','Toplam','Ayrılan','Kullanılabilir','Teslim bekleyen','Tedarik bekleyen',''],state.stocks.map(s=>[el('div',{},el('strong',{},s.name || s.fabric_key),text(s.color_name || '—')),formatKg(s.total),formatKg(s.reserved),formatKg(s.available),formatKg(s.awaiting_delivery),formatKg(s.shortage),button('Hareketler',async()=>{const target=el('div',{});const dialog=el('dialog',{class:'production p-dialog'},el('h2',{},s.name+' / Hareketler'),target,button('Kapat',()=>dialog.close()));dialog.addEventListener('close',()=>dialog.remove(),{once:true});document.body.append(dialog);dialog.showModal();await movements(s.id,target);})]));}
+  function stockTable(){return table(['Kumaş / renk','Toplam','Ayrılan','Kullanılabilir','Teslim bekleyen','Tedarik bekleyen',''],state.stocks.map(s=>[el('div',{class:s.id===state.highlight?'p-picked':null,'aria-current':s.id===state.highlight?'true':null},el('strong',{},s.name || s.fabric_key),text(s.color_name || '—'),stockBadge(s)),formatKg(s.total),formatKg(s.reserved),formatKg(s.available),formatKg(s.awaiting_delivery),formatKg(s.shortage),button('Hareketler',async()=>{const target=el('div',{});const dialog=el('dialog',{class:'production p-dialog'},el('h2',{},s.name+' / Hareketler'),target,button('Kapat',()=>dialog.close()));dialog.addEventListener('close',()=>dialog.remove(),{once:true});document.body.append(dialog);dialog.showModal();await movements(s.id,target);})]));}
   async function renderStockTab(){
     await loadStocks();const invoices=await optional('fatura-satirlari');if(!session||state.tab!=='stock')return;
     const link=el('a',{href:'stok.html'+(new URLSearchParams(location.search).has('api')?'?api='+encodeURIComponent(endpoint):'')},'Kumaş tanımı ve sayım girişi');
@@ -608,7 +651,25 @@
     await loadStocks();if(!session)return;
     const type=input('tur',{required:true,placeholder:'Örn. iki iplik'}),color=input('renk',{required:true}),name=input('ad',{});
     content.replaceChildren(card(el('div',{class:'p-row p-between'},el('h2',{},'Kumaş kalemleri'),button('Yenile',renderLedger)),text('Açılış stoğunu sayımdan sonra girin. Sayım, toplam fiziksel miktarı kaydeder; kullanılabilir miktar ayırmalara göre hesaplanır.'),stockTable()));
-    content.append(card(el('h3',{},'Yeni kumaş'),form(async()=>{await api('stok/kalemler',{tur:type.value.trim(),renk:color.value.trim(),ad:name.value.trim() || undefined,unit:'kg'});await renderLedger();message('Kumaş kalemi eklendi. Sayım yaparak fiziksel stoğu kaydedin.');},el('div',{class:'p-grid three'},field('Kumaş türü',type),field('Renk',color),field('Görünen ad (isteğe bağlı)',name)),submit('Yeni kumaşı kaydet'))));
+    const freeForm=form(async()=>{await api('stok/kalemler',{tur:type.value.trim(),renk:color.value.trim(),ad:name.value.trim() || undefined,unit:'kg'});await renderLedger();message('Kumaş kalemi eklendi. Sayım yaparak fiziksel stoğu kaydedin.');},el('div',{class:'p-grid three'},field('Kumaş türü',type),field('Renk',color),field('Görünen ad (isteğe bağlı)',name)),submit('Yeni kumaşı kaydet'));
+    const newCard=card(el('h3',{},'Yeni kumaş'));content.append(newCard);
+    const fabrics=kartelaFabrics(state.kartela);
+    if(!fabrics.length)newCard.append(freeForm);
+    else{
+      const pick=opts([...fabrics.map((f,i)=>[i,f.ad]),['serbest','Kartelası olmayan kumaş (serbest renk)']],'','Kumaş seçin');pick.setAttribute('aria-label','Kumaş');
+      const host=el('div',{});
+      pick.addEventListener('change',()=>{
+        host.replaceChildren();if(pick.value==='')return;
+        if(pick.value==='serbest'){host.append(freeForm);return;}
+        const f=fabrics[Number(pick.value)];if(f.kartela.not)host.append(text(f.kartela.not));
+        host.append(text('Rengi kartelada numarasıyla seçin.'),kartelaGrid(f.kartela,async c=>{
+          const r=await api('stok/kalemler',{tur:f.tur,kartelaNo:c.no,unit:'kg'});
+          if(r?.mevcut){state.highlight=r.id ?? r.item?.id ?? null;await renderLedger();message('Bu kalem zaten var: '+colorLabel(c)+'. Listede işaretlendi.');}
+          else{state.highlight=r?.id ?? r?.item?.id ?? null;await renderLedger();message('Kumaş kalemi eklendi: '+colorLabel(c)+'. Sayım yaparak fiziksel stoğu kaydedin.');}
+        }));
+      });
+      newCard.append(field('Kumaş',pick),host);
+    }
     const counts=card(el('h3',{},'Sayım ve hareket geçmişi'));
     for(const s of state.stocks){const qty=num('countedKg','',{step:.001,required:true}),note=input('note',{required:true,placeholder:'Örn. Açılış sayımı'}),history=el('div',{});let countKey=null;
       const countForm=form(async()=>{if(!countKey)countKey=new Date().toISOString().slice(0,10)+'-'+crypto.randomUUID().slice(0,8);await api('stok/sayim',{itemId:s.id,countedKg:readNumber(qty),countKey,note:note.value.trim()});countKey=null;await renderLedger();message('Sayım kaydedildi.');},el('div',{class:'p-grid'},field('Sayılan kg',qty),field('Sayım notu',note)),submit('Sayımı kaydet'));
