@@ -5,14 +5,45 @@
   // No recipe GET route exists. Copied from agent/operations/recipes.json (version 1).
   const PRODUCTS = {sweat:'Sweatshirt',tisort:'Tişört',polar:'Polar',polo:'Polo yaka',esofman:'Eşofman',sort:'Şort',tam_fermuar:'Tam fermuarlı',yarim_fermuar:'Yarım fermuarlı'};
   const POSITIONS = Object.freeze({gogus:'Göğüs',sirt:'Sırt',kol:'Kol',ense:'Ense',kapusan:'Kapüşon',kapuson:'Kapüşon',sol_gogus:'Sol göğüs',sag_gogus:'Sağ göğüs',sol_kol:'Sol kol',sag_kol:'Sağ kol'});
-  const LABELS = {baski:'Baskı',nakis:'Nakış',taslak:'Taslak',onay_bekliyor:'Onay bekliyor',onaylandi:'Onaylandı',onayli:'Onaylı',eski:'Eski sürüm',iptal:'İptal',bekliyor:'Bekliyor',isleniyor:'İşleniyor',tamam:'Tamam',tamamlandi:'Tamamlandı',basarisiz:'Başarısız',manuel_bekliyor:'Elle gönderim bekliyor',elle_gonderildi:'Gruba gönderildi',gonderildi:'Gönderildi',fiyat_bekliyor:'Fiyat bekliyor',teslim_bekliyor:'Teslim bekliyor',teslim_alindi:'Teslim alındı',eslesti:'Eşleşti',teyit:'Teyit gerekli',olcu:'Ölçü',fatura_eslesme:'Fatura eşleşmesi',eksik_alan:'Eksik alan',baglanti_hatasi:'Bağlantı hatası',vektor_kalite:'Vektör kalitesi',eski_surum:'Eski sürüm',acilis:'Açılış',giris:'Giriş',cikis:'Çıkış',duzeltme:'Düzeltme',tahsis:'Ayırma',tahsis_iade:'Ayırma iadesi',onay_formu:'Onay formu',baski_formu:'Baskı formu',nakis_formu:'Nakış formu',uretim_formu:'Üretim formu',kesim_formu:'Kesim formu',dikim_formu:'Dikim formu',desen_vektor:'Vektör desen',urun_gorsel:'Ürün görseli',desen_kaynak:'Desen kaynağı',atolye_dosya:'Atölye dosyası',maliyet_aktarim:'Maliyet aktarımı'};
+  const LABELS = {baski:'Baskı',nakis:'Nakış',taslak:'Taslak',onay_bekliyor:'Onay bekliyor',onaylandi:'Onaylandı',onayli:'Onaylı',eski:'Eski sürüm',iptal:'İptal',bekliyor:'Bekliyor',isleniyor:'İşleniyor',tamam:'Tamam',tamamlandi:'Tamamlandı',basarisiz:'Başarısız',manuel_bekliyor:'Elle gönderim bekliyor',elle_gonderildi:'Gruba gönderildi',gonderildi:'Gönderildi',fiyat_bekliyor:'Fiyat bekliyor',teslim_bekliyor:'Teslim bekliyor',teslim_alindi:'Teslim alındı',eslesti:'Eşleşti',teyit:'Teyit gerekli',olcu:'Ölçü',fatura_eslesme:'Fatura eşleşmesi',eksik_alan:'Eksik alan',baglanti_hatasi:'Bağlantı hatası',vektor_kalite:'Vektör kalitesi',eski_surum:'Eski sürüm',acilis:'Açılış',giris:'Giriş',cikis:'Çıkış',duzeltme:'Düzeltme',tahsis:'Ayırma',tahsis_iade:'Ayırma iadesi',onay_formu:'Onay formu',baski_formu:'Baskı formu',nakis_formu:'Nakış formu',uretim_formu:'Üretim formu',kesim_formu:'Kesim formu',dikim_formu:'Dikim formu',desen_vektor:'Vektör desen',desen_vektor_onizleme:'Vektör önizleme',urun_gorsel:'Ürün görseli',desen_kaynak:'Desen kaynağı',atolye_dosya:'Atölye dosyası',maliyet_aktarim:'Maliyet aktarımı'};
   function escapeHtml(value) { return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
   function formatNumber(value) { return value==null || (typeof value==='string'&&!value.trim()) || !Number.isFinite(Number(value)) ? '—' : new Intl.NumberFormat('tr-TR',{maximumFractionDigits:3}).format(Number(value)); }
   function formatKg(value) { const n=formatNumber(value);return n==='—'?n:n+' kg'; }
   function formatDate(value) { if (!value) return '—'; const d = new Date(value); return Number.isNaN(d.getTime()) ? '—' : new Intl.DateTimeFormat('tr-TR').format(d); }
   function statusLabel(value) { return LABELS[value] || (value == null ? 'Bilgi yok' : String(value)); }
   function positionLabel(value) { return Object.hasOwn(POSITIONS,value) ? POSITIONS[value] : String(value ?? '—'); }
-  function applicationLabel(a) { return statusLabel(a.kind)+' · '+positionLabel(a.position)+': '+formatNumber(a.width_mm==null?null:a.width_mm/10)+' × '+formatNumber(a.height_mm==null?null:a.height_mm/10)+' cm'; }
+  function applicationLabel(a) {
+    const head=statusLabel(a.kind)+' · '+positionLabel(a.position)+': ', measured=a.width_mm!=null && a.height_mm!=null;
+    const tail=a.needs_confirmation ? ' · teyit gerekli' : '';
+    if (!measured) return head+(a.needs_confirmation ? 'teyit gerekli' : 'Ölçü bekleniyor');
+    return head+formatNumber(a.width_mm/10)+' × '+formatNumber(a.height_mm/10)+' cm'+tail;
+  }
+  function measureSource(a) { try { const m=typeof a.measure_source==='string' ? JSON.parse(a.measure_source) : a.measure_source; return m && typeof m==='object' ? m : {}; } catch { return {}; } }
+  // G24 contract: measure_source.method is 'otomatik' or 'elle'; confidence is 0..1.
+  function measureSummary(a) {
+    if (a.width_mm==null || a.height_mm==null) return null;
+    const m=measureSource(a), size=formatNumber(a.width_mm/10)+' × '+formatNumber(a.height_mm/10)+' cm';
+    if (m.method!=='otomatik') return m.method==='elle' ? 'Elle ölçü: '+size : 'Ölçü: '+size;
+    const parts=['Otomatik ölçü: '+size];
+    if (m.refBeden) parts.push(m.refBeden+' bedene göre');
+    const c=Number(m.confidence);
+    if (m.confidence!=null && Number.isFinite(c)) parts.push('güven %'+Math.round(c<=1 ? c*100 : c));
+    return parts.join(' · ');
+  }
+  // Why an application has no usable measurement, or null when it is measured.
+  function measureGap(version,line,lineFilesList,a) {
+    if (a && a.width_mm!=null && a.height_mm!=null) return null;
+    if (!lineFilesList.some(f=>f.kind==='urun_gorsel')) return {code:'gorsel_eksik',text:'Ön görsel eksik'};
+    if (!lineFilesList.some(f=>f.kind==='desen_kaynak' || f.kind==='desen_kaynak_vektor')) return {code:'desen_eksik',text:'Desen eksik'};
+    return {code:'olculebilir',text:'Ölçü bekleniyor'};
+  }
+  const VECTOR_BADGES={hazirlaniyor:['Vektör hazırlanıyor…','warn'],hazir:['Vektörel PDF hazır','good'],teyit:['Kalite teyidi gerekli','warn'],hata:['Vektör hazırlanamadı','warn']};
+  function vectorBadge(row) { const b=row && VECTOR_BADGES[row.status]; return b ? {label:b[0],tone:b[1],downloadable:!!row.previewFileId && ['hazir','teyit'].includes(row.status)} : null; }
+  const VECTOR_POLL_MS=4000, VECTOR_POLL_MAX_MS=120000;
+  function vectorPollNext(rows,elapsedMs) {
+    if (!(rows||[]).some(r=>r.status==='hazirlaniyor')) return 'dur';
+    return elapsedMs>=VECTOR_POLL_MAX_MS ? 'yenile' : 'bekle';
+  }
   function packageActions(status) { return status==='manuel_bekliyor' ? [['Gruba gönderildi olarak işaretle','elle-gonderildi']] : status==='basarisiz' ? [['Tekrar dene','tekrar']] : status==='bekliyor' ? [['Elle gönderime al (otomatik gönderim kapalı)','manuel']] : []; }
   function parseNumber(value) {
     if(typeof value==='number'){if(Number.isFinite(value))return value;throw new RangeError('Geçerli bir sayı girin.');}
@@ -155,7 +186,7 @@
     }
     return jobs.filter(job=>!job.done);
   }
-  const pure={designRatio,contentBounds,fitDesignBox,bindDesignBox,reportDesignRatio,readDesignAsset,reconcileJobs,designApplication,lineFiles,missingImages,uploadJobs,parseNumber,inputNumber,validateNumber,displayMessage,positiveSizes,unmatchedAwaitingKg,queueFile,SIZES,PRODUCTS,POSITIONS,positionLabel,applicationLabel,packageActions,costApplications,pricePayload,escapeHtml,formatNumber,formatKg,formatDate,statusLabel,sizeTotal,pixelBox,adapt};
+  const pure={designRatio,contentBounds,fitDesignBox,bindDesignBox,reportDesignRatio,readDesignAsset,reconcileJobs,designApplication,lineFiles,missingImages,uploadJobs,parseNumber,inputNumber,validateNumber,displayMessage,positiveSizes,unmatchedAwaitingKg,queueFile,SIZES,PRODUCTS,POSITIONS,positionLabel,applicationLabel,measureSource,measureSummary,measureGap,vectorBadge,vectorPollNext,VECTOR_POLL_MS,packageActions,costApplications,pricePayload,escapeHtml,formatNumber,formatKg,formatDate,statusLabel,sizeTotal,pixelBox,adapt};
   if (typeof module!=='undefined' && module.exports) module.exports=pure;
   global.MerciProduction=pure;
   if (typeof document==='undefined') return;
@@ -171,7 +202,7 @@
   if (session && session.endpoint!==endpoint) session=null;
   if (!session) sessionStorage.removeItem(storageKey);
   const state={tab:'orders',stocks:[],flats:[],orders:[],outbox:[],activeOrder:null,version:null,pending:[]};
-  let fileMetadata={};
+  let fileMetadata={},vectorRows={},vectorTimer=null;
   function rememberFile(file,job){fileMetadata[file.id]={lineId:job.lineId,gorunum:job.gorunum,name:job.file.name};}
   async function sendJobs(jobs){reconcileJobs(jobs,state.version);for(const versionId of new Set(jobs.filter(job=>job.uploaded&&job.kind==='desen_kaynak'&&!job.application&&!job.done).map(job=>job.versionId))){try{reconcileJobs(jobs,await api('surumler/'+versionId));}catch(error){for(const job of jobs.filter(job=>job.versionId===versionId&&!job.done))job.error=error.message;return jobs.filter(job=>!job.done);}}const failed=await uploadJobs(jobs,async job=>{const data=new FormData();data.append('file',job.file);data.append('kind',job.kind);data.append('lineId',job.lineId);if(job.gorunum)data.append('gorunum',job.gorunum);const file=await api('surumler/'+job.versionId+'/dosyalar',data);rememberFile(file,job);return file;},job=>api('satirlar/'+job.lineId+'/uygulamalar',{kind:job.applicationKind,position:job.position,measure_source:JSON.stringify({desenDosyaId:job.uploaded.id,dosyaAdi:job.file.name}),needs_confirmation:1}));state.pending=state.pending.filter(job=>!job.done);return failed;}
   function focusMedia(){document.getElementById('order-media')?.scrollIntoView({block:'start'});}
@@ -322,13 +353,13 @@
     content.replaceChildren(f);
   }
   async function openOrder(id,versionId){
-    clearUrls();const o=await api('siparisler/'+id);state.activeOrder=o;state.version=versionId?o.versions.find(v=>v.id===versionId):o.versions.at(-1);if(!state.version)throw Error('Sürüm bulunamadı.');
+    clearUrls();clearTimeout(vectorTimer);const o=await api('siparisler/'+id);state.activeOrder=o;state.version=versionId?o.versions.find(v=>v.id===versionId):o.versions.at(-1);if(!state.version)throw Error('Sürüm bulunamadı.');
     const v=state.version;state.outbox=adapt('list',await api('outbox'));const costs=await optional('siparisler/'+id+'/maliyet');if(!session||state.tab!=='orders')return;
     const selector=opts(o.versions.map(v=>[v.id,'v'+v.version_no+' · '+statusLabel(v.status)]),v.id);selector.setAttribute('aria-label','Sipariş sürümü');selector.addEventListener('change',()=>run(()=>openOrder(id,Number(selector.value))));
     content.replaceChildren(card(el('div',{class:'p-row p-between'},el('div',{},el('h2',{},o.order_no+' / '+(o.customer_name || 'Müşteri yok')),badge(v.status)),el('div',{class:'p-row'},button('Yenile',()=>openOrder(id,v.id)),button('Siparişlere dön',renderOrders))),field('Sürüm',selector)));
     const oldSent=o.versions.filter(old=>old.id!==v.id).some(old=>state.outbox.some(j=>j.version_id===old.id && j.kind==='atolye_dosya' && ['tamam','tamamlandi','elle_gonderildi'].includes(j.status)));
     if(oldSent || (v.status==='eski'&&state.outbox.some(j=>j.version_id===v.id&&j.kind==='atolye_dosya'&&['tamam','tamamlandi','elle_gonderildi'].includes(j.status))))content.append(el('div',{class:'p-notice'},'Eski sürüm atölyeye ulaştı. Atölyeye yeni sürümü gönderin.'));
-    content.append(card(el('h3',{},'Ürünler'),table(['Ürün','Renk / kumaş','Bedenler','Adet','Uygulama'],v.lines.map(raw=>{const l=adapt('line',raw),s=state.stocks.find(s=>s.id===l.fabric_item_id);return [PRODUCTS[l.product_key] || l.product_key,(l.color_name || '—')+' / '+(s?.name || l.fabric_item_id || '—'),positiveSizes(l.sizes),formatNumber(l.quantity),el('div',{},l.applications.map(a=>text(applicationLabel(a)+(a.needs_confirmation?' · teyit kaydı var':''))))];}))));
+    content.append(card(el('h3',{},'Ürünler'),table(['Ürün','Renk / kumaş','Bedenler','Adet','Uygulama'],v.lines.map(raw=>{const l=adapt('line',raw),s=state.stocks.find(s=>s.id===l.fabric_item_id);return [PRODUCTS[l.product_key] || l.product_key,(l.color_name || '—')+' / '+(s?.name || l.fabric_item_id || '—'),positiveSizes(l.sizes),formatNumber(l.quantity),el('div',{},l.applications.map(a=>text(applicationLabel(a))))];}))));
     if(v.status==='taslak')renderMedia(v);
     else if(v.status==='onay_bekliyor'&&!v.files.some(f=>f.kind==='onay_formu'))content.append(el('div',{class:'p-notice'},'Yeni sürüm açıldı. Bu sunucu sürümü revizyonlarda dosya yükleme ve form hazırlamayı henüz desteklemiyor. Belgeler hazır olana kadar onay verilemez.'));
     content.append(card(el('div',{class:'p-step'},'3 / Formlar ve onay'),el('h3',{},'Sürüm belgeleri'),el('div',{class:'p-actions'},button('Formları hazırla',async()=>{await api('surumler/'+v.id+'/hazirla'+(v.files.some(f=>f.kind.endsWith('_formu'))?'?yeniden=1':''),{});await openOrder(id,v.id);message('Formlar hazırlandı. PDF önizlemelerini kontrol edin.');},''),button('Onaya gönder',async()=>{await api('surumler/'+v.id+'/gonder',{});await openOrder(id,v.id);}),button('Müşteri onayladı',()=>approvalDialog(v)),button('Revizyon aç',()=>renderWizard(true))),renderFiles(v.files.filter(f=>f.kind.endsWith('_formu')),true)));
@@ -349,8 +380,53 @@
       const det=el('details',{},el('summary',{},PRODUCTS[l.product_key]+' / '+(l.color_name || '')+' · Dosya ve ölçü ',missingImages(v,fileMetadata).some(line=>line.id===l.id)?badge('Görsel eksik','warn'):null));det.open=true;
       const failed=state.pending.filter(job=>job.versionId===v.id&&job.lineId===l.id&&!job.done);
       for(const job of failed)det.append(el('div',{class:'p-notice error'},text(job.file.name+': '+job.error,'p-inline-error'),button('Yeniden yükle',async()=>{await sendJobs([job]);await openOrder(state.activeOrder.id,v.id);focusMedia();})));
-      det.append(renderFiles(lineFiles(v,l.id,fileMetadata).filter(file=>['urun_gorsel','desen_kaynak'].includes(file.kind))),uploadForm(v,l),measurementEditor(v,l));section.append(det);
-    }content.append(section);
+      const lf=lineFiles(v,l.id,fileMetadata),manual=el('details',{class:'p-manual'},el('summary',{},'Elle ölçü (yedek yol)'),measurementEditor(v,l));
+      det.append(renderFiles(lf.filter(file=>['urun_gorsel','desen_kaynak','desen_kaynak_vektor'].includes(file.kind))),autoMeasureBlock(v,l,lf,manual),uploadForm(v,l),manual);section.append(det);
+    }content.append(section);startVectorPolling(v);
+  }
+  function autoMeasureBlock(v,line,lf,manual){
+    const box=el('div',{class:'p-auto'});
+    const openManual=()=>{manual.open=true;manual.scrollIntoView?.({block:'center'});};
+    for(const a of line.applications||[]){
+      const row=el('div',{class:'p-auto-row'}),summary=measureSummary(a),gap=measureGap(v,line,lf,a),label=statusLabel(a.kind)+' · '+positionLabel(a.position);
+      row.append(el('strong',{},label));
+      if(summary)row.append(text(summary,'p-number'));
+      if(a.needs_confirmation){
+        const reason=measureSource(a).reasons;
+        row.append(el('div',{class:'p-notice warn'},'Ölçü teyit gerektiriyor.'+(Array.isArray(reason)&&reason.length?' '+reason.join(' '):'')),el('div',{class:'p-actions'},
+          button('Ölçüyü onayla',async()=>{const list=adapt('list',await api('teyitler?status=acik')),c=list.find(c=>c.kind==='olcu'&&c.ref_table==='applications'&&Number(c.ref_id)===Number(a.id));
+            if(!c)throw Error('Açık ölçü teyidi bulunamadı; sayfayı yenileyin.');await api('teyitler/'+c.id+'/coz',{});await openOrder(state.activeOrder.id,v.id);message('Ölçü teyidi kaydedildi.');}),
+          button('Elle düzelt',async()=>openManual(),'secondary')));
+      }else if(gap){
+        row.append(text(gap.text,'p-muted'));
+        if(gap.code==='olculebilir')row.append(button('Otomatik ölç',async()=>{await api('surumler/'+v.id+'/otomatik-olc',{});await openOrder(state.activeOrder.id,v.id);message('Otomatik ölçü çalıştı.');}));
+      }else row.append(el('div',{class:'p-actions'},button('Elle düzelt',async()=>openManual(),'secondary')));
+      box.append(row);
+    }
+    if(!(line.applications||[]).length){const gap=measureGap(v,line,lf,null);box.append(text(gap.text+(gap.code==='olculebilir'?' · Desen konumunu girin ya da elle ölçün.':''),'p-muted'));}
+    return box;
+  }
+  function vectorHost(file){const host=el('div',{class:'p-vector','data-vector-source':String(file.id)});renderVector(host,file);return host;}
+  function renderVector(host,file){
+    const row=vectorRows[file.id],b=vectorBadge(row);host.replaceChildren();
+    if(!b){host.append(text('Vektör durumu bilinmiyor','p-muted'));return;}
+    host.append(badge(b.label,b.tone));
+    if(row.status==='hata'&&row.message)host.append(text(row.message,'p-muted'));
+    if(b.downloadable)host.append(button('Vektörel PDF indir',()=>download({id:row.previewFileId,kind:'desen_vektor_onizleme',path:'desen-'+file.id+'-vektor.pdf'})));
+    if(vectorRows.timedOut&&row.status==='hazirlaniyor')host.append(button('Yenile',async()=>{vectorRows.timedOut=false;startVectorPolling(state.version);}));
+  }
+  function startVectorPolling(v){
+    clearTimeout(vectorTimer);if(!v||v.status!=='taslak'||!v.files.some(f=>f.kind==='desen_kaynak'||f.kind==='desen_kaynak_vektor'))return;
+    const started=Date.now(),versionId=v.id;
+    const tick=async()=>{
+      if(!session||state.version?.id!==versionId)return;
+      let rows;try{rows=await api('surumler/'+versionId+'/vektor-durum');}catch{vectorTimer=setTimeout(tick,VECTOR_POLL_MS*2);return;}
+      vectorRows=Object.fromEntries(rows.map(r=>[r.sourceFileId,r]));
+      const next=vectorPollNext(rows,Date.now()-started);vectorRows.timedOut=next==='yenile';
+      for(const host of document.querySelectorAll('[data-vector-source]')){const file=v.files.find(f=>String(f.id)===host.dataset.vectorSource);if(file)renderVector(host,file);}
+      if(next==='bekle')vectorTimer=setTimeout(tick,VECTOR_POLL_MS);
+    };
+    tick();
   }
   function measurementEditor(v,line){
     const host=el('section',{},el('h3',{},'Deseni yerleştir'));
@@ -447,7 +523,11 @@
   }
   function renderFiles(files,previews=false){
     const grid=el('div',{class:'p-files'});
-    for(const file of files){const preview=el('div',{}),item=el('div',{class:'p-file'},el('h3',{},statusLabel(file.kind)),text(fileMetadata[file.id]?.name || file.path?.split('/').pop() || 'Dosya #'+file.id),preview,el('div',{class:'p-actions'},button('İndir',()=>download(file)),previews?button('PDF önizle',async()=>{const u=blobUrl(await api('dosyalar/'+file.id,undefined,undefined,true));preview.replaceChildren(el('iframe',{src:u,title:statusLabel(file.kind)+' PDF önizlemesi'}));}):null));grid.append(item);}
+    for(const file of files){const preview=el('div',{}),item=el('div',{class:'p-file'},el('h3',{},statusLabel(file.kind)),text(fileMetadata[file.id]?.name || file.path?.split('/').pop() || 'Dosya #'+file.id),preview,['desen_kaynak','desen_kaynak_vektor'].includes(file.kind)?vectorHost(file):null,el('div',{class:'p-actions'},button('İndir',()=>download(file)),previews?button('PDF önizle',async()=>{const u=blobUrl(await api('dosyalar/'+file.id,undefined,undefined,true));preview.replaceChildren(el('iframe',{src:u,title:statusLabel(file.kind)+' PDF önizlemesi'}));}):null));grid.append(item);}
+    for(const [i,file] of files.entries()){
+      if(!['desen_kaynak','urun_gorsel'].includes(file.kind)||!/\.(png|jpe?g)$/i.test(file.path||fileMetadata[file.id]?.name||''))continue;
+      api('dosyalar/'+file.id,undefined,undefined,true).then(blob=>{const slot=grid.children[i]?.children[2];if(slot)slot.replaceChildren(el('img',{class:'p-thumb',src:blobUrl(blob),alt:'Küçük önizleme'}));}).catch(()=>{});
+    }
     return grid;
   }
   async function download(file){const url=blobUrl(await api('dosyalar/'+file.id,undefined,undefined,true));const a=el('a',{href:url,download:(file.path?.split('/').pop() || file.kind+'-'+file.id)});document.body.append(a);a.click();a.remove();}

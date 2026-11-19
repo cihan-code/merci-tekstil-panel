@@ -58,3 +58,10 @@ body:has(#view-stok.active)>.top .header-right{display:none}
 .production .p-pdf-preview{width:72px;min-height:72px;flex:0 0 72px;background:#F1EEE4;border-radius:7px;color:#12213B;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11px}.production .p-pdf-preview>span:first-child{font-size:28px;line-height:1}
 
 .production .p-box[hidden]{display:none}.production .p-box img,.production .p-box object{position:absolute;inset:0;display:block}.production .p-ratio-note{color:var(--p-muted);font-size:13px}.production input[readonly]{color:var(--p-muted);cursor:default}.production .p-ratio-confirm:empty{display:none}
+
+.production .p-auto{display:grid;gap:12px;margin:14px 0}
+.production .p-auto-row{border:1px solid var(--p-line);border-radius:10px;padding:12px 14px;display:grid;gap:8px}
+.production .p-notice.warn{background:#3A3115;color:#FFE9A8;border:1px solid #8A7425}
+.production .p-vector{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:8px 0}
+.production .p-thumb{width:72px;height:72px;object-fit:contain;border-radius:7px;background:#F1EEE4}
+.production .p-manual{margin:14px 0}

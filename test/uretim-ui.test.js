@@ -276,3 +276,37 @@ test('missing, invalid and target-only PDF reports require explicit confirmation
   }
   for(const [w,h] of [[0,60],[140,NaN],[Infinity,60],[-1,2]])assert.throws(()=>ui.designRatio(w,h,'invalid'),RangeError);
 });
+
+test('G25 vector badges follow the server status and only ready or confirm-needed vectors download',()=>{
+  assert.deepEqual(ui.vectorBadge({status:'hazirlaniyor'}),{label:'Vektör hazırlanıyor…',tone:'warn',downloadable:false});
+  assert.deepEqual(ui.vectorBadge({status:'hazir',previewFileId:7}),{label:'Vektörel PDF hazır',tone:'good',downloadable:true});
+  assert.deepEqual(ui.vectorBadge({status:'teyit',previewFileId:8}),{label:'Kalite teyidi gerekli',tone:'warn',downloadable:true});
+  assert.equal(ui.vectorBadge({status:'hata'}).downloadable,false);
+  assert.equal(ui.vectorBadge(undefined),null);
+});
+test('G25 vector polling stops when nothing is preparing and offers refresh after two minutes',()=>{
+  const rows=[{status:'hazirlaniyor'},{status:'hazir'}];
+  assert.equal(ui.vectorPollNext(rows,5000),'bekle');
+  assert.equal(ui.vectorPollNext(rows,120000),'yenile');
+  assert.equal(ui.vectorPollNext([{status:'hazir'}],1000),'dur');
+  assert.equal(ui.vectorPollNext([],0),'dur');
+});
+test('G25 automatic measurement summary shows size, reference size and confidence',()=>{
+  const app={kind:'baski',position:'gogus',width_mm:284,height_mm:121,measure_source:JSON.stringify({method:'otomatik',refBeden:'L',confidence:0.92})};
+  assert.equal(ui.measureSummary(app),'Otomatik ölçü: 28,4 × 12,1 cm · L bedene göre · güven %92');
+  assert.equal(ui.measureSummary({...app,measure_source:{method:'elle'}}),'Elle ölçü: 28,4 × 12,1 cm');
+  assert.equal(ui.measureSummary({...app,width_mm:null}),null);
+  assert.equal(ui.measureSummary({...app,measure_source:'not json'}),'Ölçü: 28,4 × 12,1 cm');
+});
+test('G25 measurement gap names the missing input before offering automatic measurement',()=>{
+  const app={width_mm:null,height_mm:null};
+  assert.equal(ui.measureGap({},{},[{kind:'desen_kaynak'}],app).text,'Ön görsel eksik');
+  assert.equal(ui.measureGap({},{},[{kind:'urun_gorsel'}],app).text,'Desen eksik');
+  assert.equal(ui.measureGap({},{},[{kind:'urun_gorsel'},{kind:'desen_kaynak'}],app).code,'olculebilir');
+  assert.equal(ui.measureGap({},{},[],{width_mm:10,height_mm:10}),null);
+});
+test('G25 unmeasured applications read "Ölçü bekleniyor" and confirmation is stated',()=>{
+  assert.equal(ui.applicationLabel({kind:'baski',position:'sirt',width_mm:null,height_mm:null}),'Baskı · Sırt: Ölçü bekleniyor');
+  assert.equal(ui.applicationLabel({kind:'baski',position:'sirt',width_mm:null,height_mm:null,needs_confirmation:1}),'Baskı · Sırt: teyit gerekli');
+  assert.equal(ui.applicationLabel({kind:'baski',position:'sirt',width_mm:100,height_mm:50,needs_confirmation:1}),'Baskı · Sırt: 10 × 5 cm · teyit gerekli');
+});
