@@ -6,7 +6,7 @@
   const CHILD_SIZES = ['2-4 YAŞ','4-6 YAŞ','6-8 YAŞ','8-10 YAŞ','10-12 YAŞ','12-14 YAŞ'];
   // No recipe GET route exists. Copied from agent/operations/recipes.json (version 1).
   const PRODUCTS = {sweat:'Sweatshirt',tisort:'Tişört',polar:'Polar',polo:'Polo yaka',esofman:'Eşofman',sort:'Şort',tam_fermuar:'Tam fermuarlı',yarim_fermuar:'Yarım fermuarlı'};
-  const POSITIONS = Object.freeze({gogus:'Göğüs',sirt:'Sırt',kol:'Kol',ense:'Ense',kapusan:'Kapüşon',kapuson:'Kapüşon',sol_gogus:'Sol göğüs',sag_gogus:'Sağ göğüs',sol_kol:'Sol kol',sag_kol:'Sağ kol'});
+  const POSITIONS = Object.freeze({gogus:'Göğüs',sirt:'Sırt',kol:'Kol',ense:'Ense',kapusan:'Kapüşon',kapuson:'Kapüşon',sol_gogus:'Sol göğüs',sag_gogus:'Sağ göğüs',sol_kol:'Sol kol',sag_kol:'Sağ kol',bacak:'Bacak',sol_bacak:'Sol bacak',sag_bacak:'Sağ bacak'});
   const LABELS = {baski:'Baskı',nakis:'Nakış',taslak:'Taslak',onay_bekliyor:'Onay bekliyor',onaylandi:'Onaylandı',onayli:'Onaylı',eski:'Eski sürüm',iptal:'İptal',bekliyor:'Bekliyor',isleniyor:'İşleniyor',tamam:'Tamam',tamamlandi:'Tamamlandı',basarisiz:'Başarısız',manuel_bekliyor:'Elle gönderim bekliyor',elle_gonderildi:'Gruba gönderildi',gonderildi:'Gönderildi',fiyat_bekliyor:'Fiyat bekliyor',teslim_bekliyor:'Teslim bekliyor',teslim_alindi:'Teslim alındı',eslesti:'Eşleşti',teyit:'Teyit gerekli',olcu:'Ölçü',fatura_eslesme:'Fatura eşleşmesi',eksik_alan:'Eksik alan',baglanti_hatasi:'Bağlantı hatası',vektor_kalite:'Vektör kalitesi',eski_surum:'Eski sürüm',acilis:'Açılış',giris:'Giriş',cikis:'Çıkış',duzeltme:'Düzeltme',tahsis:'Ayırma',tahsis_iade:'Ayırma iadesi',onay_formu:'Onay formu',baski_formu:'Baskı formu',nakis_formu:'Nakış formu',uretim_formu:'Üretim formu',kesim_formu:'Kesim formu',dikim_formu:'Dikim formu',desen_vektor:'Vektör desen',desen_vektor_onizleme:'Vektör önizleme',urun_gorsel:'Ürün görseli',desen_kaynak:'Desen kaynağı',atolye_dosya:'Atölye dosyası',maliyet_aktarim:'Maliyet aktarımı'};
   function escapeHtml(value) { return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
   function formatNumber(value) { return value==null || (typeof value==='string'&&!value.trim()) || !Number.isFinite(Number(value)) ? '—' : new Intl.NumberFormat('tr-TR',{maximumFractionDigits:3}).format(Number(value)); }
@@ -70,11 +70,27 @@
   }
   // Server quality codes become Turkish sentences; full sentences pass through unchanged.
   const VECTOR_REASONS={raster_detay_ve_metin_gorsel_teyidi:'Görselden çevrildi; ince detay ve yazılar gözle kontrol edilmeli.',karma_sayfada_raster_korundu:'PDF içindeki piksel görsel vektöre çevrilmedi.',cok_yol:'Çok sayıda yol var (2000 üstü).',ince_cizgi:'0,2 mm’den ince çizgi var.',metin:'PDF yazı içeriyor; yazılar eğriye çevrilmeli.',dolgu_detay_kalinligi_olculemedi:'Dolgu detaylarının kalınlığı ölçülemedi.',supheli_oran:'Desenin en-boy oranı olağan dışı.',oran_bozuldu:'Hedef ölçü desenin en-boy oranını değiştiriyor.'};
+  const UNKNOWN_REASON='Kalite teyidi gerekli';
+  const isCode=value=>/^[a-z][a-z0-9_]*$/.test(String(value ?? '').trim());
+  // Server text first; a raw code never reaches the screen.
+  function vectorReasonList(row) {
+    const codes=Array.isArray(row?.reasons) ? row.reasons : [], texts=Array.isArray(row?.reasonTexts) ? row.reasonTexts : [];
+    const out=codes.map((r,i)=>{
+      const given=String(texts[i] ?? '').trim();
+      if(given && !isCode(given))return given;
+      if(Object.hasOwn(VECTOR_REASONS,r))return VECTOR_REASONS[r];
+      return isCode(r) ? UNKNOWN_REASON : String(r);
+    });
+    if(!codes.length)for(const t of texts)if(t && !isCode(t))out.push(String(t).trim());
+    return [...new Set(out)];
+  }
   function vectorDetail(row,confirmationMessage) {
     if(!row)return '';
     if(row.status==='teyit' || row.quality==='teyit'){
-      const codes=(row.reasons || []).map(r=>VECTOR_REASONS[r] ?? r);
-      return reasonText(codes) || reasonText(confirmationMessage) || reasonText(row.message);
+      const listed=vectorReasonList(row);
+      if(listed.length)return listed.join(' ');
+      const fallback=reasonText(confirmationMessage) || reasonText(row.message);
+      return isCode(fallback) ? UNKNOWN_REASON : fallback;
     }
     if(['hata','yok'].includes(row.status))return String(row.message || '').replace(NO_VECTORIZER,'');
     return '';
@@ -116,7 +132,7 @@
     return number;
   }
   function displayMessage(value){
-    return String(value ?? '').split(/\r?\n/).map(line=>line.trim()).filter(line=>line&&line!=='—').join('\n').replace(/\.[ \t]*,/g,';').replace(/\b(?:gogus|sirt|sol_gogus|sag_gogus|sol_kol|sag_kol)\b/g,key=>positionLabel(key)).replace(/\b(?:sweat|tisort|polar|polo|esofman|sort|tam_fermuar|yarim_fermuar)\b/g,key=>PRODUCTS[key]);
+    return String(value ?? '').split(/\r?\n/).map(line=>line.trim()).filter(line=>line&&line!=='—').join('\n').replace(/\.[ \t]*,/g,';').replace(/\b(?:gogus|sirt|sol_gogus|sag_gogus|sol_kol|sag_kol|sol_bacak|sag_bacak|bacak)\b/g,key=>positionLabel(key)).replace(/\b(?:sweat|tisort|polar|polo|esofman|sort|tam_fermuar|yarim_fermuar)\b/g,key=>PRODUCTS[key]);
   }
   function positiveSizes(sizes){return Object.entries(sizes || {}).filter(([,qty])=>Number(qty)>0).map(([key,qty])=>key+': '+formatNumber(qty)).join(', ');}
   function unmatchedAwaitingKg(rows){return rows.filter(row=>row.delivery_status==='teslim_bekliyor' && row.unit==='kg' && (row.item_id==null||row.match_status!=='eslesti')).reduce((sum,row)=>sum+(Number(row.qty_milli)||0),0)/1000;}
@@ -142,7 +158,9 @@
   }
   const RASTER_EXT=/\.(png|jpe?g)$/i;
   const PDF_EXT=/\.pdf$/i;
-  const APPLICATION_POSITIONS=['gogus','sirt','kol','ense','kapuson'];
+  const APPLICATION_POSITIONS=['gogus','sirt','kol','ense','kapuson'], LEG_POSITIONS=['bacak','sol_bacak','sag_bacak'];
+  // Leg positions only make sense on trousers-type products.
+  const applicationPositions=productKey=>['esofman','pantolon'].includes(productKey)?[...APPLICATION_POSITIONS,...LEG_POSITIONS]:APPLICATION_POSITIONS;
   const fileName=file=>file.path || file.name || '';
   function currentProductImage(a,image,files,metadata){
     const view=f=>f.gorunum || metadata[f.id]?.gorunum;
@@ -305,7 +323,7 @@
     return [...groups].map(([label,items])=>({label,items}));
   }
   function kartelaCaption(s){const no=s.kartela?.no ?? s.color_no;return no==null||no===''?'':'Kartela No '+no;}
-  const pure={reasonText,vectorQuality,vectorDetail,designAspect,lockedSize,manualSaveBody,previewBox,orientationIsSafe,placementMarks,unmeasuredApps,unmeasuredCount,CHILD_SIZES,uploadFields,guessUpload,linkTarget,reconcileJobs,designApplication,measurementWarning,lineFiles,missingImages,uploadJobs,parseNumber,inputNumber,validateNumber,displayMessage,positiveSizes,unmatchedAwaitingKg,queueFile,SIZES,PRODUCTS,POSITIONS,positionLabel,applicationLabel,measureSource,measureSummary,measureContext,measureGap,vectorBadge,vectorPollNext,VECTOR_POLL_MS,packageActions,costApplications,pricePayload,escapeHtml,formatNumber,formatKg,formatDate,statusLabel,sizeTotal,adapt,safeHex,hexLight,hexInk,kartelaFabrics,colorLabel,stockLabel,stockGroups,kartelaCaption};
+  const pure={vectorReasonList,applicationPositions,reasonText,vectorQuality,vectorDetail,designAspect,lockedSize,manualSaveBody,previewBox,orientationIsSafe,placementMarks,unmeasuredApps,unmeasuredCount,CHILD_SIZES,uploadFields,guessUpload,linkTarget,reconcileJobs,designApplication,measurementWarning,lineFiles,missingImages,uploadJobs,parseNumber,inputNumber,validateNumber,displayMessage,positiveSizes,unmatchedAwaitingKg,queueFile,SIZES,PRODUCTS,POSITIONS,positionLabel,applicationLabel,measureSource,measureSummary,measureContext,measureGap,vectorBadge,vectorPollNext,VECTOR_POLL_MS,packageActions,costApplications,pricePayload,escapeHtml,formatNumber,formatKg,formatDate,statusLabel,sizeTotal,adapt,safeHex,hexLight,hexInk,kartelaFabrics,colorLabel,stockLabel,stockGroups,kartelaCaption};
   if (typeof module!=='undefined' && module.exports) module.exports=pure;
   global.MerciProduction=pure;
   if (typeof document==='undefined') return;
@@ -494,7 +512,7 @@
     }
     const designs=input('designs',{type:'file',accept:'.png,.pdf',multiple:true}),rows=el('div',{});
     designs.addEventListener('change',()=>{
-      for(const file of designs.files){const job={file,kind:'desen_kaynak',applicationKind:'baski',position:'gogus'},kind=opts([['baski','Baskı'],['nakis','Nakış']],'baski'),position=opts(APPLICATION_POSITIONS.map(key=>[key,positionLabel(key)]),'gogus');box._uploads.push(job);
+      for(const file of designs.files){const job={file,kind:'desen_kaynak',applicationKind:'baski',position:'gogus'},kind=opts([['baski','Baskı'],['nakis','Nakış']],'baski'),position=opts(applicationPositions(product.value).map(key=>[key,positionLabel(key)]),'gogus');box._uploads.push(job);
         kind.addEventListener('change',()=>job.applicationKind=kind.value);position.addEventListener('change',()=>job.position=position.value);
         const row=el('div',{class:'p-design-row'},selectedPreview(file),el('div',{class:'p-grid'},field('Uygulama · '+file.name,kind),field('Konum · '+file.name,position)),button('Deseni kaldır',()=>{box._uploads=box._uploads.filter(item=>item!==job);row.remove();}));rows.append(row);
       }designs.value='';designs.closest('.p-field').querySelector('.p-file-name').textContent='Eklenen desenler aşağıda';
@@ -541,7 +559,7 @@
     const kind=opts([['urun_gorsel','Ürün görseli'],['desen_kaynak','Desen (PNG / PDF)']],'urun_gorsel');kind.name='kind';
     const view=opts([['on','Ön'],['arka','Arka'],['kol','Kol']],'on');view.name='gorunum';
     const applicationKind=opts([['baski','Baskı'],['nakis','Nakış']],'baski');applicationKind.name='applicationKind';
-    const position=opts(APPLICATION_POSITIONS.map(key=>[key,positionLabel(key)]),'gogus');position.name='position';
+    const position=opts(applicationPositions(line?.product_key).map(key=>[key,positionLabel(key)]),'gogus');position.name='position';
     const file=input('file',{type:'file',accept:'.png,.jpg,.jpeg,.pdf',required:true});
     const fields={gorunum:field('Görünüm',view),applicationKind:field('Uygulama',applicationKind),position:field('Konum',position)};
     const show=()=>{const visible=uploadFields(kind.value);for(const [key,node] of Object.entries(fields))node.hidden=!visible.includes(key);};
@@ -560,7 +578,7 @@
   }
   function applicationForm(v,line){
     const kind=opts([['baski','Baskı'],['nakis','Nakış']],'baski');
-    const position=opts(APPLICATION_POSITIONS.map(key=>[key,positionLabel(key)]),'gogus');
+    const position=opts(applicationPositions(line?.product_key).map(key=>[key,positionLabel(key)]),'gogus');
     const f=form(async()=>{
       if((line.applications || []).some(a=>a.kind===kind.value && a.position===position.value))throw Error('Bu tür ve konumda bir uygulama zaten var.');
       await api('satirlar/'+line.id+'/uygulamalar',{kind:kind.value,position:position.value,needs_confirmation:1});
@@ -662,6 +680,7 @@
   function vectorHost(file){const host=el('div',{class:'p-vector','data-vector-source':String(file.id)});renderVector(host,file);return host;}
   function renderVector(host,file){
     const row=vectorRows[file.id],b=vectorBadge(row,file);host.replaceChildren(badge(b.label,b.tone));
+    if(row?.sourceLabel)host.append(badge(row.sourceLabel,''));
     const quality=vectorQuality(row);
     if(quality && row.status!=='teyit')host.append(badge(quality.label,quality.tone));
     const confirmation=row && state.confirmations.find(c=>c.kind==='vektor_kalite'&&c.ref_table==='files'&&Number(c.ref_id)===Number(row.previewFileId));
@@ -680,7 +699,8 @@
     const label={hazir:'Görselden çıkarılan desen hazır',teyit:'Çıkarılan desen için teyit gerekli',hata:'Desen çıkarılamadı'}[row?.status] ||
       (vectorRows.timedOut?'Görselden desen sonucu bekleniyor':'Görselden desen hazırlanıyor…');
     host.replaceChildren(badge(label,row?.status==='hazir'?'good':'warn'));
-    const detail=reasonText(row?.reasons) || reasonText(row?.message);
+    if(row?.sourceLabel)host.append(badge(row.sourceLabel,''));
+    const detail=vectorReasonList(row).join(' ') || reasonText(row?.message);
     if(detail)host.append(el('span',{class:'p-vector-detail'},detail));
     if(row?.previewFileId && ['hazir','teyit'].includes(row.status)){
       const file={id:row.previewFileId,kind:'desen_vektor_onizleme',path:'desen-'+applicationId+'-vektor.pdf'};
