@@ -197,3 +197,18 @@ missing vector records), then this panel.
 
 Tests: `node --test test/operations-ui.js test/uretim-ui.test.js test/uretim-olcu-sade.test.js test/panel-oturum.test.js`
 and all `test/sync-harness.js` scenarios.
+
+## Pattern choice and sleeve measurement context (2026-11-20)
+
+Draft product headings show a compact **Kalıp** selector only when the server
+returns multiple `kalipAdaylari`. Changing it sends only `{kalipId}` via
+`PATCH /api/siparis/satirlar/:id`, then reloads the version and its measurement
+confirmations. A failed change restores the previous selection. Measurement rows
+show `measure_source.flatAd` / `refBeden` (or the selected candidate) and the
+server's `summary`, falling back to stated `sleeveMethod` / `scaleFrom` text.
+No measurement or sleeve scale is calculated in the panel.
+
+Deploy API commit `3090066` before these assets. Validation: the four panel test
+files above (99 tests), all twelve sync scenarios, and synthetic dark browser
+checks at 1440 / 390 px, including expanded correction and upload forms without
+horizontal overflow. G39 screenshots stay outside the public repository.

@@ -88,3 +88,5 @@ body:has(#view-stok.active)>.top .header-right{display:none}
 .production .p-picked{outline:2px solid var(--p-teal);outline-offset:6px;border-radius:6px}
 @media(max-width:700px){.production .p-kgrid{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media(max-width:340px){.production .p-kgrid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+.production .p-media-heading{margin-top:18px}.production .p-media-heading h4{margin:0}.production .p-kalip{max-width:100%;min-width:0}.production .p-kalip .p-field{display:flex;align-items:center;gap:8px;margin:0}.production .p-kalip select{width:auto;max-width:100%;min-width:0;font-size:13px;padding:6px 10px}.production .p-measure-context{margin:0;color:var(--p-muted);font-size:13px}

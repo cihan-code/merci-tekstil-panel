@@ -47,11 +47,12 @@ function harness({responses={}}={}) {
       const route=String(url).replace(ENDPOINT+'/api/siparis/','');
       calls.push({route,method:init.method,body:init.body instanceof FormData?init.body:init.body?JSON.parse(init.body):undefined});
       const data=responses[route] ?? {};
+      if(data instanceof Error)throw data;
       return {ok:true,status:200,json:async()=>data,blob:async()=>({type:'image/png'})};
     }};
   context.addEventListener=()=>{};
   const source=SOURCE.replace("  renderFrame();if(session)run(async()=>{await loadCommon();await renderTab();});",
-    '  global.k={manualEditor,uploadForm,autoMeasureBlock,state,setRefresh:fn=>{refreshInPlace=fn;}};')
+    '  global.k={manualEditor,uploadForm,autoMeasureBlock,patternSelector,state,setRefresh:fn=>{refreshInPlace=fn;}};')
     .replace("  window.addEventListener('pagehide'","  global.addEventListener('pagehide'");
   vm.runInNewContext(source,context);
   const refreshed=[];context.k.setRefresh(async v=>{refreshed.push(v.id);});
@@ -194,4 +195,39 @@ test('G39 vector states are always stated, polling waits for missing rows and re
   assert.equal(ui.vectorPollNext([{sourceFileId:4,status:'hazir'},{sourceFileId:5,status:'teyit'}],1000,[4,5]),'dur');
   for(const retired of ['Elle ölçü (yedek yol)','Kütüphane kayıtlarının görsel indirme ucu','Vektör durumu bilinmiyor','Deseni yerleştir','duz-cizimler'])
     assert.equal(SOURCE.includes(retired),false,retired);
+});
+
+
+test('G39b pattern selector only appears for multiple candidates, PATCHes kalipId and refreshes',async()=>{
+  const h=harness(),candidates=[{id:'regular',ad:'SWEAT',refBeden:'L'},{id:'over',ad:'OWERSİZE SWEAT',refBeden:'L'}];
+  assert.equal(h.patternSelector(VERSION,LINE),null);
+  assert.equal(h.patternSelector(VERSION,{...LINE,kalipAdaylari:candidates.slice(0,1)}),null);
+  const line={...LINE,kalipId:'regular',kalipAdaylari:candidates};
+  const selector=h.patternSelector(VERSION,line),select=byName(selector,'kalipId');
+  assert.equal(select.value,'regular');assert.match(selector.textContent,/SWEAT \(L\)/);
+  select.value='over';await select.fire('change');
+  assert.deepEqual(h.calls,[{route:'satirlar/11',method:'PATCH',body:{kalipId:'over'}}]);
+  assert.deepEqual(h.refreshed,[5]);assert.equal(select.disabled,false);
+  select.value='';await select.fire('change');assert.equal(h.calls.length,1);
+  assert.equal(byName(h.patternSelector({...VERSION,status:'onaylandi'},line),'kalipId').disabled,true);
+  assert.equal(byName(h.patternSelector(VERSION,{...line,kalipId:null}),'kalipId').value,'');
+});
+
+test('G39b measurement rows show the chosen pattern and server sleeve explanation',()=>{
+  const h=harness(),line={...LINE,kalipId:'a',kalipAdaylari:[{id:'a',ad:'SWEAT',refBeden:'L'}]};
+  const app={id:3,kind:'nakis',position:'kol',width_mm:100,height_mm:50,measure_source:{flatAd:'OWERSİZE SWEAT',refBeden:'L',summary:'Kol genişliğine göre ölçüldü.',sleeveMethod:'fallback',scaleFrom:'on'}};
+  const block=h.autoMeasureBlock(VERSION,{...line,applications:[app]},[]);
+  assert.match(block.textContent,/Kalıp: OWERSİZE SWEAT \(L\) · Kol genişliğine göre ölçüldü\./);
+  assert.doesNotMatch(block.textContent,/fallback/);
+  assert.equal(ui.measureContext({measure_source:{sleeveMethod:'kol',scaleFrom:'ön görünüm'}},line),'Kalıp: SWEAT (L) · Kol ölçümü: kol · Ölçek: ön görünüm');
+  assert.equal(ui.measureContext({measure_source:'invalid'}),'');
+});
+
+
+test('G39b a failed pattern change restores the saved selection without refreshing',async()=>{
+  const h=harness({responses:{'satirlar/11':new Error('offline')}});
+  const line={...LINE,kalipId:'a',kalipAdaylari:[{id:'a',ad:'SWEAT'},{id:'b',ad:'OWERSİZE SWEAT'}]};
+  const select=byName(h.patternSelector(VERSION,line),'kalipId');
+  select.value='b';await select.fire('change');
+  assert.equal(select.value,'a');assert.equal(select.disabled,false);assert.deepEqual(h.refreshed,[]);
 });

@@ -31,6 +31,18 @@
     if (m.confidence!=null && Number.isFinite(c)) parts.push('güven %'+Math.round(c<=1 ? c*100 : c));
     return parts.join(' · ');
   }
+  function measureContext(a,line={}) {
+    const m=measureSource(a),parts=[];
+    const flat=(line.kalipAdaylari || []).find(f=>String(f.id)===String(line.kalipId));
+    const name=m.flatAd || flat?.ad,beden=m.refBeden || flat?.refBeden;
+    if(name)parts.push('Kalıp: '+name+(beden?' ('+beden+')':''));
+    if(typeof m.summary==='string' && m.summary.trim())parts.push(m.summary.trim());
+    else {
+      if(typeof m.sleeveMethod==='string' && m.sleeveMethod.trim())parts.push('Kol ölçümü: '+m.sleeveMethod);
+      if(typeof m.scaleFrom==='string' && m.scaleFrom.trim())parts.push('Ölçek: '+m.scaleFrom);
+    }
+    return parts.join(' · ');
+  }
   // Why an application has no usable measurement, or null when it is measured.
   function measureGap(version,line,lineFilesList,a) {
     if (a && a.width_mm!=null && a.height_mm!=null) return null;
@@ -227,7 +239,7 @@
     return [...groups].map(([label,items])=>({label,items}));
   }
   function kartelaCaption(s){const no=s.kartela?.no ?? s.color_no;return no==null||no===''?'':'Kartela No '+no;}
-  const pure={reasonText,vectorQuality,vectorDetail,designAspect,lockedSize,manualSaveBody,previewBox,unmeasuredApps,uploadFields,guessUpload,linkTarget,reconcileJobs,designApplication,measurementWarning,lineFiles,missingImages,uploadJobs,parseNumber,inputNumber,validateNumber,displayMessage,positiveSizes,unmatchedAwaitingKg,queueFile,SIZES,PRODUCTS,POSITIONS,positionLabel,applicationLabel,measureSource,measureSummary,measureGap,vectorBadge,vectorPollNext,VECTOR_POLL_MS,packageActions,costApplications,pricePayload,escapeHtml,formatNumber,formatKg,formatDate,statusLabel,sizeTotal,adapt,safeHex,hexLight,hexInk,kartelaFabrics,colorLabel,stockLabel,stockGroups,kartelaCaption};
+  const pure={reasonText,vectorQuality,vectorDetail,designAspect,lockedSize,manualSaveBody,previewBox,unmeasuredApps,uploadFields,guessUpload,linkTarget,reconcileJobs,designApplication,measurementWarning,lineFiles,missingImages,uploadJobs,parseNumber,inputNumber,validateNumber,displayMessage,positiveSizes,unmatchedAwaitingKg,queueFile,SIZES,PRODUCTS,POSITIONS,positionLabel,applicationLabel,measureSource,measureSummary,measureContext,measureGap,vectorBadge,vectorPollNext,VECTOR_POLL_MS,packageActions,costApplications,pricePayload,escapeHtml,formatNumber,formatKg,formatDate,statusLabel,sizeTotal,adapt,safeHex,hexLight,hexInk,kartelaFabrics,colorLabel,stockLabel,stockGroups,kartelaCaption};
   if (typeof module!=='undefined' && module.exports) module.exports=pure;
   global.MerciProduction=pure;
   if (typeof document==='undefined') return;
@@ -459,10 +471,25 @@
     toggle.addEventListener('click',()=>{f.hidden=!f.hidden;toggle.setAttribute('aria-expanded',String(!f.hidden));});
     return el('div',{class:'p-upload'},toggle,f);
   }
+  function patternSelector(v,line){
+    if((line.kalipAdaylari || []).length<2)return null;
+    const select=opts(line.kalipAdaylari.map(f=>[f.id,f.ad+(f.refBeden?' ('+f.refBeden+')':'')]),line.kalipId,'Kalıbı seçin');
+    select.name='kalipId';select.disabled=v.status!=='taslak';
+    select.addEventListener('change',()=>run(async()=>{
+      try {
+        if(!select.value){select.value=line.kalipId || '';return;}
+        await api('satirlar/'+line.id,{kalipId:select.value},'PATCH');
+        await refreshInPlace(v);message('Kalıp seçimi kaydedildi.');
+      } catch(error){select.value=line.kalipId || '';throw error;}
+    },select));
+    return el('div',{class:'p-kalip'},field('Kalıp',select));
+  }
   function renderMedia(v){
     const section=card(el('div',{class:'p-step'},'2 / Görsel, desen ve ölçü'),el('h3',{},'Ürün dosyaları'));section.id='order-media';
     for(const l of v.lines){
-      const det=el('details',{},el('summary',{},PRODUCTS[l.product_key]+' / '+(l.color_name || '')+' · Dosya ve ölçü ',missingImages(v,fileMetadata).some(line=>line.id===l.id)?badge('Görsel eksik','warn'):null));det.open=true;
+      const heading=el('div',{class:'p-row p-between p-media-heading'},el('h4',{},PRODUCTS[l.product_key]+' / '+(l.color_name || '')),patternSelector(v,l));
+      section.append(heading);
+      const det=el('details',{},el('summary',{},'Dosya ve ölçü ',missingImages(v,fileMetadata).some(line=>line.id===l.id)?badge('Görsel eksik','warn'):null));det.open=true;
       const failed=state.pending.filter(job=>job.versionId===v.id&&job.lineId===l.id&&!job.done);
       for(const job of failed)det.append(el('div',{class:'p-notice error'},text(job.file.name+': '+job.error,'p-inline-error'),button('Yeniden yükle',async()=>{await sendJobs([job]);await openOrder(state.activeOrder.id,v.id);focusMedia();})));
       const lf=lineFiles(v,l.id,fileMetadata);
@@ -484,6 +511,7 @@
       const edit=()=>button('Elle düzelt',async()=>{if(editorHost.children.length){editorHost.replaceChildren();return;}editorHost.replaceChildren(manualEditor(v,line,a,lf,()=>editorHost.replaceChildren()));},'secondary');
       row.append(el('strong',{},label));
       if(summary)row.append(text(summary,'p-number'));
+      const context=measureContext(a,line);if(context)row.append(text(context,'p-measure-context'));
       const warning=measurementWarning(a,lf,fileMetadata);
       const reason=reasonText(measureSource(a).reasons) || reasonText(state.confirmations.find(c=>c.kind==='olcu'&&c.ref_table==='applications'&&Number(c.ref_id)===Number(a.id))?.message);
       const waiting=a.width_mm==null && !measureSource(a).method && (!reason || GENERIC_REASONS.includes(reason));
