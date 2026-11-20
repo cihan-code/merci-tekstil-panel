@@ -33,6 +33,8 @@
     if (m.confidence!=null && Number.isFinite(c)) parts.push('güven %'+Math.round(c<=1 ? c*100 : c));
     return parts.join(' · ');
   }
+  // Set when the size used the geometric mean of two scales (mockup ratio differs from the pattern); informational only.
+  function scaleNote(a) { const m=measureSource(a);return m.scaleMode==='geo_ortalama' && typeof m.scaleNote==='string' && m.scaleNote.trim() ? m.scaleNote.trim() : ''; }
   function measureContext(a,line={}) {
     const m=measureSource(a),parts=[];
     const flat=(line.kalipAdaylari || []).find(f=>String(f.id)===String(line.kalipId));
@@ -323,7 +325,7 @@
     return [...groups].map(([label,items])=>({label,items}));
   }
   function kartelaCaption(s){const no=s.kartela?.no ?? s.color_no;return no==null||no===''?'':'Kartela No '+no;}
-  const pure={vectorReasonList,applicationPositions,reasonText,vectorQuality,vectorDetail,designAspect,lockedSize,manualSaveBody,previewBox,orientationIsSafe,placementMarks,unmeasuredApps,unmeasuredCount,CHILD_SIZES,uploadFields,guessUpload,linkTarget,reconcileJobs,designApplication,measurementWarning,lineFiles,missingImages,uploadJobs,parseNumber,inputNumber,validateNumber,displayMessage,positiveSizes,unmatchedAwaitingKg,queueFile,SIZES,PRODUCTS,POSITIONS,positionLabel,applicationLabel,measureSource,measureSummary,measureContext,measureGap,vectorBadge,vectorPollNext,VECTOR_POLL_MS,packageActions,costApplications,pricePayload,escapeHtml,formatNumber,formatKg,formatDate,statusLabel,sizeTotal,adapt,safeHex,hexLight,hexInk,kartelaFabrics,colorLabel,stockLabel,stockGroups,kartelaCaption};
+  const pure={vectorReasonList,applicationPositions,reasonText,vectorQuality,vectorDetail,designAspect,lockedSize,manualSaveBody,previewBox,orientationIsSafe,placementMarks,unmeasuredApps,scaleNote,unmeasuredCount,CHILD_SIZES,uploadFields,guessUpload,linkTarget,reconcileJobs,designApplication,measurementWarning,lineFiles,missingImages,uploadJobs,parseNumber,inputNumber,validateNumber,displayMessage,positiveSizes,unmatchedAwaitingKg,queueFile,SIZES,PRODUCTS,POSITIONS,positionLabel,applicationLabel,measureSource,measureSummary,measureContext,measureGap,vectorBadge,vectorPollNext,VECTOR_POLL_MS,packageActions,costApplications,pricePayload,escapeHtml,formatNumber,formatKg,formatDate,statusLabel,sizeTotal,adapt,safeHex,hexLight,hexInk,kartelaFabrics,colorLabel,stockLabel,stockGroups,kartelaCaption};
   if (typeof module!=='undefined' && module.exports) module.exports=pure;
   global.MerciProduction=pure;
   if (typeof document==='undefined') return;
@@ -488,7 +490,7 @@
     const product=opts(Object.entries(PRODUCTS),line.product_key || 'tisort');product.name='product_key';
     const fabric=stockOptions(line.fabric_item_id);fabric.name='fabric_item_id';fabric.required=true;
     const color=input('color_name',{value:line.color_name || '',required:true});const kinfo=el('div',{class:'p-kinfo','aria-live':'polite'});const showK=()=>{const s=state.stocks.find(s=>String(s.id)===fabric.value);kinfo.replaceChildren();const cap=s&&kartelaCaption(s);if(cap)kinfo.append(swatch(s.color_hex),cap);};showK();fabric.addEventListener('change',()=>{const s=state.stocks.find(s=>String(s.id)===fabric.value);if(s?.color_name)color.value=s.color_name;showK();});
-    box.append(el('div',{class:'p-grid'},field('Ürün',product),el('div',{},field('Kumaş kalemi',fabric),kinfo),field('Renk',color),field('Astar',el('input',{name:'lining',type:'checkbox',checked:line.lining===1||line.lining===true}))));
+    box.append(el('div',{class:'p-grid'},field('Ürün',product),el('div',{},field('Kumaş kalemi',fabric),kinfo),field('Renk',color),field('Astar',el('input',{name:'lining',type:'checkbox',checked:line.lining===1||line.lining===true})),field('Numune (adet belli değil)',el('input',{name:'numune',type:'checkbox',checked:line.numune===1||line.numune===true}))));
     const sizes=el('div',{class:'p-sizes'},SIZES.map(s=>field(s,num('size_'+s,line.sizes[s] || 0,{step:1,required:true}))));
     const child=el('details',{open:CHILD_SIZES.some(s=>line.sizes[s])},el('summary',{},'Çocuk bedenleri (yaş aralığı)'),el('div',{class:'p-sizes'},CHILD_SIZES.map(s=>field(s,num('size_'+s,line.sizes[s] || 0,{step:1,required:true})))));
     const noteBox=field('Kumaş / kalıp açıklaması (formlara yazılır)',el('textarea',{name:'note',maxlength:'500',placeholder:'Örn. Yeni kalıp, şardonsuz kumaş, lastikli etek',value:line.note||''}));
@@ -520,8 +522,8 @@
     host.append(views,field('Desenler (PNG / PDF, birden fazla)',designs),rows);return host;
   }
   function readSizes(box){return Object.fromEntries(SIZES.concat(CHILD_SIZES).map(s=>[s,readNumber(box.querySelector('[name="size_'+s+'"]')) ?? 0]));}
-  function readLine(box){const get=n=>box.querySelector('[name="'+n+'"]');const source=box._source,sizes=Object.fromEntries(Object.entries(readSizes(box)).filter(([k,q])=>!CHILD_SIZES.includes(k)||q>0)),quantity=sizeTotal(sizes);if(!quantity)throw Error('Her ürün satırında en az bir adet gerekli.');
-    const line={...(source.id?{id:source.id}:{}),product_key:get('product_key').value,fabric_item_id:Number(get('fabric_item_id').value),color_name:get('color_name').value.trim(),sizes:adapt('sizesOut',sizes),quantity,lining:get('lining').checked,note:get('note').value.trim()||null,material_items:Object.fromEntries(['kaskorse','ribana','astar'].filter(k=>get('material_'+k).value).map(k=>[k,Number(get('material_'+k).value)]))};
+  function readLine(box){const get=n=>box.querySelector('[name="'+n+'"]');const source=box._source,sizes=Object.fromEntries(Object.entries(readSizes(box)).filter(([k,q])=>!CHILD_SIZES.includes(k)||q>0)),quantity=sizeTotal(sizes),numune=get('numune').checked;if(!quantity&&!numune)throw Error('Her ürün satırında en az bir adet gerekli (numune ise Numune kutusunu işaretleyin).');
+    const line={...(source.id?{id:source.id}:{}),product_key:get('product_key').value,fabric_item_id:Number(get('fabric_item_id').value),color_name:get('color_name').value.trim(),sizes:adapt('sizesOut',sizes),quantity,lining:get('lining').checked,note:get('note').value.trim()||null,numune,material_items:Object.fromEntries(['kaskorse','ribana','astar'].filter(k=>get('material_'+k).value).map(k=>[k,Number(get('material_'+k).value)]))};
     if(source.applications?.length)line.applications=source.applications.map((a,i)=>{const w=get('app_w_'+i).value?Math.round(readNumber(get('app_w_'+i))*10):null,h=get('app_h_'+i).value?Math.round(readNumber(get('app_h_'+i))*10):null;const confirmed=get('app_confirm_'+i).checked;if((w!==a.width_mm||h!==a.height_mm||a.needs_confirmation)&&!confirmed)throw Error('Uygulama ölçülerini kontrol edip elle teyit kutusunu işaretleyin.');return {...a,width_mm:w,height_mm:h,needs_confirmation:confirmed?0:a.needs_confirmation};});return line;
   }
   function renderWizard(revision=false){
@@ -544,7 +546,7 @@
     content.replaceChildren(card(el('div',{class:'p-row p-between'},el('div',{},el('h2',{},o.order_no+' / '+(o.customer_name || 'Müşteri yok')),badge(v.status)),el('div',{class:'p-row'},button('Yenile',()=>openOrder(id,v.id)),button('Siparişlere dön',renderOrders))),field('Sürüm',selector)));
     const oldSent=o.versions.filter(old=>old.id!==v.id).some(old=>state.outbox.some(j=>j.version_id===old.id && j.kind==='atolye_dosya' && ['tamam','tamamlandi','elle_gonderildi'].includes(j.status)));
     if(oldSent || (v.status==='eski'&&state.outbox.some(j=>j.version_id===v.id&&j.kind==='atolye_dosya'&&['tamam','tamamlandi','elle_gonderildi'].includes(j.status))))content.append(el('div',{class:'p-notice'},'Eski sürüm atölyeye ulaştı. Atölyeye yeni sürümü gönderin.'));
-    content.append(card(el('h3',{},'Ürünler'),table(['Ürün','Renk / kumaş','Bedenler','Adet','Uygulama'],v.lines.map(raw=>{const l=adapt('line',raw),s=state.stocks.find(s=>s.id===l.fabric_item_id);return [(PRODUCTS[l.product_key] || l.product_key)+(l.note?' · '+l.note:''),(l.color_name || '—')+' / '+(s?.name || l.fabric_item_id || '—'),positiveSizes(l.sizes),formatNumber(l.quantity),el('div',{},l.applications.map(a=>text(applicationLabel(a))))];}))));
+    content.append(card(el('h3',{},'Ürünler'),table(['Ürün','Renk / kumaş','Bedenler','Adet','Uygulama'],v.lines.map(raw=>{const l=adapt('line',raw),s=state.stocks.find(s=>s.id===l.fabric_item_id);return [(PRODUCTS[l.product_key] || l.product_key)+(l.numune?' · NUMUNE':'')+(l.note?' · '+l.note:''),(l.color_name || '—')+' / '+(s?.name || l.fabric_item_id || '—'),positiveSizes(l.sizes),formatNumber(l.quantity),el('div',{},l.applications.map(a=>text(applicationLabel(a))))];}))));
     if(v.status==='taslak')renderMedia(v);
     else if(v.status==='onay_bekliyor'&&!v.files.some(f=>f.kind==='onay_formu'))content.append(el('div',{class:'p-notice'},'Yeni sürüm açıldı. Bu sunucu sürümü revizyonlarda dosya yükleme ve form hazırlamayı henüz desteklemiyor. Belgeler hazır olana kadar onay verilemez.'));
     const previewHost=el('div',{class:'p-preview-host','aria-live':'polite'});
@@ -631,6 +633,7 @@
       row.append(el('strong',{},label));
       if(summary)row.append(text(summary,'p-number'));
       const context=measureContext(a,line);if(context)row.append(text(context,'p-measure-context'));
+      const note=scaleNote(a);if(note)row.append(el('div',{class:'p-notice info'},'≈ '+note));
       const warning=measurementWarning(a,lf,fileMetadata);
       const reason=reasonText(measureSource(a).reasons) || reasonText(state.confirmations.find(c=>c.kind==='olcu'&&c.ref_table==='applications'&&Number(c.ref_id)===Number(a.id))?.message);
       const waiting=a.width_mm==null && !measureSource(a).method && (!reason || GENERIC_REASONS.includes(reason));
