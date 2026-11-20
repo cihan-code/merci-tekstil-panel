@@ -138,12 +138,76 @@
     const w=validateNumber(width,{min:.1,step:.1,required:true}),h=validateNumber(height,{min:.1,step:.1,required:true});
     return {width_mm:Math.round(w*10),height_mm:Math.round(h*10),elleTeyit:true};
   }
-  // The automatically found box as percentages of the product image; null when there is nothing real to show.
-  function previewBox(a,files=[]) {
-    const m=measureSource(a),box=m.designBoxPx || m.candidateBoxPx,w=Number(m.rasterWidth),h=Number(m.rasterHeight);
-    const image=files.find(f=>Number(f.id)===Number(m.gorselFileId) && f.kind==='urun_gorsel');
-    if(!image || !/\.(png|jpe?g)$/i.test(image.path || '') || !box || !(w>0 && h>0) || ![box.x,box.y,box.w,box.h].every(Number.isFinite) || box.w<=0 || box.h<=0)return null;
-    return {fileId:image.id,left:box.x/w*100,top:box.y/h*100,width:box.w/w*100,height:box.h/h*100,aspect:w/h,confirmed:!!m.designBoxPx,mmPerPx:Number(m.mmPerPx)>0?Number(m.mmPerPx):null,rasterWidth:w,rasterHeight:h};
+  const RASTER_EXT=/\.(png|jpe?g)$/i;
+  const PDF_EXT=/\.pdf$/i;
+  const APPLICATION_POSITIONS=['gogus','sirt','kol','ense','kapuson'];
+  const fileName=file=>file.path || file.name || '';
+  function currentProductImage(a,image,files,metadata){
+    const view=f=>f.gorunum || metadata[f.id]?.gorunum;
+    const latest=(...views)=>files.filter(f=>f.kind==='urun_gorsel' && views.includes(view(f))).reduce(
+      (last,f)=>!last || Number(f.id)>Number(last.id)?f:last,null);
+    const imageView=view(image),recordedView=measureSource(a).selectedView;
+    if(imageView && recordedView && imageView!==recordedView)return false;
+    const position=a.position;
+    let active;
+    if(['kol','sol_kol','sag_kol'].includes(position))active=latest('kol') || latest('on') || latest('arka');
+    else if(position==='teyit')active=latest('on','arka');
+    else if(recordedView || imageView)active=latest(recordedView || imageView);
+    if(files.some(f=>f.kind==='urun_gorsel' && !view(f) && Number(f.id)>Number(image.id)))return false;
+    return !active || String(active.id)===String(image.id);
+  }
+  // Retain the measured coordinates. A typed size never changes the found placement.
+  function previewBox(a,files=[],line={},metadata={}) {
+    const m=measureSource(a),box=m.designBoxPx || m.candidateBoxPx,w=m.rasterWidth,h=m.rasterHeight;
+    const image=files.find(f=>m.gorselFileId!=null && String(f.id)===String(m.gorselFileId) && f.kind==='urun_gorsel');
+    if(!image || !RASTER_EXT.test(fileName(image)) || a.olcuHatasi || image.olcuHatasi || metadata[image.id]?.olcuHatasi)return null;
+    if(![w,h].every(n=>Number.isSafeInteger(n)&&n>0) || !box || ![box.x,box.y,box.w,box.h].every(Number.isFinite))return null;
+    if(box.x<0 || box.y<0 || box.w<=0 || box.h<=0 || box.x+box.w>w || box.y+box.h>h)return null;
+    if(Object.hasOwn(a,'desenDosyaId') && String(a.desenDosyaId ?? '')!==String(m.desenFileId ?? ''))return null;
+    if(line.kalipId!=null && String(line.kalipId)!==String(m.flatId))return null;
+    if(!currentProductImage(a,image,files,metadata))return null;
+    return {fileId:image.id,left:box.x/w*100,top:box.y/h*100,width:box.w/w*100,height:box.h/h*100,
+      rasterWidth:w,rasterHeight:h,confirmed:!!m.designBoxPx && !a.needs_confirmation};
+  }
+  function orientationIsSafe(bytes){
+    // The measurement raster and browser image must share axes, including square images and mirrors.
+    const view=new DataView(bytes),size=view.byteLength;
+    if(size<8)return false;
+    if(view.getUint32(0)===0x89504e47 && view.getUint32(4)===0x0d0a1a0a){
+      for(let pos=8;pos+12<=size;){
+        const length=view.getUint32(pos),type=view.getUint32(pos+4);
+        if(length>size-pos-12 || type===0x65584966 || type===0x6163544c)return false; // eXIf / animated PNG
+        if(type===0x49454e44)return true;
+        pos+=length+12;
+      }
+      return false;
+    }
+    if(view.getUint16(0)!==0xffd8)return false;
+    for(let pos=2;pos+4<=size;){
+      if(view.getUint8(pos++)!==0xff)return false;
+      while(pos<size && view.getUint8(pos)===0xff)pos++;
+      if(pos+2>=size)return false;
+      const marker=view.getUint8(pos++);
+      if(marker===0xda)return true;
+      const length=view.getUint16(pos);
+      if(length<2 || length>size-pos)return false;
+      // APP1 can carry EXIF or XMP orientation. Render those JPEGs without coordinates.
+      if(marker===0xe1)return false;
+      pos+=length;
+    }
+    return false;
+  }
+  function placementMarks(line,files,metadata){
+    const marks=new Map();
+    for(const a of line.applications || []){
+      const shot=previewBox(a,files,line,metadata);
+      if(!shot)continue;
+      if(!marks.has(shot.fileId))marks.set(shot.fileId,[]);
+      const showSize=shot.confirmed || measureSource(a).method!=='elle';
+      marks.get(shot.fileId).push({shot,label:statusLabel(a.kind)+' · '+positionLabel(a.position),
+        width:showSize ? a.width_mm : null,height:showSize ? a.height_mm : null});
+    }
+    return marks;
   }
   const GENERIC_REASONS=['Uygulama ölçüsü teyit edilmeli','Ölçü kaynağı yok; ekip teyidi gerekli'];
   // Applications the automatic measurement has never processed (registered before G24 or still waiting).
@@ -239,7 +303,7 @@
     return [...groups].map(([label,items])=>({label,items}));
   }
   function kartelaCaption(s){const no=s.kartela?.no ?? s.color_no;return no==null||no===''?'':'Kartela No '+no;}
-  const pure={reasonText,vectorQuality,vectorDetail,designAspect,lockedSize,manualSaveBody,previewBox,unmeasuredApps,uploadFields,guessUpload,linkTarget,reconcileJobs,designApplication,measurementWarning,lineFiles,missingImages,uploadJobs,parseNumber,inputNumber,validateNumber,displayMessage,positiveSizes,unmatchedAwaitingKg,queueFile,SIZES,PRODUCTS,POSITIONS,positionLabel,applicationLabel,measureSource,measureSummary,measureContext,measureGap,vectorBadge,vectorPollNext,VECTOR_POLL_MS,packageActions,costApplications,pricePayload,escapeHtml,formatNumber,formatKg,formatDate,statusLabel,sizeTotal,adapt,safeHex,hexLight,hexInk,kartelaFabrics,colorLabel,stockLabel,stockGroups,kartelaCaption};
+  const pure={reasonText,vectorQuality,vectorDetail,designAspect,lockedSize,manualSaveBody,previewBox,orientationIsSafe,placementMarks,unmeasuredApps,uploadFields,guessUpload,linkTarget,reconcileJobs,designApplication,measurementWarning,lineFiles,missingImages,uploadJobs,parseNumber,inputNumber,validateNumber,displayMessage,positiveSizes,unmatchedAwaitingKg,queueFile,SIZES,PRODUCTS,POSITIONS,positionLabel,applicationLabel,measureSource,measureSummary,measureContext,measureGap,vectorBadge,vectorPollNext,VECTOR_POLL_MS,packageActions,costApplications,pricePayload,escapeHtml,formatNumber,formatKg,formatDate,statusLabel,sizeTotal,adapt,safeHex,hexLight,hexInk,kartelaFabrics,colorLabel,stockLabel,stockGroups,kartelaCaption};
   if (typeof module!=='undefined' && module.exports) module.exports=pure;
   global.MerciProduction=pure;
   if (typeof document==='undefined') return;
@@ -255,13 +319,16 @@
   if (session && session.endpoint!==endpoint) session=null;
   if (!session) sessionStorage.removeItem(storageKey);
   const state={tab:'orders',kartela:null,highlight:null,stocks:[],orders:[],outbox:[],confirmations:[],activeOrder:null,version:null,pending:[]};
-  let fileMetadata={},vectorRows={},vectorTimer=null;
+  let fileMetadata={},vectorRows={},extractionRows={},vectorTimer=null;
   // Versions whose never-measured applications were already sent to automatic measurement in this page session.
   const autoMeasured=new Set();
   function rememberFile(file,job){fileMetadata[file.id]={lineId:job.lineId,gorunum:job.gorunum,name:job.file.name};}
   async function sendJobs(jobs){reconcileJobs(jobs,state.version);for(const versionId of new Set(jobs.filter(job=>job.uploaded&&job.kind==='desen_kaynak'&&!job.application&&!job.done).map(job=>job.versionId))){try{reconcileJobs(jobs,await api('surumler/'+versionId));}catch(error){for(const job of jobs.filter(job=>job.versionId===versionId&&!job.done))job.error=error.message;return jobs.filter(job=>!job.done);}}const failed=await uploadJobs(jobs,async job=>{const data=new FormData();data.append('file',job.file);data.append('kind',job.kind);data.append('lineId',job.lineId);if(job.gorunum)data.append('gorunum',job.gorunum);if(job.applicationId)data.append('applicationId',job.applicationId);const file=await api('surumler/'+job.versionId+'/dosyalar',data);rememberFile(file,job);return file;},job=>api('satirlar/'+job.lineId+'/uygulamalar',{kind:job.applicationKind,position:job.position,desenDosyaId:job.uploaded.id,measure_source:JSON.stringify({desenDosyaId:job.uploaded.id,dosyaAdi:job.file.name}),needs_confirmation:1}));for(const job of jobs){if(job.done && job.uploaded){const warning=job.application?.olcuHatasi ?? job.uploaded.olcuHatasi;if(warning)fileMetadata[job.uploaded.id]={...fileMetadata[job.uploaded.id],olcuHatasi:warning};}}state.pending=state.pending.filter(job=>!job.done);return failed;}
   function focusMedia(){document.getElementById('order-media')?.scrollIntoView({block:'start'});}
   const objectUrls=new Set(); let pageUrls=new Set(), content, notice;
+  const measuredResize=typeof ResizeObserver==='function'?new ResizeObserver(entries=>{
+    for(const {target} of entries){if(target.isConnected)target.layoutPlacements();else measuredResize.unobserve(target);}
+  }):null;
   const el=(tag,attrs,...children)=>{
     const n=document.createElement(tag);
     for (const [k,v] of Object.entries(attrs || {})) {
@@ -302,7 +369,7 @@
   };
   const badge=(s,tone)=>el('span',{class:'p-badge '+(tone ?? (/basarisiz|eski/.test(s)?'bad':/bekliyor|teyit/.test(s)?'warn':/tamam|onayli|onaylandi|gonderildi/.test(s)?'good':''))},statusLabel(s));
   function message(s,error=false){ if(notice){notice.textContent=s;notice.className='p-notice'+(error?' error':'');} }
-  function clearUrls(){ for(const u of pageUrls){URL.revokeObjectURL(u);objectUrls.delete(u);} pageUrls=new Set(); }
+  function clearUrls(){ measuredResize?.disconnect();for(const u of pageUrls){URL.revokeObjectURL(u);objectUrls.delete(u);} pageUrls=new Set(); }
   function blobUrl(blob){const u=URL.createObjectURL(blob);pageUrls.add(u);objectUrls.add(u);return u;}
   async function api(path,body,method,blob=false){
     if(!endpoint) throw Error('API adresi geçersiz.');
@@ -408,7 +475,7 @@
     }
     const designs=input('designs',{type:'file',accept:'.png,.pdf',multiple:true}),rows=el('div',{});
     designs.addEventListener('change',()=>{
-      for(const file of designs.files){const job={file,kind:'desen_kaynak',applicationKind:'baski',position:'gogus'},kind=opts([['baski','Baskı'],['nakis','Nakış']],'baski'),position=opts(['gogus','sirt','kol','ense','kapuson'].map(key=>[key,positionLabel(key)]),'gogus');box._uploads.push(job);
+      for(const file of designs.files){const job={file,kind:'desen_kaynak',applicationKind:'baski',position:'gogus'},kind=opts([['baski','Baskı'],['nakis','Nakış']],'baski'),position=opts(APPLICATION_POSITIONS.map(key=>[key,positionLabel(key)]),'gogus');box._uploads.push(job);
         kind.addEventListener('change',()=>job.applicationKind=kind.value);position.addEventListener('change',()=>job.position=position.value);
         const row=el('div',{class:'p-design-row'},selectedPreview(file),el('div',{class:'p-grid'},field('Uygulama · '+file.name,kind),field('Konum · '+file.name,position)),button('Deseni kaldır',()=>{box._uploads=box._uploads.filter(item=>item!==job);row.remove();}));rows.append(row);
       }designs.value='';designs.closest('.p-field').querySelector('.p-file-name').textContent='Eklenen desenler aşağıda';
@@ -434,7 +501,7 @@
     content.replaceChildren(f);
   }
   async function openOrder(id,versionId){
-    clearUrls();clearTimeout(vectorTimer);const o=await api('siparisler/'+id);state.activeOrder=o;state.version=versionId?o.versions.find(v=>v.id===versionId):o.versions.at(-1);if(!state.version)throw Error('Sürüm bulunamadı.');
+    clearUrls();clearTimeout(vectorTimer);vectorRows={};extractionRows={};const o=await api('siparisler/'+id);state.activeOrder=o;state.version=versionId?o.versions.find(v=>v.id===versionId):o.versions.at(-1);if(!state.version)throw Error('Sürüm bulunamadı.');
     const v=state.version;[state.outbox,state.confirmations]=await Promise.all([api('outbox').then(rows=>adapt('list',rows)),api('teyitler?status=acik').then(rows=>adapt('list',rows))]);const costs=await optional('siparisler/'+id+'/maliyet');if(!session||state.tab!=='orders')return;
     const selector=opts(o.versions.map(v=>[v.id,'v'+v.version_no+' · '+statusLabel(v.status)]),v.id);selector.setAttribute('aria-label','Sipariş sürümü');selector.addEventListener('change',()=>run(()=>openOrder(id,Number(selector.value))));
     content.replaceChildren(card(el('div',{class:'p-row p-between'},el('div',{},el('h2',{},o.order_no+' / '+(o.customer_name || 'Müşteri yok')),badge(v.status)),el('div',{class:'p-row'},button('Yenile',()=>openOrder(id,v.id)),button('Siparişlere dön',renderOrders))),field('Sürüm',selector)));
@@ -454,7 +521,7 @@
     const kind=opts([['urun_gorsel','Ürün görseli'],['desen_kaynak','Desen (PNG / PDF)']],'urun_gorsel');kind.name='kind';
     const view=opts([['on','Ön'],['arka','Arka'],['kol','Kol']],'on');view.name='gorunum';
     const applicationKind=opts([['baski','Baskı'],['nakis','Nakış']],'baski');applicationKind.name='applicationKind';
-    const position=opts(['gogus','sirt','kol','ense','kapuson'].map(key=>[key,positionLabel(key)]),'gogus');position.name='position';
+    const position=opts(APPLICATION_POSITIONS.map(key=>[key,positionLabel(key)]),'gogus');position.name='position';
     const file=input('file',{type:'file',accept:'.png,.jpg,.jpeg,.pdf',required:true});
     const fields={gorunum:field('Görünüm',view),applicationKind:field('Uygulama',applicationKind),position:field('Konum',position)};
     const show=()=>{const visible=uploadFields(kind.value);for(const [key,node] of Object.entries(fields))node.hidden=!visible.includes(key);};
@@ -468,6 +535,19 @@
     },el('div',{class:'p-grid'},field('Dosya',file),field('Dosya türü',kind),fields.gorunum,fields.applicationKind,fields.position),submit('Yükle'));
     f.hidden=true;f.classList.add('p-upload-form');
     const toggle=el('button',{type:'button',class:'secondary','aria-expanded':'false'},'Dosya ekle');
+    toggle.addEventListener('click',()=>{f.hidden=!f.hidden;toggle.setAttribute('aria-expanded',String(!f.hidden));});
+    return el('div',{class:'p-upload'},toggle,f);
+  }
+  function applicationForm(v,line){
+    const kind=opts([['baski','Baskı'],['nakis','Nakış']],'baski');
+    const position=opts(APPLICATION_POSITIONS.map(key=>[key,positionLabel(key)]),'gogus');
+    const f=form(async()=>{
+      if((line.applications || []).some(a=>a.kind===kind.value && a.position===position.value))throw Error('Bu tür ve konumda bir uygulama zaten var.');
+      await api('satirlar/'+line.id+'/uygulamalar',{kind:kind.value,position:position.value,needs_confirmation:1});
+      await refreshInPlace(v);message('Uygulama eklendi.');
+    },el('div',{class:'p-grid'},field('Uygulama türü',kind),field('Konum',position)),submit('Uygulamayı kaydet'));
+    f.hidden=true;
+    const toggle=el('button',{type:'button',class:'secondary','aria-expanded':'false'},'Dosyasız uygulama ekle');
     toggle.addEventListener('click',()=>{f.hidden=!f.hidden;toggle.setAttribute('aria-expanded',String(!f.hidden));});
     return el('div',{class:'p-upload'},toggle,f);
   }
@@ -493,7 +573,8 @@
       const failed=state.pending.filter(job=>job.versionId===v.id&&job.lineId===l.id&&!job.done);
       for(const job of failed)det.append(el('div',{class:'p-notice error'},text(job.file.name+': '+job.error,'p-inline-error'),button('Yeniden yükle',async()=>{await sendJobs([job]);await openOrder(state.activeOrder.id,v.id);focusMedia();})));
       const lf=lineFiles(v,l.id,fileMetadata);
-      det.append(renderFiles(lf.filter(file=>['urun_gorsel','desen_kaynak','desen_kaynak_vektor'].includes(file.kind))),autoMeasureBlock(v,l,lf),uploadForm(v,l));section.append(det);
+      const marks=failed.length ? new Map() : placementMarks(l,lf,fileMetadata);
+      det.append(renderFiles(lf.filter(file=>['urun_gorsel','desen_kaynak','desen_kaynak_vektor'].includes(file.kind)),false,marks),autoMeasureBlock(v,l,lf,failed.length===0),uploadForm(v,l),applicationForm(v,l));section.append(det);
     }content.append(section);startVectorPolling(v);measureOnOpen(v);
   }
   // Applications registered before automatic measurement existed are measured once when their draft is opened.
@@ -502,13 +583,13 @@
     autoMeasured.add(v.id);
     run(async()=>{const result=await api('surumler/'+v.id+'/otomatik-olc?degisen=1',{});if(result?.results?.length && state.version?.id===v.id && state.activeOrder)await refreshInPlace(v);});
   }
-  function autoMeasureBlock(v,line,lf){
+  function autoMeasureBlock(v,line,lf,showPlacement=true){
     const box=el('div',{class:'p-auto'});
     for(const a of line.applications||[]){
       const row=el('div',{class:'p-auto-row'}),summary=measureSummary(a),gap=measureGap(v,line,lf,a),label=statusLabel(a.kind)+' · '+positionLabel(a.position);
       const editorHost=el('div',{class:'p-manual-slot'});
       // The editor opens inside this row; the page does not move.
-      const edit=()=>button('Elle düzelt',async()=>{if(editorHost.children.length){editorHost.replaceChildren();return;}editorHost.replaceChildren(manualEditor(v,line,a,lf,()=>editorHost.replaceChildren()));},'secondary');
+      const edit=()=>button('Elle düzelt',async()=>{if(editorHost.children.length){editorHost.replaceChildren();return;}editorHost.replaceChildren(manualEditor(v,line,a,showPlacement?lf:[],()=>editorHost.replaceChildren()));},'secondary');
       row.append(el('strong',{},label));
       if(summary)row.append(text(summary,'p-number'));
       const context=measureContext(a,line);if(context)row.append(text(context,'p-measure-context'));
@@ -528,31 +609,24 @@
         row.append(text(gap.text,'p-muted'));
         row.append(el('div',{class:'p-actions'},gap.code==='olculebilir'?button('Otomatik ölç',async()=>{await api('surumler/'+v.id+'/otomatik-olc',{});await refreshInPlace(v);message('Otomatik ölçü çalıştı.');}):null,edit()));
       }else row.append(el('div',{class:'p-actions'},edit()));
+      if(!designFileId(a) && lf.some(file=>file.kind==='urun_gorsel'))row.append(extractionHost(a));
       row.append(editorHost);box.append(row);
     }
     if(!(line.applications||[]).length){const gap=measureGap(v,line,lf,null);box.append(text(gap.text+(gap.code==='olculebilir'?' · Desen yükleyince uygulama eklenir.':''),'p-muted'));}
     return box;
   }
   function manualEditor(v,line,a,lf,close){
-    const label=statusLabel(a.kind)+' · '+positionLabel(a.position),ratio=designAspect(a,vectorRows[designFileId(a)]),shot=previewBox(a,lf);
+    const label=statusLabel(a.kind)+' · '+positionLabel(a.position),ratio=designAspect(a,vectorRows[designFileId(a)]),shot=previewBox(a,lf,line,fileMetadata);
     const width=num('manual_w',a.width_mm==null?'':a.width_mm/10,{min:.1,step:.1,required:true}),height=num('manual_h',a.height_mm==null?'':a.height_mm/10,{min:.1,step:.1,required:true});
     const lock=input('manual_lock',{type:'checkbox'});lock.checked=!!ratio;
     const error=el('p',{class:'p-inline-error','aria-live':'polite'});
-    let preview=null,mark=null;
-    if(shot){
-      // Shown only once the product image has loaded: never an empty frame.
-      const image=el('img',{alt:'Ürün görseli; turuncu kutu otomatik bulunan desen yeri'});mark=el('div',{class:'p-mini-box'+(shot.confirmed?'':' candidate')});
-      preview=el('figure',{class:'p-mini'},el('div',{class:'p-mini-stage'},image,mark),el('figcaption',{},shot.confirmed?'Otomatik bulunan desen yeri':'Aday desen yeri (teyit edilmedi)'));preview.hidden=true;
-      mark.setAttribute('style','left:'+shot.left+'%;top:'+shot.top+'%;width:'+shot.width+'%;height:'+shot.height+'%');
-      image.addEventListener('load',()=>{preview.hidden=false;});
-      api('dosyalar/'+shot.fileId,undefined,undefined,true).then(blob=>{image.src=blobUrl(blob);}).catch(()=>preview.remove());
-    }
-    // With a known physical scale the box follows the entered size around its found centre.
-    const follow=()=>{if(!mark || !shot.mmPerPx)return;try{const w=readNumber(width),h=readNumber(height);if(!w||!h)return;
-      const bw=w*10/shot.mmPerPx/shot.rasterWidth*100,bh=h*10/shot.mmPerPx/shot.rasterHeight*100,cx=shot.left+shot.width/2,cy=shot.top+shot.height/2;
-      mark.setAttribute('style','left:'+(cx-bw/2)+'%;top:'+(cy-bh/2)+'%;width:'+bw+'%;height:'+bh+'%');}catch{}};
+    const preview=shot?.confirmed?el('div',{class:'p-manual-preview'}):null;
+    let updateMark;
+    const follow=()=>{try{updateMark?.(readNumber(width)*10,readNumber(height)*10);}catch{updateMark?.(null,null);}};
+    if(preview)renderRaster(preview,lf.find(file=>file.id===shot.fileId),[{shot,label,width:a.width_mm,height:a.height_mm}],true,update=>{updateMark=update;follow();});
     const sync=changed=>{error.textContent='';if(lock.checked && ratio){let pair=null;try{pair=lockedSize(changed,(changed==='width'?width:height).value,ratio);}catch{}
-      if(pair)(changed==='width'?height:width).value=inputNumber(changed==='width'?pair.height:pair.width);}follow();};
+      if(pair)(changed==='width'?height:width).value=inputNumber(changed==='width'?pair.height:pair.width);}
+      follow();};
     width.addEventListener('input',()=>sync('width'));height.addEventListener('input',()=>sync('height'));
     lock.addEventListener('change',()=>sync('width'));
     const save=button('Kaydet',async()=>{
@@ -576,27 +650,159 @@
     if(b.downloadable)host.append(button('Vektörel PDF indir',()=>download({id:row.previewFileId,kind:'desen_vektor_onizleme',path:'desen-'+file.id+'-vektor.pdf'})));
     if(vectorRows.timedOut&&(!row||row.status==='hazirlaniyor'))host.append(button('Yenile',async()=>{vectorRows.timedOut=false;startVectorPolling(state.version);}));
   }
+  function extractionHost(a){
+    const host=el('div',{class:'p-vector','data-extraction-application':String(a.id)});
+    renderExtraction(host,a.id);
+    return host;
+  }
+  function renderExtraction(host,applicationId){
+    const row=extractionRows[applicationId];
+    const label={hazir:'Görselden çıkarılan desen hazır',teyit:'Çıkarılan desen için teyit gerekli',hata:'Desen çıkarılamadı'}[row?.status] ||
+      (vectorRows.timedOut?'Görselden desen sonucu bekleniyor':'Görselden desen hazırlanıyor…');
+    host.replaceChildren(badge(label,row?.status==='hazir'?'good':'warn'));
+    const detail=reasonText(row?.reasons) || reasonText(row?.message);
+    if(detail)host.append(el('span',{class:'p-vector-detail'},detail));
+    if(row?.previewFileId && ['hazir','teyit'].includes(row.status)){
+      const file={id:row.previewFileId,kind:'desen_vektor_onizleme',path:'desen-'+applicationId+'-vektor.pdf'};
+      const preview=el('div',{class:'p-extraction-preview'});
+      host.append(button('Çıkarılan PDF’yi aç',()=>openPdfPreview(preview,file)),button('Çıkarılan PDF’yi indir',()=>download(file)),preview);
+    }
+    if(vectorRows.timedOut && (!row || row.status==='hazirlaniyor'))host.append(button('Yenile',async()=>{vectorRows.timedOut=false;startVectorPolling(state.version);}));
+  }
   function startVectorPolling(v){
-    clearTimeout(vectorTimer);if(!v||v.status!=='taslak'||!v.files.some(f=>f.kind==='desen_kaynak'||f.kind==='desen_kaynak_vektor'))return;
-    const started=Date.now(),versionId=v.id,sourceIds=v.files.filter(f=>f.kind==='desen_kaynak'||f.kind==='desen_kaynak_vektor').map(f=>f.id);
+    clearTimeout(vectorTimer);
+    if(!v || v.status!=='taslak')return;
+    const sourceIds=v.files.filter(f=>['desen_kaynak','desen_kaynak_vektor'].includes(f.kind)).map(f=>f.id);
+    const extractedHosts=[...document.querySelectorAll('[data-extraction-application]')];
+    if(!sourceIds.length && !extractedHosts.length)return;
+    const started=Date.now();
     const tick=async()=>{
-      if(!session||state.version?.id!==versionId)return;
-      let rows;try{rows=await api('surumler/'+versionId+'/vektor-durum');}catch{vectorTimer=setTimeout(tick,VECTOR_POLL_MS*2);return;}
+      if(!session || state.version!==v)return;
+      let rows;try{rows=await api('surumler/'+v.id+'/vektor-durum');}catch{if(state.version===v)vectorTimer=setTimeout(tick,VECTOR_POLL_MS*2);return;}
       if(rows.some(r=>r.status==='teyit'||r.quality==='teyit')){try{state.confirmations=adapt('list',await api('teyitler?status=acik'));}catch{}}
-      if(!session||state.version?.id!==versionId)return;
-      vectorRows=Object.fromEntries(rows.map(r=>[r.sourceFileId,r]));
-      const next=vectorPollNext(rows,Date.now()-started,sourceIds);vectorRows.timedOut=next==='yenile';
+      if(!session || state.version!==v)return;
+      vectorRows=Object.fromEntries(rows.filter(r=>!r.extracted).map(r=>[r.sourceFileId,r]));
+      const nextExtractionRows=Object.fromEntries(rows.filter(r=>r.extracted).map(r=>[r.applicationId,r]));
+      const elapsed=Date.now()-started;
+      const next=vectorPollNext(rows,elapsed,sourceIds);
+      const waiting=next==='bekle' || (elapsed<VECTOR_POLL_MAX_MS && extractedHosts.some(host=>!nextExtractionRows[host.dataset.extractionApplication]));
+      vectorRows.timedOut=!waiting && (next==='yenile' || extractedHosts.some(host=>!nextExtractionRows[host.dataset.extractionApplication]));
       for(const host of document.querySelectorAll('[data-vector-source]')){const file=v.files.find(f=>String(f.id)===host.dataset.vectorSource);if(file)renderVector(host,file);}
-      if(next==='bekle')vectorTimer=setTimeout(tick,VECTOR_POLL_MS);
+      for(const host of extractedHosts){
+        const id=host.dataset.extractionApplication;
+        const old=extractionRows[id],row=nextExtractionRows[id];
+        if(old?.status==='hazir' && row?.status==='hazir' && old.previewFileId===row.previewFileId)continue;
+        extractionRows[id]=row;
+        renderExtraction(host,id);
+      }
+      if(waiting)vectorTimer=setTimeout(tick,VECTOR_POLL_MS);
     };
     tick();
   }
-  function renderFiles(files,previews=false){
+  async function openPdfPreview(preview,file){
+    const blob=await api('dosyalar/'+file.id,undefined,undefined,true);
+    const u=blobUrl(blob.slice(0,blob.size,'application/pdf'));
+    preview.replaceChildren(el('iframe',{src:u,title:statusLabel(file.kind)+' PDF önizlemesi'}));
+  }
+  function dimensionText(mm){return Number.isFinite(Number(mm)) && Number(mm)>0 ? formatNumber(Number(mm)/10)+' cm' : '';}
+  function placementMarker({shot,label,width,height}){
+    const en=el('span',{class:'p-dimension-label'}),boy=el('span',{class:'p-dimension-label'});
+    const widthLine=el('div',{class:'p-dimension p-dimension-width','aria-hidden':'true'});
+    const heightLine=el('div',{class:'p-dimension p-dimension-height','aria-hidden':'true'});
+    const horizontal=el('div',{class:'p-dimension-value p-dimension-en','aria-hidden':'true'},en);
+    const vertical=el('div',{class:'p-dimension-value p-dimension-boy','aria-hidden':'true'},boy);
+    const candidate=shot.confirmed?'':' p-placement-candidate';
+    const node=el('div',{class:'p-placement'+candidate,role:'img',style:`--x:${shot.left}%;--y:${shot.top}%;--w:${shot.width}%;--h:${shot.height}%`},
+      el('div',{class:'p-placement-box','aria-hidden':'true'}),widthLine,heightLine,horizontal,vertical);
+    if(shot.top+shot.height>76)node.classList.add('p-placement-above');
+    if(shot.left+shot.width>72)node.classList.add('p-placement-left');
+    if(shot.height<7 || (shot.left<21 && shot.left+shot.width>79))node.classList.add('p-placement-no-height');
+    const update=(w,h)=>{
+      const enText=dimensionText(w),boyText=dimensionText(h);
+      en.textContent=shot.confirmed?enText:'Teyit'+(enText?' · '+enText:'');
+      boy.textContent=boyText;
+      horizontal.hidden=widthLine.hidden=shot.confirmed && !enText;
+      vertical.hidden=heightLine.hidden=!boyText;
+      node.setAttribute('aria-label',[label,shot.confirmed?'':'Teyit gerekli',enText && 'En '+enText,boyText && 'Boy '+boyText].filter(Boolean).join(' · '));
+    };
+    update(width,height);
+    return {node,update,shot,horizontal,vertical};
+  }
+  function layoutPlacements(stage,markers){
+    const bounds=stage.getBoundingClientRect();
+    if(!bounds.width)return;
+    const occupied=[];
+    const claim=node=>{
+      const rect=node.getBoundingClientRect();
+      if(rect.left<bounds.left-1 || rect.right>bounds.right+1 ||
+        occupied.some(other=>rect.left<other.right+3 && rect.right>other.left-3 && rect.top<other.bottom+3 && rect.bottom>other.top-3))return false;
+      occupied.push(rect);
+      return true;
+    };
+    for(const {node,shot,horizontal} of markers){
+      if(horizontal.hidden)continue;
+      const above=shot.top+shot.height>76;
+      const fit=(side,gap)=>{
+        node.classList.toggle('p-placement-above',side);
+        node.style.setProperty('--width-gap',gap+'px');
+        return claim(horizontal.firstChild);
+      };
+      if(fit(above,7) || fit(!above,7))continue;
+      // A second track keeps two nearby width labels readable without sliding their endpoints.
+      if(above && shot.top>12 && fit(true,30))continue;
+      if(shot.top+shot.height<88 && fit(false,30))continue;
+      fit(above,7);
+    }
+    for(const {node,shot,vertical} of markers){
+      const tall=bounds.height*shot.height/100>=12;
+      node.classList.toggle('p-placement-no-height',!tall);
+      if(!tall || vertical.hidden)continue;
+      const left=shot.left>100-shot.left-shot.width;
+      node.classList.toggle('p-placement-left',left);
+      if(claim(vertical.firstChild))continue;
+      node.classList.toggle('p-placement-left',!left);
+      if(!claim(vertical.firstChild))node.classList.add('p-placement-no-height');
+    }
+  }
+  async function renderRaster(slot,file,marks=[],onlyMeasured=false,onUpdate){
+    try{
+      const blob=await api('dosyalar/'+file.id,undefined,undefined,true);
+      if(slot.isConnected===false)return;
+      const safe=marks.length && await blob.arrayBuffer().then(orientationIsSafe,()=>false);
+      if(slot.isConnected===false)return;
+      if(onlyMeasured && !safe)return;
+      const image=el('img',{class:'p-thumb',alt:statusLabel(file.kind)});
+      image.addEventListener('load',()=>{
+        const matched=safe ? marks.filter(({shot})=>shot.rasterWidth===image.naturalWidth && shot.rasterHeight===image.naturalHeight) : [];
+        if(!matched.length){if(onlyMeasured)slot.replaceChildren();return;}
+        const rendered=matched.map(placementMarker);
+        image.className='p-measured-raster';
+        const stage=el('div',{class:'p-measured-stage'},image,rendered.map(mark=>mark.node));
+        slot.replaceChildren(el('figure',{class:'p-measured'},stage,
+          el('figcaption',{},matched.map(({label,shot})=>label+(shot.confirmed?'':' (teyit gerekli)')).join(' / '))));
+        if(measuredResize){
+          stage.layoutPlacements=()=>layoutPlacements(stage,rendered);
+          stage.layoutPlacements();
+          measuredResize.observe(stage);
+        }
+        if(onUpdate)onUpdate((w,h)=>{rendered[0].update(w,h);stage.layoutPlacements?.();});
+      },{once:true});
+      image.addEventListener('error',()=>slot.replaceChildren(),{once:true});
+      if(!onlyMeasured)slot.replaceChildren(image);
+      image.src=blobUrl(blob);
+    }catch{slot.replaceChildren();}
+  }
+  function renderFiles(files,previews=false,marks=new Map()){
     const grid=el('div',{class:'p-files'});
-    for(const file of files){const preview=el('div',{}),item=el('div',{class:'p-file'},el('h3',{},statusLabel(file.kind)),text(fileMetadata[file.id]?.name || file.path?.split('/').pop() || 'Dosya #'+file.id),preview,['desen_kaynak','desen_kaynak_vektor'].includes(file.kind)?vectorHost(file):null,el('div',{class:'p-actions'},button('İndir',()=>download(file)),previews?button('PDF önizle',async()=>{const u=blobUrl(await api('dosyalar/'+file.id,undefined,undefined,true));preview.replaceChildren(el('iframe',{src:u,title:statusLabel(file.kind)+' PDF önizlemesi'}));}):null));grid.append(item);}
-    for(const [i,file] of files.entries()){
-      if(!['desen_kaynak','urun_gorsel'].includes(file.kind)||!/\.(png|jpe?g)$/i.test(file.path||fileMetadata[file.id]?.name||''))continue;
-      api('dosyalar/'+file.id,undefined,undefined,true).then(blob=>{const slot=grid.children[i]?.children[2];if(slot)slot.replaceChildren(el('img',{class:'p-thumb',src:blobUrl(blob),alt:'Küçük önizleme'}));}).catch(()=>{});
+    for(const file of files){
+      const preview=el('div',{}),name=fileMetadata[file.id]?.name || fileName(file).split('/').pop() || 'Dosya #'+file.id;
+      const pdf=previews || (file.kind==='urun_gorsel' && PDF_EXT.test(fileName(file) || name));
+      const openPdf=pdf?button('PDF önizle',()=>openPdfPreview(preview,file)):null;
+      const item=el('div',{class:'p-file'},el('h3',{},statusLabel(file.kind)),text(name),preview,
+        ['desen_kaynak','desen_kaynak_vektor'].includes(file.kind)?vectorHost(file):null,
+        el('div',{class:'p-actions'},button('İndir',()=>download(file)),openPdf));
+      grid.append(item);
+      if(['desen_kaynak','urun_gorsel'].includes(file.kind) && RASTER_EXT.test(fileName(file) || name))renderRaster(preview,file,marks.get(file.id));
     }
     return grid;
   }

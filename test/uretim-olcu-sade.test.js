@@ -37,10 +37,12 @@ function harness({responses={}}={}) {
     set textContent(v){this._text=String(v);}
   }
   class FormData {constructor(){this.entries=[];}append(k,v){this.entries.push([k,v]);}}
-  const calls=[],root=new Element('root');
+  const calls=[],root=new Element('root'),png=Uint8Array.from(Buffer.from('89504e470d0a1a0a0000000049454e4400000000','hex')).buffer;
+  const images=[];
+  const createElement=tag=>{const node=new Element(tag);if(tag==='img')images.push(node);return node;};
   const URLShim=Object.assign(function(value){return new URL(value);},{createObjectURL:()=>'blob:test',revokeObjectURL(){}});
   const context={Node:Element,console,setTimeout,clearTimeout,
-    document:{getElementById:()=>root,createElement:tag=>new Element(tag),createTextNode:text=>({textContent:text}),querySelectorAll:()=>[]},
+    document:{getElementById:()=>root,createElement,createTextNode:text=>({textContent:text}),querySelectorAll:()=>[]},
     sessionStorage:{getItem:()=>JSON.stringify({token:'t',user:{name:'Deneme Kişi'},endpoint:ENDPOINT}),removeItem(){},setItem(){}},
     location:{search:''},URL:URLShim,URLSearchParams,FormData,
     fetch:async(url,init)=>{
@@ -48,15 +50,15 @@ function harness({responses={}}={}) {
       calls.push({route,method:init.method,body:init.body instanceof FormData?init.body:init.body?JSON.parse(init.body):undefined});
       const data=responses[route] ?? {};
       if(data instanceof Error)throw data;
-      return {ok:true,status:200,json:async()=>data,blob:async()=>({type:'image/png'})};
+      return {ok:true,status:200,json:async()=>data,blob:async()=>({type:'image/png',arrayBuffer:async()=>png})};
     }};
   context.addEventListener=()=>{};
   const source=SOURCE.replace("  renderFrame();if(session)run(async()=>{await loadCommon();await renderTab();});",
-    '  global.k={manualEditor,uploadForm,autoMeasureBlock,patternSelector,state,setRefresh:fn=>{refreshInPlace=fn;}};')
+    '  global.k={manualEditor,uploadForm,applicationForm,renderFiles,autoMeasureBlock,patternSelector,state,setRefresh:fn=>{refreshInPlace=fn;}};')
     .replace("  window.addEventListener('pagehide'","  global.addEventListener('pagehide'");
   vm.runInNewContext(source,context);
   const refreshed=[];context.k.setRefresh(async v=>{refreshed.push(v.id);});
-  return {...context.k,calls,refreshed,Element};
+  return {...context.k,calls,refreshed,Element,images};
 }
 const byName=(root,name)=>root.find(e=>(e.attrs.name ?? e.name)===name)[0];
 const byText=(root,tag,text)=>root.find(e=>e.tag===tag&&e.textContent===text)[0];
@@ -102,30 +104,81 @@ test('G39 Kaydet sends integer millimetres with elleTeyit and refreshes in place
   await byText(editor,'button','Vazgeç').click();assert.equal(closed,true);
 });
 
-test('G39 the preview shows the product image with the found box, and nothing at all without them',async()=>{
-  const files=[{id:21,kind:'urun_gorsel',path:'/x/urun_gorsel-1.png'},{id:22,kind:'urun_gorsel',path:'/x/urun_gorsel-2.pdf'}];
-  const source={gorselFileId:21,designBoxPx:{x:100,y:50,w:200,h:100},rasterWidth:1000,rasterHeight:500,mmPerPx:2};
-  assert.deepEqual(ui.previewBox({measure_source:source},files),{fileId:21,left:10,top:10,width:20,height:20,aspect:2,confirmed:true,mmPerPx:2,rasterWidth:1000,rasterHeight:500});
-  assert.equal(ui.previewBox({measure_source:{...source,gorselFileId:22}},files),null,'a PDF product image cannot be shown as an image');
-  assert.equal(ui.previewBox({measure_source:{...source,designBoxPx:null}},files),null);
-  assert.equal(ui.previewBox({measure_source:{...source,rasterWidth:0}},files),null);
-  assert.equal(ui.previewBox({measure_source:{designBoxPx:source.designBoxPx}},files),null);
+test('G40 product annotations are grouped by the current raster and reject stale or invalid sources',()=>{
+  const files=[{id:21,kind:'urun_gorsel',gorunum:'on',path:'/x/front.png'},{id:22,kind:'urun_gorsel',gorunum:'arka',path:'/x/back.pdf'}];
+  const source={gorselFileId:21,selectedView:'on',designBoxPx:{x:100,y:50,w:200,h:100},rasterWidth:1000,rasterHeight:500,flatId:8,desenFileId:12};
+  const app={id:3,kind:'baski',position:'gogus',desenDosyaId:12,width_mm:400,height_mm:200,measure_source:source};
+  const shot={fileId:21,left:10,top:10,width:20,height:20,confirmed:true,rasterWidth:1000,rasterHeight:500};
+  assert.deepEqual(ui.previewBox(app,files,{kalipId:8}),shot);
+  const candidate={...app,id:4,kind:'nakis',needs_confirmation:1,measure_source:{...source,designBoxPx:null,candidateBoxPx:source.designBoxPx}};
+  assert.equal(ui.placementMarks({applications:[app,candidate]},files).get(21).length,2);
+  assert.equal(ui.previewBox(candidate,files).confirmed,false);
+  const manualCandidate={...candidate,needs_confirmation:0,measure_source:{...candidate.measure_source,method:'elle'}};
+  assert.equal(ui.placementMarks({applications:[manualCandidate]},files).get(21)[0].width,null);
+  assert.equal(ui.previewBox({...app,measure_source:{...source,gorselFileId:22}},files),null);
+  assert.equal(ui.previewBox({...app,measure_source:{...source,designBoxPx:null}},files),null);
+  assert.equal(ui.previewBox({...app,measure_source:{...source,rasterWidth:0}},files),null);
+  assert.equal(ui.previewBox({...app,measure_source:{...source,designBoxPx:{...source.designBoxPx,x:-1}}},files),null);
+  assert.equal(ui.previewBox({...app,measure_source:{...source,designBoxPx:{...source.designBoxPx,x:900}}},files),null);
+  assert.equal(ui.previewBox({...app,measure_source:{designBoxPx:source.designBoxPx}},files),null);
+  assert.equal(ui.previewBox({...app,desenDosyaId:99},files),null);
+  assert.equal(ui.previewBox(app,files,{kalipId:9}),null);
+  assert.equal(ui.previewBox(app,[...files,{...files[0],id:23}]),null);
+  assert.equal(ui.previewBox(app,files,{}, {21:{olcuHatasi:'Görsele ulaşılamadı'}}),null);
+});
 
-  const h=harness(),app={id:3,kind:'baski',position:'gogus',width_mm:400,height_mm:200,measure_source:JSON.stringify(source)};
-  const editor=h.manualEditor(VERSION,LINE,app,files,()=>{});
-  const figure=editor.find(e=>e.tag==='figure')[0],box=editor.find(e=>e.className==='p-mini-box')[0];
-  assert.ok(figure);assert.equal(figure.hidden,true,'hidden until the image has loaded');
-  assert.equal(box.attrs.style,'left:10%;top:10%;width:20%;height:20%');
+test('G40 inline size changes update labels while the found box stays fixed',async()=>{
+  const files=[{id:21,kind:'urun_gorsel',path:'/x/front.png'}];
+  const source={gorselFileId:21,designBoxPx:{x:100,y:50,w:200,h:100},rasterWidth:1000,rasterHeight:500};
+  const app={id:3,kind:'baski',position:'gogus',width_mm:400,height_mm:200,measure_source:source};
+  const h=harness(),editor=h.manualEditor(VERSION,LINE,app,files,()=>{});
+  assert.equal(editor.find(e=>e.tag==='figure').length,0);
+  await new Promise(setImmediate);
   assert.deepEqual(h.calls.map(c=>c.route),['dosyalar/21']);
-  await figure.find(e=>e.tag==='img')[0].fire('load');assert.equal(figure.hidden,false);
-  // With a physical scale the box follows the entered size around its centre.
+  Object.assign(h.images[0],{naturalWidth:1000,naturalHeight:500});
+  await h.images[0].fire('load');
+  const box=editor.find(e=>e.className==='p-placement')[0];
+  assert.equal(box.attrs.style,'--x:10%;--y:10%;--w:20%;--h:20%');
+  assert.equal(box.attrs['aria-label'],'Baskı · Göğüs · En 40 cm · Boy 20 cm');
   const width=byName(editor,'manual_w');width.value='20';await width.fire('input');
-  assert.equal(box.attrs.style,'left:15%;top:10%;width:10%;height:20%');
   const height=byName(editor,'manual_h');height.value='10';await height.fire('input');
-  assert.equal(box.attrs.style,'left:15%;top:15%;width:10%;height:10%');
+  assert.equal(box.attrs.style,'--x:10%;--y:10%;--w:20%;--h:20%');
+  assert.equal(box.attrs['aria-label'],'Baskı · Göğüs · En 20 cm · Boy 10 cm');
 
+  for(const h2 of [harness(),harness({responses:{'dosyalar/21':Error('Dosya yüklenemedi')}})]){
+    const bad=h2.manualEditor(VERSION,LINE,app,files,()=>{});
+    await new Promise(setImmediate);
+    if(h2.images[0]){
+      Object.assign(h2.images[0],{naturalWidth:500,naturalHeight:1000});
+      await h2.images[0].fire('load');
+    }
+    assert.equal(bad.find(e=>e.tag==='figure').length,0);
+  }
   const bare=h.manualEditor(VERSION,LINE,{...app,measure_source:'{}'},files,()=>{});
-  assert.equal(bare.find(e=>e.tag==='figure'||e.className==='p-mini-box').length,0);
+  assert.equal(bare.find(e=>e.tag==='figure').length,0);
+});
+
+test('G40 rotated or ambiguous image containers do not get marks',()=>{
+  const inspect=hex=>ui.orientationIsSafe(Uint8Array.from(Buffer.from(hex,'hex')).buffer);
+  assert.equal(inspect('89504e470d0a1a0a0000000049454e4400000000'),true);
+  assert.equal(inspect('89504e470d0a1a0a000000006558496600000000'),false);
+  assert.equal(inspect('89504e470d0a1a0a000000006163544c00000000'),false);
+  assert.equal(inspect('ffd8ffe00002ffda0002ff00ffd9'),true);
+  assert.equal(inspect('ffd8ffe10002ffda0002ff00ffd9'),false);
+  assert.equal(inspect('255044462d312e34'),false);
+});
+
+test('G40 applications can be added without a design file',async()=>{
+  const h=harness(),host=h.applicationForm(VERSION,LINE);
+  const form=host.find(e=>e.tag==='form')[0];
+  assert.equal(form.hidden,true);
+  await byText(host,'button','Dosyasız uygulama ekle').click();
+  assert.equal(form.hidden,false);
+  const [kind,position]=form.find(e=>e.tag==='select');
+  kind.value='nakis';position.value='sirt';
+  await form.fire('submit');
+  assert.deepEqual(h.calls,[{route:'satirlar/11/uygulamalar',method:'POST',body:{kind:'nakis',position:'sirt',needs_confirmation:1}}]);
+  assert.deepEqual(h.refreshed,[5]);
 });
 
 test('G39 upload form folds behind Dosya ekle and shows only the fields of the chosen type',async()=>{
