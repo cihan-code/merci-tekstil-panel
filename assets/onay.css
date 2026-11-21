@@ -1,0 +1,42 @@
+/* G64 customer approval page: phone first (390 px), light and dark follow the device. No login, no external fonts. */
+:root{--bg:#F6F3EA;--card:#FFFFFF;--ink:#14203A;--muted:#5A6479;--line:#D9D4C5;--accent:#B85A1E;--accent-ink:#FFFFFF;--ok:#14705E;--ok-bg:#E1F3EE;--warn-bg:#FBEBD9;--err:#9B2C3F;--err-bg:#FBE4E8;--field:#FFFFFF}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0D1132;--card:#16254A;--ink:#F1EEE4;--muted:#B6BCD1;--line:#3A4A72;--accent:#F0A06A;--accent-ink:#101934;--ok:#8FE3CC;--ok-bg:#12423D;--warn-bg:#4A3B22;--err:#FFB8C4;--err-bg:#4A2636;--field:#0D1930}}
+:root[data-theme=dark]{--bg:#0D1132;--card:#16254A;--ink:#F1EEE4;--muted:#B6BCD1;--line:#3A4A72;--accent:#F0A06A;--accent-ink:#101934;--ok:#8FE3CC;--ok-bg:#12423D;--warn-bg:#4A3B22;--err:#FFB8C4;--err-bg:#4A2636;--field:#0D1930}
+*{box-sizing:border-box;min-width:0}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.onay{max-width:720px;margin:0 auto;padding:16px 16px 56px;overflow-wrap:anywhere}
+.onay-head{display:flex;align-items:center;gap:12px;padding:8px 0 18px;border-bottom:1px solid var(--line);margin-bottom:18px}
+.onay-logo{display:inline-grid;place-items:center;width:44px;height:44px;border-radius:10px;background:var(--accent);color:var(--accent-ink);font:700 24px Georgia,serif}
+.onay-brand{font:600 20px/1.2 Georgia,serif}.onay-sub{color:var(--muted);font-size:14px}
+.onay h1{font:600 22px/1.3 Georgia,serif;margin:0 0 4px}.onay h2{font:600 18px/1.3 Georgia,serif;margin:0 0 10px}
+.onay-meta{color:var(--muted);margin:0 0 16px}
+.onay-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin:0 0 16px}
+.onay-product h2{margin-bottom:2px}.onay-chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.onay-chip{border:1px solid var(--line);border-radius:999px;padding:2px 10px;font-size:13px;color:var(--muted)}
+.onay-images{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:10px 0}
+.onay-images img{width:100%;height:auto;max-height:260px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:10px}
+.onay-sizes{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;padding:0;list-style:none}
+.onay-sizes li{border:1px solid var(--line);border-radius:8px;padding:4px 10px;font-variant-numeric:tabular-nums}
+.onay-sizes b{margin-left:6px}
+.onay-apps{margin:8px 0 0;padding:0;list-style:none}.onay-apps li{padding:8px 0;border-top:1px solid var(--line)}
+.onay-apps small{display:block;color:var(--muted)}
+.onay button,.onay .onay-btn{display:flex;align-items:center;justify-content:center;width:100%;min-height:52px;border-radius:12px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);font-weight:600;font-size:17px;font-family:inherit;text-decoration:none;cursor:pointer;padding:12px 16px}
+.onay button.secondary,.onay .onay-btn.secondary{background:transparent;color:var(--ink);border-color:var(--line)}
+.onay button:disabled{opacity:.55;cursor:wait}
+.onay :focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+.onay label{display:block;font-weight:600;margin:12px 0 6px}
+.onay input[type=text],.onay textarea{width:100%;border:1px solid var(--line);border-radius:10px;background:var(--field);color:var(--ink);font:inherit;padding:12px;min-height:48px}
+.onay textarea{min-height:120px;resize:vertical}
+.onay-actions{display:grid;gap:12px;margin-top:14px}
+.onay details{margin:10px 0}.onay summary{cursor:pointer;font-weight:600;padding:8px 0}
+.onay-terms{white-space:pre-wrap;font-size:14px;color:var(--muted);max-height:50vh;overflow:auto;margin:8px 0}
+.onay-note{border-left:3px solid var(--accent);padding:6px 12px;margin:8px 0;background:var(--warn-bg);border-radius:0 8px 8px 0;white-space:pre-wrap}
+.onay-note small{display:block;color:var(--muted)}
+.onay-result{text-align:center;padding:28px 16px}.onay-result h1{margin-bottom:8px}
+.onay-result.ok{background:var(--ok-bg);border-color:var(--ok)}.onay-result.ok h1{color:var(--ok)}
+.onay-result.bad{background:var(--err-bg);border-color:var(--err)}.onay-result.bad h1{color:var(--err)}
+.onay-error{color:var(--err);background:var(--err-bg);border-radius:10px;padding:10px 12px;margin:10px 0}
+.onay-hint{color:var(--muted);font-size:14px;margin:8px 0 0}
+[hidden]{display:none!important}
+@media (min-width:900px){.onay{padding-top:32px}.onay-actions{grid-template-columns:1fr 1fr}}

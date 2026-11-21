@@ -7,7 +7,7 @@
   // No recipe GET route exists. Copied from agent/operations/recipes.json (version 1).
   const PRODUCTS = {sweat:'Sweatshirt',tisort:'Tişört',polar:'Polar',polo:'Polo yaka',esofman:'Eşofman',sort:'Şort',tam_fermuar:'Tam fermuarlı',yarim_fermuar:'Yarım fermuarlı'};
   const POSITIONS = Object.freeze({gogus:'Göğüs',sirt:'Sırt',kol:'Kol',ense:'Ense',kapusan:'Kapüşon',kapuson:'Kapüşon',sol_gogus:'Sol göğüs',sag_gogus:'Sağ göğüs',sol_kol:'Sol kol',sag_kol:'Sağ kol',bacak:'Bacak',sol_bacak:'Sol bacak',sag_bacak:'Sağ bacak'});
-  const LABELS = {baski:'Baskı',nakis:'Nakış',taslak:'Taslak',onay_bekliyor:'Onay bekliyor',onaylandi:'Onaylandı',onayli:'Onaylı',eski:'Eski sürüm',iptal:'İptal',bekliyor:'Bekliyor',isleniyor:'İşleniyor',tamam:'Tamam',tamamlandi:'Tamamlandı',basarisiz:'Başarısız',manuel_bekliyor:'Elle gönderim bekliyor',elle_gonderildi:'Gruba gönderildi',gonderildi:'Gönderildi',fiyat_bekliyor:'Fiyat bekliyor',teslim_bekliyor:'Teslim bekliyor',teslim_alindi:'Teslim alındı',eslesti:'Eşleşti',teyit:'Teyit gerekli',olcu:'Ölçü',fatura_eslesme:'Fatura eşleşmesi',eksik_alan:'Eksik alan',baglanti_hatasi:'Bağlantı hatası',vektor_kalite:'Vektör kalitesi',eski_surum:'Eski sürüm',acilis:'Açılış',giris:'Giriş',cikis:'Çıkış',duzeltme:'Düzeltme',tahsis:'Ayırma',tahsis_iade:'Ayırma iadesi',onay_formu:'Onay formu',baski_formu:'Baskı formu',nakis_formu:'Nakış formu',uretim_formu:'Üretim formu',kesim_formu:'Kesim formu',dikim_formu:'Dikim formu',desen_vektor:'Vektör desen',desen_vektor_onizleme:'Vektör önizleme',urun_gorsel:'Ürün görseli',desen_kaynak:'Desen kaynağı',atolye_dosya:'Atölye dosyası',maliyet_aktarim:'Maliyet aktarımı',onay_zinciri:'Onay zinciri (İşler + takip)'};
+  const LABELS = {baski:'Baskı',nakis:'Nakış',taslak:'Taslak',onay_bekliyor:'Onay bekliyor',onaylandi:'Onaylandı',onayli:'Onaylı',eski:'Eski sürüm',iptal:'İptal',bekliyor:'Bekliyor',isleniyor:'İşleniyor',tamam:'Tamam',tamamlandi:'Tamamlandı',basarisiz:'Başarısız',manuel_bekliyor:'Elle gönderim bekliyor',elle_gonderildi:'Gruba gönderildi',gonderildi:'Gönderildi',fiyat_bekliyor:'Fiyat bekliyor',teslim_bekliyor:'Teslim bekliyor',teslim_alindi:'Teslim alındı',eslesti:'Eşleşti',teyit:'Teyit gerekli',olcu:'Ölçü',fatura_eslesme:'Fatura eşleşmesi',eksik_alan:'Eksik alan',baglanti_hatasi:'Bağlantı hatası',vektor_kalite:'Vektör kalitesi',eski_surum:'Eski sürüm',musteri_notu:'Müşteri notu',acilis:'Açılış',giris:'Giriş',cikis:'Çıkış',duzeltme:'Düzeltme',tahsis:'Ayırma',tahsis_iade:'Ayırma iadesi',onay_formu:'Onay formu',baski_formu:'Baskı formu',nakis_formu:'Nakış formu',uretim_formu:'Üretim formu',kesim_formu:'Kesim formu',dikim_formu:'Dikim formu',desen_vektor:'Vektör desen',desen_vektor_onizleme:'Vektör önizleme',urun_gorsel:'Ürün görseli',desen_kaynak:'Desen kaynağı',atolye_dosya:'Atölye dosyası',maliyet_aktarim:'Maliyet aktarımı',onay_zinciri:'Onay zinciri (İşler + takip)'};
   function escapeHtml(value) { return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
   function formatNumber(value) { return value==null || (typeof value==='string'&&!value.trim()) || !Number.isFinite(Number(value)) ? '—' : new Intl.NumberFormat('tr-TR',{maximumFractionDigits:3}).format(Number(value)); }
   function formatKg(value) { const n=formatNumber(value);return n==='—'?n:n+' kg'; }
@@ -493,13 +493,13 @@
   }
   async function renderOrders(){
     content.replaceChildren(card(el('h2',{},'Siparişler'),text('Siparişler yükleniyor…')));
-    await loadFabricTypes();const [orders,jobs]=await Promise.all([api('siparisler'),api('outbox')]);state.orders=adapt('list',orders);state.outbox=adapt('list',jobs);
+    await loadFabricTypes();const [orders,jobs,open]=await Promise.all([api('siparisler'),api('outbox'),api('teyitler?status=acik').catch(()=>[])]);state.orders=adapt('list',orders);state.outbox=adapt('list',jobs);const wanted=new Set(adapt('list',open).filter(c=>c.kind==='musteri_notu').map(c=>Number(c.ref_id)));
     const details=await Promise.all(state.orders.map(o=>api('siparisler/'+o.id)));
     const costs=await Promise.all(state.orders.map(o=>optional('siparisler/'+o.id+'/maliyet')));
     if(!session||state.tab!=='orders')return;
     content.replaceChildren(card(el('div',{class:'p-row p-between'},el('div',{},el('h2',{},'Siparişler'),text('Güncel sürüm, atölye ve fiyat durumu.')),button('Yeni sipariş',()=>renderWizard(),'')),table(['Sipariş / müşteri','Güncel sürüm','Stok','Atölye','Maliyet',''],details.map((o,i)=>{
       const v=o.versions?.at(-1),stock=v?adapt('orderStock',v):{label:'Bilgi yok'};const jobs=state.outbox.filter(j=>j.version_id===v?.id&&j.kind==='atolye_dosya');
-      return [el('div',{},el('strong',{},o.order_no),text(o.customer_name || 'Müşteri belirtilmedi'),v&&missingImages(v,fileMetadata).length?badge('Görsel eksik','warn'):null),v?el('div',{},'v'+v.version_no,' ',badge(v.status)):'—',badge(stock.label,stock.tone),jobs.length?el('div',{},jobs.map(j=>el('div',{},badge(j.status)))):'Paket bekleniyor',costs[i].data?adapt('cost',costs[i].data).label:'Sunucu hazır değil',el('div',{class:'p-row'},button('Aç',()=>openOrder(o.id)),button('Sil',()=>deleteDialog(o),'secondary'))];
+      return [el('div',{},el('strong',{},o.order_no),text(o.customer_name || 'Müşteri belirtilmedi'),v&&missingImages(v,fileMetadata).length?badge('Görsel eksik','warn'):null),v?el('div',{},'v'+v.version_no,' ',badge(v.status),wanted.has(v.id)?badge('Müşteri değişiklik istedi','warn'):null):'—',badge(stock.label,stock.tone),jobs.length?el('div',{},jobs.map(j=>el('div',{},badge(j.status)))):'Paket bekleniyor',costs[i].data?adapt('cost',costs[i].data).label:'Sunucu hazır değil',el('div',{class:'p-row'},button('Aç',()=>openOrder(o.id)),button('Sil',()=>deleteDialog(o),'secondary'))];
     }))));
   }
   // G59: soft delete, always behind a confirmation that names the order. The server explains a refusal; it stays in the dialog.
@@ -596,9 +596,27 @@
     },card(el('div',{class:'p-step'},revision?'Revizyon / Yeni sürüm':'1 / Sipariş ve ürünler'),el('h2',{},revision?'Revizyon aç':'Yeni sipariş'),revision?text('Bu liste yeni sürümün tüm satırlarıdır. Değişen alanları düzenleyin; eski sürüm korunur.'):el('div',{class:'p-grid three'},field('Sipariş no',input('order_no',{required:true})),field('Müşteri',input('customer_name',{required:true})),field('İşler no (isteğe bağlı)',input('job_no',{})))),lines,button('Ürün satırı ekle',()=>lines.append(lineEditor({},lines.children.length,!revision))),el('div',{class:'p-actions'},submit(revision?'Yeni sürüm aç':'Siparişi oluştur'),button('Vazgeç',()=>revision?openOrder(o.id,v.id):renderOrders())));
     content.replaceChildren(f);
   }
+  // G64: customer approval link and the notes the customer left. Notes are plain text and go in as text nodes only.
+  function whatsappUrl(link,order){return 'https://wa.me/?text='+encodeURIComponent('Merhaba, MerciTex sipariş onayı: '+(order?.order_no?order.order_no+' numaralı ':'')+'siparişinizin onay formunu bu bağlantıdan inceleyip onaylayabilir ya da değişiklik notu yazabilirsiniz: '+link);}
+  function customerBlock(o,v,notes){
+    const rows=Array.isArray(notes)?notes:[],parts=[];
+    if(v.status==='onay_bekliyor'){
+      const out=el('div',{class:'p-customer-link','aria-live':'polite'});
+      parts.push(el('div',{class:'p-actions'},button('Müşteri onay linki',async()=>{
+        const r=await api('surumler/'+v.id+'/musteri-link',{});
+        const box=el('input',{type:'text',readonly:'readonly',value:r.link,'aria-label':'Müşteri onay linki'});
+        let copied=false;try{const cb=global.navigator?.clipboard;if(typeof cb?.writeText==='function'){await cb.writeText(r.link);copied=true;}}catch{}
+        out.replaceChildren(box,el('div',{class:'p-row'},el('a',{class:'p-button secondary',href:whatsappUrl(r.link,o),target:'_blank',rel:'noopener noreferrer'},"WhatsApp'ta aç")),
+          text((copied?'Link panoya kopyalandı. ':'Linki elle kopyalayın. ')+'Son kullanma: '+formatDate(r.expiresAt)+'. Yeni link istenirse bu link geçersiz olur.'));
+        message(copied?'Müşteri linki hazır ve panoya kopyalandı.':'Müşteri linki hazır.');
+      },'secondary')),out);
+    }
+    if(rows.length)parts.push(...rows.map(n=>el('div',{class:'p-stock-item'},el('div',{class:'p-row'},badge('Müşteri değişiklik istedi','warn'),el('strong',{},n.adSoyad||'—'),text(formatDate(n.tarih))),el('p',{class:'p-ink p-customer-note'},n.metin))));
+    return parts.length?card(el('h3',{},'Müşteri onayı'),...parts):null;
+  }
   async function openOrder(id,versionId){
     clearUrls();clearTimeout(vectorTimer);vectorRows={};extractionRows={};const o=await api('siparisler/'+id);state.activeOrder=o;state.version=versionId?o.versions.find(v=>v.id===versionId):o.versions.at(-1);if(!state.version)throw Error('Sürüm bulunamadı.');
-    const v=state.version;[state.outbox,state.confirmations]=await Promise.all([api('outbox').then(rows=>adapt('list',rows)),api('teyitler?status=acik').then(rows=>adapt('list',rows))]);const costs=await optional('siparisler/'+id+'/maliyet');if(!session||state.tab!=='orders')return;
+    const v=state.version;[state.outbox,state.confirmations]=await Promise.all([api('outbox').then(rows=>adapt('list',rows)),api('teyitler?status=acik').then(rows=>adapt('list',rows))]);const costs=await optional('siparisler/'+id+'/maliyet');const customerNotes=await optional('surumler/'+v.id+'/musteri-notlari').catch(()=>({data:[]}));if(!session||state.tab!=='orders')return;
     const selector=opts(o.versions.map(v=>[v.id,'v'+v.version_no+' · '+statusLabel(v.status)]),v.id);selector.setAttribute('aria-label','Sipariş sürümü');selector.addEventListener('change',()=>run(()=>openOrder(id,Number(selector.value))));
     content.replaceChildren(card(el('div',{class:'p-row p-between'},el('div',{},el('h2',{},o.order_no+' / '+(o.customer_name || 'Müşteri yok')),badge(v.status)),el('div',{class:'p-row'},button('Yenile',()=>openOrder(id,v.id)),button('Siparişlere dön',renderOrders))),field('Sürüm',selector)));
     const oldSent=o.versions.filter(old=>old.id!==v.id).some(old=>state.outbox.some(j=>j.version_id===old.id && j.kind==='atolye_dosya' && ['tamam','tamamlandi','elle_gonderildi'].includes(j.status)));
@@ -608,6 +626,7 @@
     else if(v.status==='onay_bekliyor'&&!v.files.some(f=>f.kind==='onay_formu'))content.append(el('div',{class:'p-notice'},'Yeni sürüm açıldı. Bu sunucu sürümü revizyonlarda dosya yükleme ve form hazırlamayı henüz desteklemiyor. Belgeler hazır olana kadar onay verilemez.'));
     const previewHost=el('div',{class:'p-preview-host','aria-live':'polite'});
     content.append(card(el('div',{class:'p-step'},'3 / Formlar ve onay'),el('h3',{},'Sürüm belgeleri'),el('div',{class:'p-actions'},button('Formları hazırla',async()=>{await api('surumler/'+v.id+'/hazirla'+(v.files.some(f=>f.kind.endsWith('_formu'))?'?yeniden=1':''),{});await openOrder(id,v.id);const waiting=unmeasuredCount(state.version);message('Formlar hazırlandı.'+(waiting?' '+waiting+' uygulamanın ölçü teyidi bekliyor; formlarda işaretli, atölye formuna alınmadı.':' PDF önizlemelerini kontrol edin.'));},''),button('Adetsiz önizleme',async()=>{previewHost.replaceChildren(previewResult(await api('surumler/'+v.id+'/onizleme?adetsiz=1',{})));},'secondary'),button('Onaya gönder',async()=>{await api('surumler/'+v.id+'/gonder',{});await openOrder(id,v.id);}),button('Müşteri onayladı',()=>approvalDialog(v)),button('Revizyon aç',()=>renderWizard(true))),previewHost,renderFiles(v.files.filter(f=>f.kind.endsWith('_formu')),true)));
+    {const customer=customerBlock(o,v,customerNotes.data);if(customer)content.append(customer);}
     if(v.status==='onaylandi'){const pack=await optional('surumler/'+v.id+'/atolye-paketi');if(pack.unavailable)content.append(card(el('h3',{},'Atölye paketi'),text(pack.error)));else renderPackage(pack.data,v);}
     else content.append(card(el('h3',{},'Atölye paketi'),text('Atölye paketi için müşteri onayını kaydedin.')));
     renderCost(costs,id,v);
