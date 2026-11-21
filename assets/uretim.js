@@ -535,7 +535,7 @@
       const showInfo=()=>{kinfo.replaceChildren();const h=fabricStockHint(current(),color.value);if(h)kinfo.append(h);};
       const toggle=el('button',{type:'button',class:'secondary'},'Renk listesini aç');
       toggle.addEventListener('click',()=>{if(listHost.children.length){listHost.replaceChildren();return;}const t=current();if(!t){message('Önce kumaş türünü seçin.',true);return;}if(!t.renkler.length){message('Bu tür için kayıtlı renk yok; rengi elle yazın.',true);return;}message('');
-        listHost.append(kartelaGrid({ad:t.ad,renkler:t.renkler},async c=>{if(c.teyit)throw Error(c.renk+' renginin adı teyit bekliyor; rengi elle yazın.');color.value=c.renk;listHost.replaceChildren();showInfo();}));});
+        listHost.append(kartelaGrid({ad:t.ad,renkler:t.renkler},async c=>{color.value=c.renk;listHost.replaceChildren();showInfo();if(c.teyit)message(c.renk+' renginin adı kartelada teyit bekliyor ('+(typeof c.teyit==='string'?c.teyit:'teyit gerekli')+'); gerekirse rengi elle düzeltin.');}));});
       fabric.addEventListener('change',()=>{color.value='';listHost.replaceChildren();showInfo();});color.addEventListener('input',showInfo);showInfo();
       fabricBlock=[field('Kumaş türü',fabric),el('div',{},field('Renk (elle yazın ya da listeden seçin)',color),el('div',{class:'p-actions'},toggle),listHost,kinfo)];
     }else{
