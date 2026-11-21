@@ -677,8 +677,49 @@
     autoMeasured.add(v.id);
     run(async()=>{const result=await api('surumler/'+v.id+'/otomatik-olc?degisen=1',{});if(result?.results?.length && state.version?.id===v.id && state.activeOrder)await refreshInPlace(v);});
   }
+  // G62: the front/back question and the one-click suggestion of an open measurement confirmation.
+  function openConfirmationFor(a){return state.confirmations.find(c=>c.kind==='olcu'&&c.ref_table==='applications'&&Number(c.ref_id)===Number(a.id));}
+  async function findConfirmation(a){return openConfirmationFor(a) || adapt('list',await api('teyitler?status=acik')).find(c=>c.kind==='olcu'&&c.ref_table==='applications'&&Number(c.ref_id)===Number(a.id));}
+  function asksFrontBack(a,reason){const m=measureSource(a),c=openConfirmationFor(a);
+    if(m.viewSource==='kullanici')return false;
+    return !!(m.onArkaSorusu || c?.onArkaSorusu || /ön\/arka|görünüm teyit|görünüm(?:ler)? ayrılamadı/i.test(String(reason||'')));}
+  // Two garments side by side answer "sol/sag", stacked ones "ust/alt" (from the measured product boxes).
+  function frontAxis(a){const views=(measureSource(a).views||[]).filter(g=>g?.page===(measureSource(a).selectedPage ?? g?.page)&&g?.productBoxPx);
+    if(views.length<2)return 'yatay';const [p,q]=views.map(g=>({x:g.productBoxPx.x+g.productBoxPx.w/2,y:g.productBoxPx.y+g.productBoxPx.h/2}));
+    return Math.abs(p.y-q.y)>Math.abs(p.x-q.x) ? 'dikey' : 'yatay';}
+  function suggestionOf(a){const o=measureSource(a).oneri || openConfirmationFor(a)?.oneri;
+    const w=Number(o?.width_mm),h=Number(o?.height_mm);return Number.isSafeInteger(w)&&Number.isSafeInteger(h)&&w>0&&h>0 ? {width_mm:w,height_mm:h} : null;}
+  function viewQuestion(v,a,lf,seen){
+    const imageId=measureSource(a).gorselFileId,image=lf.find(f=>imageId!=null && String(f.id)===String(imageId) && f.kind==='urun_gorsel');
+    if(imageId!=null && seen.has(String(imageId)))return el('p',{class:'p-muted'},'Ön/arka sorusu bu görselin ilk baskısında cevaplanır; cevap bütün baskıları yeniden ölçer.');
+    if(imageId!=null)seen.add(String(imageId));
+    const vertical=frontAxis(a)==='dikey',error=el('p',{class:'p-inline-error','aria-live':'polite'}),slot=el('div',{class:'p-manual-preview'});
+    if(image && RASTER_EXT.test(fileName(image)))renderRaster(slot,image,[],false);
+    const buttons=[];
+    const answer=(front)=>async()=>{error.textContent='';buttons.forEach(b=>{b.disabled=true;});
+      try{const c=await findConfirmation(a);if(!c)throw Error('Açık ölçü teyidi bulunamadı; sayfayı yenileyin.');
+        await api('teyitler/'+c.id+'/coz',{onUrun:front});await refreshInPlace(v);message('Ön/arka cevabı kaydedildi; aynı görselin bütün baskıları yeniden ölçüldü.');}
+      catch(e){error.textContent=e.message;throw e;}
+      finally{buttons.forEach(b=>{b.disabled=false;});}};
+    const pair=vertical?[['ust','Üstteki ön'],['alt','Alttaki ön']]:[['sol','Soldaki ön'],['sag','Sağdaki ön']];
+    return el('div',{class:'p-front-question',role:'group','aria-label':'Ön ve arka hangisi'},
+      el('p',{},'Görselde iki ürün var; hangisi ön?'),slot,
+      el('div',{class:'p-actions'},...pair.map(([front,label])=>{const b=button(label,answer(front),'secondary');buttons.push(b);return b;})),error);
+  }
+  function suggestionBlock(v,a){
+    const o=suggestionOf(a);if(!o)return null;const error=el('p',{class:'p-inline-error','aria-live':'polite'});
+    const approve=async()=>{error.textContent='';
+      try{const c=await findConfirmation(a);if(!c)throw Error('Açık ölçü teyidi bulunamadı; sayfayı yenileyin.');
+        try{await api('teyitler/'+c.id+'/coz',{oneriOnay:true});}
+        catch(e){if(![400,404].includes(e.status))throw e;
+          await api('uygulamalar/'+a.id,{width_mm:o.width_mm,height_mm:o.height_mm,elleTeyit:true,kaynak:'sistem önerisi (kullanıcı onayı)'},'PATCH');}
+        await refreshInPlace(v);message('Öneri onaylandı: '+formatNumber(o.width_mm/10)+' × '+formatNumber(o.height_mm/10)+' cm.');}
+      catch(e){error.textContent=e.message;throw e;}};
+    return el('div',{class:'p-suggestion'},text('Öneri: '+formatNumber(o.width_mm/10)+' × '+formatNumber(o.height_mm/10)+' cm','p-number'),
+      el('div',{class:'p-actions'},button('Öneriyi onayla',approve,'')),error);
+  }
   function autoMeasureBlock(v,line,lf,showPlacement=true){
-    const box=el('div',{class:'p-auto'});
+    const box=el('div',{class:'p-auto'}),seenImages=new Set();
     for(const a of line.applications||[]){
       const row=el('div',{class:'p-auto-row'}),summary=measureSummary(a),gap=measureGap(v,line,lf,a),label=statusLabel(a.kind)+' · '+positionLabel(a.position);
       const editorHost=el('div',{class:'p-manual-slot'});
@@ -696,7 +737,10 @@
       }else if(waiting){
         row.append(el('div',{class:'p-notice warn'},'Otomatik ölçü henüz çalışmadı.'),el('div',{class:'p-actions'},button('Otomatik ölç',async()=>{await api('surumler/'+v.id+'/otomatik-olc?degisen=1',{});await refreshInPlace(v);message('Otomatik ölçü çalıştı.');}),edit()));
       }else if(a.needs_confirmation){
-        row.append(el('div',{class:'p-notice warn'},'Ölçü teyit gerektiriyor.'+(reason?' '+reason:'')),el('div',{class:'p-actions'},
+        row.append(el('div',{class:'p-notice warn'},'Ölçü teyit gerektiriyor.'+(reason?' '+reason:'')));
+        if(asksFrontBack(a,reason))row.append(viewQuestion(v,a,lf,seenImages));
+        const suggestion=suggestionBlock(v,a);if(suggestion)row.append(suggestion);
+        row.append(el('div',{class:'p-actions'},
           a.width_mm!=null && a.height_mm!=null ? button('Ölçüyü onayla',async()=>{const list=adapt('list',await api('teyitler?status=acik')),c=list.find(c=>c.kind==='olcu'&&c.ref_table==='applications'&&Number(c.ref_id)===Number(a.id));
             if(!c)throw Error('Açık ölçü teyidi bulunamadı; sayfayı yenileyin.');await api('teyitler/'+c.id+'/coz',{});await refreshInPlace(v);message('Ölçü teyidi kaydedildi.');}) : null,
           edit()));
