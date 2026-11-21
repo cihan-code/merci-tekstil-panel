@@ -16,7 +16,7 @@
   function measureLabel(a) {
     if (a.olcu === 'bekliyor' || a.enMm == null) return { main: 'Ölçü kesinleşiyor', sub: '' };
     const main = (a.olcu === 'yaklasik' ? '≈ ' : '') + cm(a.enMm) + ' × ' + cm(a.boyMm) + ' cm';
-    return { main, sub: a.olcu === 'yaklasik' ? 'Yaklaşık ölçü (≈)' : 'Standart ölçü' };
+    return { main, sub: { yaklasik: 'Yaklaşık ölçü (≈)', standart: 'Standart ölçü', otomatik: 'Otomatik ölçü' }[a.olcu] || '' };
   }
 
   function start(doc, opts) {

@@ -39,7 +39,7 @@ function page({search=`?t=${TOKEN}&api=${API}`,summary,status=200,responses={}}=
 const SUMMARY={durum:'bekliyor',siparis:{no:'MRC-G64-1',ad:'Örnek Kulüp',surum:2},sonKullanma:'2026-12-06T10:00:00.000Z',
   urunler:[{ad:'Tişört',renk:'Mavi',kumas:null,numune:false,adet:4,bedenler:{M:2,L:2,XL:0},
     gorseller:[{gorunum:'on',url:`/api/siparis/musteri/${TOKEN}/gorsel/5`}],
-    uygulamalar:[{tur:'baski',konum:'gogus',enMm:280,boyMm:120,olcu:'standart'},{tur:'nakis',konum:'sol_kol',enMm:75,boyMm:40,olcu:'yaklasik'},{tur:'baski',konum:'sirt',enMm:null,boyMm:null,olcu:'bekliyor'}]}],
+    uygulamalar:[{tur:'baski',konum:'gogus',enMm:280,boyMm:120,olcu:'standart'},{tur:'baski',konum:'kol',enMm:100,boyMm:50,olcu:null},{tur:'nakis',konum:'sol_kol',enMm:75,boyMm:40,olcu:'yaklasik'},{tur:'baski',konum:'sirt',enMm:null,boyMm:null,olcu:'bekliyor'}]}],
   onayFormu:`/api/siparis/musteri/${TOKEN}/onay-formu.pdf`,sartlar:'1. Sipariş ve Üretim Onayı\nÖrnek şart metni.',notlar:[]};
 const buttons=(root,label)=>root.find(e=>e.tag==='button'&&e.textContent===label)[0];
 
@@ -51,12 +51,13 @@ test('yardımcılar: api adresi, belirteç biçimi, ölçü etiketi',()=>{
   assert.deepEqual(onay.measureLabel({olcu:'standart',enMm:280,boyMm:120}),{main:'28 × 12 cm',sub:'Standart ölçü'});
   assert.deepEqual(onay.measureLabel({olcu:'yaklasik',enMm:75,boyMm:40}),{main:'≈ 7,5 × 4 cm',sub:'Yaklaşık ölçü (≈)'});
   assert.equal(onay.measureLabel({olcu:'bekliyor',enMm:null}).main,'Ölçü kesinleşiyor');
+  assert.deepEqual(onay.measureLabel({olcu:null,enMm:280,boyMm:120}),{main:'28 × 12 cm',sub:''});
 });
 
 test('özet çizilir: sipariş, ürün, görsel, beden, uygulama ölçüleri, PDF bağlantısı, şartlar, iki düğme',async()=>{
   const p=page({summary:SUMMARY});await p.run();
   const text=p.root.textContent;
-  for(const s of ['Örnek Kulüp','MRC-G64-1','Tişört','Mavi','4 adet','Göğüs · Baskı','28 × 12 cm','Standart ölçü','≈ 7,5 × 4 cm','Yaklaşık ölçü (≈)','Ölçü kesinleşiyor','Örnek şart metni','Onaylıyorum','Değişiklik istiyorum'])
+  for(const s of ['Örnek Kulüp','MRC-G64-1','Tişört','Mavi','4 adet','Göğüs · Baskı','28 × 12 cm','Standart ölçü','Kol · Baskı — 10 × 5 cm','≈ 7,5 × 4 cm','Yaklaşık ölçü (≈)','Ölçü kesinleşiyor','Örnek şart metni','Onaylıyorum','Değişiklik istiyorum'])
     assert.ok(text.includes(s),s);
   assert.ok(!text.includes('XL0'));
   assert.equal(p.root.find(e=>e.tag==='img')[0].getAttribute('src'),`${API}/api/siparis/musteri/${TOKEN}/gorsel/5`);
