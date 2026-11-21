@@ -154,9 +154,12 @@
     if(n==null || n<=0 || !(ratio>0))return null;
     return changed==='width' ? {width:n,height:Math.round(n*10/ratio)/10} : {width:Math.round(n*10*ratio)/10,height:n};
   }
-  function manualSaveBody(width,height) {
+  // The optional source note ("atölye ölçüsü") is one short line; an empty note is not sent.
+  function manualSaveBody(width,height,source) {
     const w=validateNumber(width,{min:.1,step:.1,required:true}),h=validateNumber(height,{min:.1,step:.1,required:true});
-    return {width_mm:Math.round(w*10),height_mm:Math.round(h*10),elleTeyit:true};
+    const kaynak=String(source ?? '').replace(/\s+/g,' ').trim();
+    if(kaynak.length>60)throw new RangeError('Kaynak en çok 60 karakter olabilir.');
+    return {width_mm:Math.round(w*10),height_mm:Math.round(h*10),elleTeyit:true,...(kaynak?{kaynak}:{})};
   }
   const RASTER_EXT=/\.(png|jpe?g)$/i;
   const PDF_EXT=/\.pdf$/i;
@@ -660,6 +663,8 @@
     const label=statusLabel(a.kind)+' · '+positionLabel(a.position),ratio=designAspect(a,vectorRows[designFileId(a)]),shot=previewBox(a,lf,line,fileMetadata);
     const width=num('manual_w',a.width_mm==null?'':a.width_mm/10,{min:.1,step:.1,required:true}),height=num('manual_h',a.height_mm==null?'':a.height_mm/10,{min:.1,step:.1,required:true});
     const lock=input('manual_lock',{type:'checkbox'});lock.checked=!!ratio;
+    const previousNote=measureSource(a).method==='elle'?measureSource(a).kaynak:'';
+    const source=input('manual_source',{type:'text',maxlength:'60',placeholder:'ör. atölye ölçüsü',value:typeof previousNote==='string'?previousNote:''});
     const error=el('p',{class:'p-inline-error','aria-live':'polite'});
     const preview=shot?.confirmed?el('div',{class:'p-manual-preview'}):null;
     let updateMark;
@@ -671,12 +676,13 @@
     width.addEventListener('input',()=>sync('width'));height.addEventListener('input',()=>sync('height'));
     lock.addEventListener('change',()=>sync('width'));
     const save=button('Kaydet',async()=>{
-      let body;try{body=manualSaveBody(width.value,height.value);}catch(e){error.textContent=e.message;throw e;}
+      let body;try{body=manualSaveBody(width.value,height.value,source.value);}catch(e){error.textContent=e.message;throw e;}
       try{await api('uygulamalar/'+a.id,body,'PATCH');}catch(e){error.textContent=e.message;throw e;}
-      await refreshInPlace(v);message(label+': '+formatNumber(body.width_mm/10)+' × '+formatNumber(body.height_mm/10)+' cm, '+session.user.name+' adına kaydedildi; teyit kapandı.');
+      await refreshInPlace(v);message(label+': '+formatNumber(body.width_mm/10)+' × '+formatNumber(body.height_mm/10)+' cm'+(body.kaynak?' ('+body.kaynak+')':'')+', '+session.user.name+' adına kaydedildi; teyit kapandı.');
     },'');
     return el('div',{class:'p-manual-inline',role:'group','aria-label':label+' için elle ölçü'},
       el('div',{class:'p-manual-fields'},field('En (cm)',width),field('Boy (cm)',height)),
+      field('Kaynak (isteğe bağlı)',source),
       ratio?field('Oranı koru (desen '+formatNumber(Math.round(ratio*100)/100)+' : 1)',lock):text('Desen oranı bilinmiyor; en ve boyu ayrı girin.','p-muted'),
       preview,error,el('div',{class:'p-actions'},save,button('Vazgeç',async()=>close())));
   }

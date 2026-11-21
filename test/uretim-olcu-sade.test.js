@@ -284,3 +284,22 @@ test('G39b a failed pattern change restores the saved selection without refreshi
   select.value='b';await select.fire('change');
   assert.equal(select.value,'a');assert.equal(select.disabled,false);assert.deepEqual(h.refreshed,[]);
 });
+
+test('G53 manual editor has one optional Kaynak field; a note is trimmed and sent, an empty one is not',async()=>{
+  assert.deepEqual(ui.manualSaveBody('15','0,9','  atölye   ölçüsü '),{width_mm:150,height_mm:9,elleTeyit:true,kaynak:'atölye ölçüsü'});
+  assert.deepEqual(ui.manualSaveBody('15','0,9','   '),{width_mm:150,height_mm:9,elleTeyit:true});
+  assert.throws(()=>ui.manualSaveBody('15','0,9','x'.repeat(61)),/en çok 60/);
+
+  const h=harness(),app={id:3,kind:'baski',position:'sag_kol',width_mm:163,height_mm:10,measure_source:'{}'};
+  const editor=h.manualEditor(VERSION,LINE,app,[],()=>{});
+  const source=byName(editor,'manual_source');
+  assert.ok(source);assert.equal(source.value,'');assert.match(editor.textContent,/Kaynak \(isteğe bağlı\)/);
+  assert.equal(editor.find(e=>e.tag==='input').length,3); // en, boy ve tek ek alan: kaynak (oran bilinmiyor, kilit yok)
+  byName(editor,'manual_w').value='15';byName(editor,'manual_h').value='0,9';source.value='atölye ölçüsü';
+  await byText(editor,'button','Kaydet').click();
+  assert.deepEqual(h.calls,[{route:'uygulamalar/3',method:'PATCH',body:{width_mm:150,height_mm:9,elleTeyit:true,kaynak:'atölye ölçüsü'}}]);
+
+  // A saved manual note is shown again for editing; an automatic record has none.
+  const again=h.manualEditor(VERSION,LINE,{...app,measure_source:JSON.stringify({method:'elle',kaynak:'atölye ölçüsü'})},[],()=>{});
+  assert.equal(byName(again,'manual_source').value,'atölye ölçüsü');
+});
