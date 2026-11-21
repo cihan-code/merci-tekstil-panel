@@ -320,7 +320,28 @@
     for(const k of data?.kartelalar || [])for(const f of (k.kumaslar?.length?k.kumaslar:[{tur:k.id,ad:k.ad}]))out.push({tur:f.tur,ad:k.kumaslar?.length>1?f.ad:k.ad,kartela:k});
     return out;
   }
-  function colorLabel(c){return c.no+' '+c.renk;}
+  function colorLabel(c){return (c.no!=null&&c.no!==''?c.no+' ':'')+c.renk;}
+  // G59: the line picks a fabric type; the colour is its own field (typed, or picked from the type's colour list).
+  const trLower=v=>String(v??'').trim().replace(/\s+/g,' ').toLocaleLowerCase('tr-TR');
+  function fabricTypeOf(line,stocks=[],types=[]){
+    if(line?.fabric_type)return line.fabric_type;
+    const item=line?.fabric_item_id==null?null:stocks.find(s=>String(s.id)===String(line.fabric_item_id));
+    const key=item?.fabric_key;if(!key)return '';
+    const type=String(key).startsWith('legacy:')?key:String(key).split('|')[0];
+    return types.some(t=>t.tur===type)?type:'';
+  }
+  function fabricColorMatch(type,color){const c=trLower(color);return c?(type?.renkler||[]).find(r=>trLower(r.renk)===c)||null:null;}
+  function fabricStockHint(type,color){
+    if(!type||!trLower(color))return '';
+    const hit=fabricColorMatch(type,color);
+    return hit?.stokKalemId!=null?'Stokta bu renkte kalem var.':'Stokta bu renkte kalem bulunamazsa sipariş adla kaydedilir; yeni stok kalemi açılmaz.';
+  }
+  // Only a changed type or colour re-resolves the stock item; an untouched old line keeps the item it was saved with.
+  function fabricFields(source,type,color,original){
+    const same=source?.id!=null&&type===original&&color===(source.color_name??'');
+    return same?{color_name:color}:{fabric_type:type,color_name:color};
+  }
+  function deleteBody(){return {onay:true};}
   function stockLabel(s){return s.color_no!=null&&s.name?s.name+' ('+formatKg(s.available)+')':(s.name || s.fabric_key)+' / '+(s.color_name || 'Renk yok')+' ('+formatKg(s.available)+')';}
   function stockGroups(stocks){
     const groups=new Map();
@@ -328,7 +349,7 @@
     return [...groups].map(([label,items])=>({label,items}));
   }
   function kartelaCaption(s){const no=s.kartela?.no ?? s.color_no;return no==null||no===''?'':'Kartela No '+no;}
-  const pure={vectorReasonList,applicationPositions,reasonText,vectorQuality,vectorDetail,designAspect,lockedSize,manualSaveBody,previewBox,orientationIsSafe,placementMarks,unmeasuredApps,scaleNote,unmeasuredCount,CHILD_SIZES,uploadFields,guessUpload,linkTarget,reconcileJobs,designApplication,measurementWarning,lineFiles,missingImages,uploadJobs,parseNumber,inputNumber,validateNumber,displayMessage,positiveSizes,unmatchedAwaitingKg,queueFile,SIZES,PRODUCTS,POSITIONS,positionLabel,applicationLabel,measureSource,measureSummary,measureContext,measureGap,vectorBadge,vectorPollNext,VECTOR_POLL_MS,packageActions,costApplications,pricePayload,escapeHtml,formatNumber,formatKg,formatDate,statusLabel,sizeTotal,adapt,safeHex,hexLight,hexInk,kartelaFabrics,colorLabel,stockLabel,stockGroups,kartelaCaption};
+  const pure={vectorReasonList,applicationPositions,reasonText,vectorQuality,vectorDetail,designAspect,lockedSize,manualSaveBody,previewBox,orientationIsSafe,placementMarks,unmeasuredApps,scaleNote,unmeasuredCount,CHILD_SIZES,uploadFields,guessUpload,linkTarget,reconcileJobs,designApplication,measurementWarning,lineFiles,missingImages,uploadJobs,parseNumber,inputNumber,validateNumber,displayMessage,positiveSizes,unmatchedAwaitingKg,queueFile,SIZES,PRODUCTS,POSITIONS,positionLabel,applicationLabel,measureSource,measureSummary,measureContext,measureGap,vectorBadge,vectorPollNext,VECTOR_POLL_MS,packageActions,costApplications,pricePayload,escapeHtml,formatNumber,formatKg,formatDate,statusLabel,sizeTotal,adapt,safeHex,hexLight,hexInk,kartelaFabrics,colorLabel,stockLabel,stockGroups,kartelaCaption,fabricTypeOf,fabricColorMatch,fabricStockHint,fabricFields,deleteBody};
   if (typeof module!=='undefined' && module.exports) module.exports=pure;
   global.MerciProduction=pure;
   if (typeof document==='undefined') return;
@@ -343,7 +364,7 @@
   // Scope cached sessions to the API to avoid sending a token to a changed override.
   if (session && session.endpoint!==endpoint) session=null;
   if (!session) sessionStorage.removeItem(storageKey);
-  const state={tab:'orders',kartela:null,highlight:null,stocks:[],orders:[],outbox:[],confirmations:[],activeOrder:null,version:null,pending:[]};
+  const state={tab:'orders',kartela:null,fabricTypes:null,highlight:null,stocks:[],orders:[],outbox:[],confirmations:[],activeOrder:null,version:null,pending:[]};
   let fileMetadata={},vectorRows={},extractionRows={},vectorTimer=null;
   // Versions whose never-measured applications were already sent to automatic measurement in this page session.
   const autoMeasured=new Set();
@@ -439,8 +460,12 @@
     try{const d=await api('kartela');state.kartela=Array.isArray(d?.kartelalar)?d:null;}
     catch(e){state.kartela=null;if(typeof console!=='undefined')console.info('Kartela yüklenemedi, serbest renk alanı kullanılacak:',e.message);}
   }
+  async function loadFabricTypes(){
+    try{const d=await api('kumas-turleri');state.fabricTypes=Array.isArray(d)?d:null;}
+    catch(e){state.fabricTypes=null;if(typeof console!=='undefined')console.info('Kumaş türleri yüklenemedi, eski kumaş kalemi listesi kullanılacak:',e.message);}
+  }
   async function loadStocks(){state.stocks=adapt('list',await api('stok')).map(s=>adapt('stock',s));}
-  async function loadCommon(){await loadStocks();await loadKartela();}
+  async function loadCommon(){await loadStocks();await loadKartela();await loadFabricTypes();}
   async function logout(){session=null;sessionStorage.removeItem(storageKey);clearUrls();state.stocks=[];state.orders=[];state.activeOrder=null;state.version=null;state.pending=[];fileMetadata={};renderFrame();}
   function renderFrame(){
     clearUrls();root.replaceChildren();
@@ -465,14 +490,22 @@
   }
   async function renderOrders(){
     content.replaceChildren(card(el('h2',{},'Siparişler'),text('Siparişler yükleniyor…')));
-    const [orders,jobs]=await Promise.all([api('siparisler'),api('outbox')]);state.orders=adapt('list',orders);state.outbox=adapt('list',jobs);
+    await loadFabricTypes();const [orders,jobs]=await Promise.all([api('siparisler'),api('outbox')]);state.orders=adapt('list',orders);state.outbox=adapt('list',jobs);
     const details=await Promise.all(state.orders.map(o=>api('siparisler/'+o.id)));
     const costs=await Promise.all(state.orders.map(o=>optional('siparisler/'+o.id+'/maliyet')));
     if(!session||state.tab!=='orders')return;
     content.replaceChildren(card(el('div',{class:'p-row p-between'},el('div',{},el('h2',{},'Siparişler'),text('Güncel sürüm, atölye ve fiyat durumu.')),button('Yeni sipariş',()=>renderWizard(),'')),table(['Sipariş / müşteri','Güncel sürüm','Stok','Atölye','Maliyet',''],details.map((o,i)=>{
       const v=o.versions?.at(-1),stock=v?adapt('orderStock',v):{label:'Bilgi yok'};const jobs=state.outbox.filter(j=>j.version_id===v?.id&&j.kind==='atolye_dosya');
-      return [el('div',{},el('strong',{},o.order_no),text(o.customer_name || 'Müşteri belirtilmedi'),v&&missingImages(v,fileMetadata).length?badge('Görsel eksik','warn'):null),v?el('div',{},'v'+v.version_no,' ',badge(v.status)):'—',badge(stock.label,stock.tone),jobs.length?el('div',{},jobs.map(j=>el('div',{},badge(j.status)))):'Paket bekleniyor',costs[i].data?adapt('cost',costs[i].data).label:'Sunucu hazır değil',button('Aç',()=>openOrder(o.id))];
+      return [el('div',{},el('strong',{},o.order_no),text(o.customer_name || 'Müşteri belirtilmedi'),v&&missingImages(v,fileMetadata).length?badge('Görsel eksik','warn'):null),v?el('div',{},'v'+v.version_no,' ',badge(v.status)):'—',badge(stock.label,stock.tone),jobs.length?el('div',{},jobs.map(j=>el('div',{},badge(j.status)))):'Paket bekleniyor',costs[i].data?adapt('cost',costs[i].data).label:'Sunucu hazır değil',el('div',{class:'p-row'},button('Aç',()=>openOrder(o.id)),button('Sil',()=>deleteDialog(o),'secondary'))];
     }))));
+  }
+  // G59: soft delete, always behind a confirmation that names the order. The server explains a refusal; it stays in the dialog.
+  function deleteDialog(o){
+    const dialog=el('dialog',{class:'production p-dialog','aria-labelledby':'delete-title'},el('h2',{id:'delete-title'},'Siparişi sil'),text('"'+o.order_no+'" siparişi silinsin mi?'),text('Sipariş listeden kalkar; kayıt ve dosyalar silinmeden saklanır. İşlem kaydı tutulur.'));
+    const err=el('div',{class:'p-notice',role:'alert'},'');err.hidden=true;
+    const close=()=>{dialog.close();dialog.remove();};
+    dialog.append(err,el('div',{class:'p-actions'},button('Evet, sil',async()=>{err.hidden=true;try{await api('siparisler/'+o.id+'/sil',deleteBody());}catch(e){err.textContent=e.message;err.hidden=false;return;}close();await renderOrders();message('"'+o.order_no+'" siparişi silindi.');},''),button('Vazgeç',close)));
+    dialog.addEventListener('close',()=>dialog.remove(),{once:true});document.body.append(dialog);dialog.showModal();
   }
   // Applications whose measurement still needs a person; their forms print "Ölçü teyit bekliyor".
   function unmeasuredCount(version){return (version?.lines||[]).flatMap(l=>l.applications||[]).filter(a=>a.needs_confirmation||a.width_mm==null||a.height_mm==null).length;}
@@ -491,9 +524,27 @@
   function lineEditor(source={},index=0,media=false){
     const line=adapt('line',source),box=card(el('div',{class:'p-row p-between'},el('h3',{},'Ürün satırı '+(index+1))));box.classList.add('p-line');box._source=line;
     const product=opts(Object.entries(PRODUCTS),line.product_key || 'tisort');product.name='product_key';
-    const fabric=stockOptions(line.fabric_item_id);fabric.name='fabric_item_id';fabric.required=true;
-    const color=input('color_name',{value:line.color_name || '',required:true});const kinfo=el('div',{class:'p-kinfo','aria-live':'polite'});const showK=()=>{const s=state.stocks.find(s=>String(s.id)===fabric.value);kinfo.replaceChildren();const cap=s&&kartelaCaption(s);if(cap)kinfo.append(swatch(s.color_hex),cap);};showK();fabric.addEventListener('change',()=>{const s=state.stocks.find(s=>String(s.id)===fabric.value);if(s?.color_name)color.value=s.color_name;showK();});
-    box.append(el('div',{class:'p-grid'},field('Ürün',product),el('div',{},field('Kumaş kalemi',fabric),kinfo),field('Renk',color),field('Astar',el('input',{name:'lining',type:'checkbox',checked:line.lining===1||line.lining===true})),field('Numune (adet belli değil)',el('input',{name:'numune',type:'checkbox',checked:line.numune===1||line.numune===true}))));
+    const types=state.fabricTypes,original=types?fabricTypeOf(line,state.stocks,types):'';
+    let fabric,color,fabricBlock;
+    if(types){
+      // G59: type list (one row per type) and a separate colour field with the type's colour list.
+      fabric=opts(types.map(t=>[t.tur,t.ad]),original,'Kumaş türü seçin');fabric.name='fabric_type';fabric.required=true;
+      color=input('color_name',{value:line.color_name || '',required:true,autocomplete:'off'});
+      const kinfo=el('div',{class:'p-kinfo','aria-live':'polite'}),listHost=el('div',{});
+      const current=()=>types.find(t=>t.tur===fabric.value);
+      const showInfo=()=>{kinfo.replaceChildren();const h=fabricStockHint(current(),color.value);if(h)kinfo.append(h);};
+      const toggle=el('button',{type:'button',class:'secondary'},'Renk listesini aç');
+      toggle.addEventListener('click',()=>{if(listHost.children.length){listHost.replaceChildren();return;}const t=current();if(!t){message('Önce kumaş türünü seçin.',true);return;}if(!t.renkler.length){message('Bu tür için kayıtlı renk yok; rengi elle yazın.',true);return;}message('');
+        listHost.append(kartelaGrid({ad:t.ad,renkler:t.renkler},async c=>{if(c.teyit)throw Error(c.renk+' renginin adı teyit bekliyor; rengi elle yazın.');color.value=c.renk;listHost.replaceChildren();showInfo();}));});
+      fabric.addEventListener('change',()=>{color.value='';listHost.replaceChildren();showInfo();});color.addEventListener('input',showInfo);showInfo();
+      fabricBlock=[field('Kumaş türü',fabric),el('div',{},field('Renk (elle yazın ya da listeden seçin)',color),el('div',{class:'p-actions'},toggle),listHost,kinfo)];
+    }else{
+      fabric=stockOptions(line.fabric_item_id);fabric.name='fabric_item_id';fabric.required=true;
+      color=input('color_name',{value:line.color_name || '',required:true});const kinfo=el('div',{class:'p-kinfo','aria-live':'polite'});const showK=()=>{const s=state.stocks.find(s=>String(s.id)===fabric.value);kinfo.replaceChildren();const cap=s&&kartelaCaption(s);if(cap)kinfo.append(swatch(s.color_hex),cap);};showK();fabric.addEventListener('change',()=>{const s=state.stocks.find(s=>String(s.id)===fabric.value);if(s?.color_name)color.value=s.color_name;showK();});
+      fabricBlock=[el('div',{},field('Kumaş kalemi',fabric),kinfo),field('Renk',color)];
+    }
+    box._fabricOriginal=original;
+    box.append(el('div',{class:'p-grid'},field('Ürün',product),...fabricBlock,field('Astar',el('input',{name:'lining',type:'checkbox',checked:line.lining===1||line.lining===true})),field('Numune (adet belli değil)',el('input',{name:'numune',type:'checkbox',checked:line.numune===1||line.numune===true}))));
     const sizes=el('div',{class:'p-sizes'},SIZES.map(s=>field(s,num('size_'+s,line.sizes[s] || 0,{step:1,required:true}))));
     const child=el('details',{open:CHILD_SIZES.some(s=>line.sizes[s])},el('summary',{},'Çocuk bedenleri (yaş aralığı)'),el('div',{class:'p-sizes'},CHILD_SIZES.map(s=>field(s,num('size_'+s,line.sizes[s] || 0,{step:1,required:true})))));
     const noteBox=field('Kumaş / kalıp açıklaması (formlara yazılır)',el('textarea',{name:'note',maxlength:'500',placeholder:'Örn. Yeni kalıp, şardonsuz kumaş, lastikli etek',value:line.note||''}));
@@ -526,7 +577,7 @@
   }
   function readSizes(box){return Object.fromEntries(SIZES.concat(CHILD_SIZES).map(s=>[s,readNumber(box.querySelector('[name="size_'+s+'"]')) ?? 0]));}
   function readLine(box){const get=n=>box.querySelector('[name="'+n+'"]');const source=box._source,sizes=Object.fromEntries(Object.entries(readSizes(box)).filter(([k,q])=>!CHILD_SIZES.includes(k)||q>0)),quantity=sizeTotal(sizes),numune=get('numune').checked;if(!quantity&&!numune)throw Error('Her ürün satırında en az bir adet gerekli (numune ise Numune kutusunu işaretleyin).');
-    const line={...(source.id?{id:source.id}:{}),product_key:get('product_key').value,fabric_item_id:Number(get('fabric_item_id').value),color_name:get('color_name').value.trim(),sizes:adapt('sizesOut',sizes),quantity,lining:get('lining').checked,note:get('note').value.trim()||null,numune,material_items:Object.fromEntries(['kaskorse','ribana','astar'].filter(k=>get('material_'+k).value).map(k=>[k,Number(get('material_'+k).value)]))};
+    const line={...(source.id?{id:source.id}:{}),product_key:get('product_key').value,...(get('fabric_type')?fabricFields(source,get('fabric_type').value,get('color_name').value.trim(),box._fabricOriginal):{fabric_item_id:Number(get('fabric_item_id').value),color_name:get('color_name').value.trim()}),sizes:adapt('sizesOut',sizes),quantity,lining:get('lining').checked,note:get('note').value.trim()||null,numune,material_items:Object.fromEntries(['kaskorse','ribana','astar'].filter(k=>get('material_'+k).value).map(k=>[k,Number(get('material_'+k).value)]))};
     if(source.applications?.length)line.applications=source.applications.map((a,i)=>{const w=get('app_w_'+i).value?Math.round(readNumber(get('app_w_'+i))*10):null,h=get('app_h_'+i).value?Math.round(readNumber(get('app_h_'+i))*10):null;const confirmed=get('app_confirm_'+i).checked;if((w!==a.width_mm||h!==a.height_mm||a.needs_confirmation)&&!confirmed)throw Error('Uygulama ölçülerini kontrol edip elle teyit kutusunu işaretleyin.');return {...a,width_mm:w,height_mm:h,needs_confirmation:confirmed?0:a.needs_confirmation};});return line;
   }
   function renderWizard(revision=false){
@@ -549,7 +600,7 @@
     content.replaceChildren(card(el('div',{class:'p-row p-between'},el('div',{},el('h2',{},o.order_no+' / '+(o.customer_name || 'Müşteri yok')),badge(v.status)),el('div',{class:'p-row'},button('Yenile',()=>openOrder(id,v.id)),button('Siparişlere dön',renderOrders))),field('Sürüm',selector)));
     const oldSent=o.versions.filter(old=>old.id!==v.id).some(old=>state.outbox.some(j=>j.version_id===old.id && j.kind==='atolye_dosya' && ['tamam','tamamlandi','elle_gonderildi'].includes(j.status)));
     if(oldSent || (v.status==='eski'&&state.outbox.some(j=>j.version_id===v.id&&j.kind==='atolye_dosya'&&['tamam','tamamlandi','elle_gonderildi'].includes(j.status))))content.append(el('div',{class:'p-notice'},'Eski sürüm atölyeye ulaştı. Atölyeye yeni sürümü gönderin.'));
-    content.append(card(el('h3',{},'Ürünler'),table(['Ürün','Renk / kumaş','Bedenler','Adet','Uygulama'],v.lines.map(raw=>{const l=adapt('line',raw),s=state.stocks.find(s=>s.id===l.fabric_item_id);return [(PRODUCTS[l.product_key] || l.product_key)+(l.numune?' · NUMUNE':'')+(l.note?' · '+l.note:''),(l.color_name || '—')+' / '+(s?.name || l.fabric_item_id || '—'),positiveSizes(l.sizes),formatNumber(l.quantity),el('div',{},l.applications.map(a=>text(applicationLabel(a))))];}))));
+    content.append(card(el('h3',{},'Ürünler'),table(['Ürün','Renk / kumaş','Bedenler','Adet','Uygulama'],v.lines.map(raw=>{const l=adapt('line',raw),s=state.stocks.find(s=>s.id===l.fabric_item_id);return [(PRODUCTS[l.product_key] || l.product_key)+(l.numune?' · NUMUNE':'')+(l.note?' · '+l.note:''),el('div',{},(l.color_name || '—')+' / '+(s?.name || state.fabricTypes?.find(t=>t.tur===l.fabric_type)?.ad || l.fabric_item_id || '—'),l.stokKalemiYok?el('div',{},badge('Stokta kalem yok','warn')):null),positiveSizes(l.sizes),formatNumber(l.quantity),el('div',{},l.applications.map(a=>text(applicationLabel(a))))];}))));
     if(v.status==='taslak')renderMedia(v);
     else if(v.status==='onay_bekliyor'&&!v.files.some(f=>f.kind==='onay_formu'))content.append(el('div',{class:'p-notice'},'Yeni sürüm açıldı. Bu sunucu sürümü revizyonlarda dosya yükleme ve form hazırlamayı henüz desteklemiyor. Belgeler hazır olana kadar onay verilemez.'));
     const previewHost=el('div',{class:'p-preview-host','aria-live':'polite'});
