@@ -110,7 +110,7 @@ test('zaten onaylanmış ya da onay sırasında 404 dönen link uygun ekranı g�
 
 test('sayfa kabuğu: Türkçe, telefon görünümü, indekslenmez, açık/koyu tema, innerHTML yok, dış font yok',()=>{
   assert.match(HTML,/<html lang="tr">/);assert.match(HTML,/name="viewport" content="width=device-width, initial-scale=1"/);
-  assert.match(HTML,/noindex/);assert.match(HTML,/name="referrer" content="no-referrer"/);assert.match(HTML,/assets\/onay\.js/);
+  assert.match(HTML,/<title>Sipariş onayı — MerciTex<\/title>/);assert.ok(!/MerciCo/.test(HTML+JS));assert.match(HTML,/noindex/);assert.match(HTML,/name="referrer" content="no-referrer"/);assert.match(HTML,/assets\/onay\.js/);
   assert.match(CSS,/prefers-color-scheme:dark/);assert.match(CSS,/min-height:52px/);
   assert.ok(!/innerHTML|outerHTML|insertAdjacentHTML|document\.write/.test(JS));
   assert.ok(!/fonts\.googleapis/.test(HTML+CSS));

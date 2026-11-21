@@ -80,6 +80,7 @@ test('onay bekleyen sürümde düğme link üretir, panoya kopyalar ve WhatsApp 
   assert.ok(wa.getAttribute('href').startsWith('https://wa.me/?text='));
   assert.ok(wa.getAttribute('href').includes(encodeURIComponent(LINK)));
   assert.ok(wa.getAttribute('href').includes(encodeURIComponent('MRC-G64-1')));
+  assert.ok(wa.getAttribute('href').includes(encodeURIComponent('MerciTex')));
   assert.match(wa.getAttribute('rel'),/noopener/);
   assert.match(block.textContent,/panoya kopyalandı/);
 });

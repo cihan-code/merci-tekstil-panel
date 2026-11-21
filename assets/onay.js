@@ -33,7 +33,7 @@
       for (const c of children.flat(Infinity)) if (c != null) n.append(typeof c === 'object' ? c : doc.createTextNode(String(c)));
       return n;
     };
-    const head = el('header', { class: 'onay-head' }, el('span', { class: 'onay-logo', 'aria-hidden': 'true' }, 'M'), el('div', {}, el('div', { class: 'onay-brand' }, 'MerciCo'), el('div', { class: 'onay-sub' }, 'Sipariş onayı')));
+    const head = el('header', { class: 'onay-head' }, el('span', { class: 'onay-logo', 'aria-hidden': 'true' }, 'M'), el('div', {}, el('div', { class: 'onay-brand' }, 'MerciTex'), el('div', { class: 'onay-sub' }, 'Sipariş onayı')));
     const show = (...nodes) => { root.replaceChildren(head, ...nodes.flat(Infinity).filter(Boolean)); };
     const expired = () => show(el('section', { class: 'onay-card onay-result bad' }, el('h1', {}, 'Bu linkin süresi doldu'), el('p', {}, 'Bağlantı geçerli değil ya da yenilenmiş. Lütfen bizden yeni bir bağlantı isteyin.')));
     const approved = s => show(el('section', { class: 'onay-card onay-result ok' }, el('h1', {}, 'Onayınız alındı'), el('p', {}, 'Teşekkür ederiz. Siparişiniz üretim sürecine alınacaktır.'), s?.onaylayan ? el('p', { class: 'onay-hint' }, s.onaylayan + (s.onayTarihi ? ' · ' + date(s.onayTarihi) : '')) : null));

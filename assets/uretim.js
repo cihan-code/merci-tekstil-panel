@@ -594,7 +594,7 @@
     content.replaceChildren(f);
   }
   // G64: customer approval link and the notes the customer left. Notes are plain text and go in as text nodes only.
-  function whatsappUrl(link,order){return 'https://wa.me/?text='+encodeURIComponent('Merhaba, '+(order?.order_no?order.order_no+' numaralı ':'')+'siparişinizin onay formunu bu bağlantıdan inceleyip onaylayabilir ya da değişiklik notu yazabilirsiniz: '+link);}
+  function whatsappUrl(link,order){return 'https://wa.me/?text='+encodeURIComponent('Merhaba, MerciTex sipariş onayı: '+(order?.order_no?order.order_no+' numaralı ':'')+'siparişinizin onay formunu bu bağlantıdan inceleyip onaylayabilir ya da değişiklik notu yazabilirsiniz: '+link);}
   function customerBlock(o,v,notes){
     const rows=Array.isArray(notes)?notes:[],parts=[];
     if(v.status==='onay_bekliyor'){
