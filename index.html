@@ -2610,6 +2610,11 @@ function jobTotalCost(j) {
 }
 function jobGrossProfit(j) { return round2(jobTotalAmount(j) - jobTotalCost(j)); }
 function jobMargin(j) { const t=jobTotalAmount(j); return t ? jobGrossProfit(j)/t : 0; }
+// G68: a record the approval chain opened that has no cost yet. Its profit and margin are unknown (not 100%), so it is
+// shown as "Maliyet bekliyor" and left out of profit/margin totals. Every other record keeps the usual rule.
+function jobCostPending(j) { return j.kaynak === 'onay_zinciri' && !jobCostItems(j).length && !(Number(j.manual_total_cost) > 0); }
+const COST_PENDING_BADGE = '<span class="badge orange" title="Maliyet aktarımı ya da elle maliyet girilince hesaplanır">Maliyet bekliyor</span>';
+function jobCostCell(j, value, fmt) { return jobCostPending(j) ? COST_PENDING_BADGE : fmt(value); }
 function jobLinkedIncomes(j) { return DATA.incomes.filter(i => i.job_id === j.id); }
 function jobCollected(j) { return round2(jobLinkedIncomes(j).reduce((s,i)=>s+(i.amount||0),0)); }
 function jobRemaining(j) { return round2(jobTotalAmount(j) - jobCollected(j)); }
@@ -3327,10 +3332,12 @@ function renderIsler() {
   const jobs = DATA.jobs;
   const completed = jobs.filter(j=>j.status==='Teslim Edildi');
   const totalRevenueJobs = completed.reduce((s,j)=>s+jobTotalAmount(j),0);
-  const totalCostJobs = completed.reduce((s,j)=>s+jobTotalCost(j),0);
-  const totalGrossProfit = completed.reduce((s,j)=>s+jobGrossProfit(j),0);
-  const avgMargin = totalRevenueJobs ? totalGrossProfit/totalRevenueJobs : 0;
-  const bestJob = completed.slice().sort((a,b)=>jobGrossProfit(b)-jobGrossProfit(a))[0];
+  const priced = completed.filter(j=>!jobCostPending(j));
+  const pricedRevenue = priced.reduce((s,j)=>s+jobTotalAmount(j),0);
+  const totalCostJobs = priced.reduce((s,j)=>s+jobTotalCost(j),0);
+  const totalGrossProfit = priced.reduce((s,j)=>s+jobGrossProfit(j),0);
+  const avgMargin = pricedRevenue ? totalGrossProfit/pricedRevenue : 0;
+  const bestJob = priced.slice().sort((a,b)=>jobGrossProfit(b)-jobGrossProfit(a))[0];
   if (document.getElementById('profitStats')) {
     document.getElementById('profitStats').innerHTML = [
       ['Toplam Tamamlanan İş', fmtNum(completed.length)],
@@ -3339,12 +3346,13 @@ function renderIsler() {
       ['Toplam Brüt Kâr', fmtCurrency(totalGrossProfit)],
       ['Ortalama Kâr Marjı', fmtPercent(avgMargin)],
       ['En Yüksek Tek İş Kârı', bestJob ? fmtCurrency(jobGrossProfit(bestJob)) + ' (' + bestJob.job_no + ')' : '-'],
+      ...(completed.length > priced.length ? [['Maliyeti bekleyen iş (kâra katılmadı)', fmtNum(completed.length - priced.length)]] : []),
     ].map(([k,v])=>'<li><span>'+k+'</span><b>'+v+'</b></li>').join('');
   }
   if (document.getElementById('chartJobProfit')) {
     makeChart('chartJobProfit', {
       type: 'bar',
-      data: { labels: jobs.map(j=>j.job_no), datasets:[{ label:'Brüt Kâr', data: jobs.map(j=>jobGrossProfit(j)), backgroundColor: jobs.map(j=>jobGrossProfit(j)<0?'#c0392b':'#2e8f7c') }] },
+      data: { labels: jobs.map(j=>j.job_no), datasets:[{ label:'Brüt Kâr', data: jobs.map(j=>jobCostPending(j)?null:jobGrossProfit(j)), backgroundColor: jobs.map(j=>jobGrossProfit(j)<0?'#c0392b':'#2e8f7c') }] },
       options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{ticks:{callback:v=>fmtCurrency(v)}}} }
     });
   }
@@ -3368,9 +3376,9 @@ function renderIsler() {
     {key:'product_type', label:'Ürün'},
     {key:'quantity', label:'Adet', render:j=>fmtNum(j.quantity)},
     {key:'total_amount', label:'Toplam Bedel', render:j=>fmtCurrency(jobTotalAmount(j)), sortVal:j=>jobTotalAmount(j), exportVal:j=>jobTotalAmount(j)},
-    {key:'total_cost', label:'Maliyet', render:j=>fmtCurrency(jobTotalCost(j)), sortVal:j=>jobTotalCost(j), exportVal:j=>jobTotalCost(j)},
-    {key:'gross_profit', label:'Brüt Kâr', render:j=>'<span class="'+(jobGrossProfit(j)<0?'neg-text':'pos-text')+'">'+fmtCurrency(jobGrossProfit(j))+'</span>', sortVal:j=>jobGrossProfit(j), exportVal:j=>jobGrossProfit(j)},
-    {key:'margin', label:'Marj', render:j=>fmtPercent(jobMargin(j)), sortVal:j=>jobMargin(j), exportVal:j=>round2(jobMargin(j)*100)},
+    {key:'total_cost', label:'Maliyet', render:j=>jobCostCell(j, jobTotalCost(j), fmtCurrency), sortVal:j=>jobCostPending(j)?-Infinity:jobTotalCost(j), exportVal:j=>jobCostPending(j)?'':jobTotalCost(j)},
+    {key:'gross_profit', label:'Brüt Kâr', render:j=>jobCostPending(j)?COST_PENDING_BADGE:'<span class="'+(jobGrossProfit(j)<0?'neg-text':'pos-text')+'">'+fmtCurrency(jobGrossProfit(j))+'</span>', sortVal:j=>jobCostPending(j)?-Infinity:jobGrossProfit(j), exportVal:j=>jobCostPending(j)?'':jobGrossProfit(j)},
+    {key:'margin', label:'Marj', render:j=>jobCostCell(j, jobMargin(j), fmtPercent), sortVal:j=>jobCostPending(j)?-Infinity:jobMargin(j), exportVal:j=>jobCostPending(j)?'':round2(jobMargin(j)*100)},
     {key:'status', label:'Durum', render:j=>'<span class="badge '+jobStatusBadgeClass(j.status)+'">'+esc(j.status)+'</span>', sortVal:j=>jobStatusSortKey(j), exportVal:j=>j.status||''},
     {key:'collection', label:'Tahsilat', render:j=>{
       if (jobNoDeposit(j)) return '<span class="badge red">⚠ Kaporasız</span>';
@@ -3405,12 +3413,15 @@ function renderIslerAylik() {
     months.map(ym => {
       const jobsInMonth = groups[ym];
       const revenue = jobsInMonth.reduce((s,j)=>s+jobTotalAmount(j), 0);
-      const cost = jobsInMonth.reduce((s,j)=>s+jobTotalCost(j), 0);
-      const profit = revenue - cost;
-      const margin = revenue ? profit / revenue : 0;
+      // Records still waiting for their cost stay out of cost, profit and margin (G68).
+      const priced = jobsInMonth.filter(j=>!jobCostPending(j)), pending = jobsInMonth.length - priced.length;
+      const pricedRevenue = priced.reduce((s,j)=>s+jobTotalAmount(j), 0);
+      const cost = priced.reduce((s,j)=>s+jobTotalCost(j), 0);
+      const profit = pricedRevenue - cost;
+      const margin = pricedRevenue ? profit / pricedRevenue : 0;
       const parts = ym.split('-');
       const label = (AY_ADLARI[parseInt(parts[1], 10) - 1] || parts[1]) + ' ' + parts[0];
-      return '<tr><td>' + esc(label) + '</td><td>' + fmtNum(jobsInMonth.length) + '</td><td>' + fmtCurrency(revenue) + '</td><td>' + fmtCurrency(cost) + '</td>' +
+      return '<tr><td>' + esc(label) + '</td><td>' + fmtNum(jobsInMonth.length) + '</td><td>' + fmtCurrency(revenue) + '</td><td>' + fmtCurrency(cost) + (pending ? ' <span class="badge orange">' + fmtNum(pending) + ' maliyet bekliyor</span>' : '') + '</td>' +
         '<td><span class="' + (profit < 0 ? 'neg-text' : 'pos-text') + '">' + fmtCurrency(profit) + '</span></td><td>' + fmtPercent(margin) + '</td></tr>';
     }).join('') + '</tbody>';
 }
@@ -3627,9 +3638,9 @@ function showJobDetail(id) {
       <div class="kpi-card"><div class="label">Müşteri</div><div class="value" style="font-size:15px">${esc(jobCustomerDisplay(job))}</div></div>
       <div class="kpi-card"><div class="label">Durum</div><div class="value" style="font-size:15px">${esc(job.status)}</div></div>
       <div class="kpi-card"><div class="label">Toplam Bedel</div><div class="value">${fmtCurrency(jobTotalAmount(job))}</div></div>
-      <div class="kpi-card"><div class="label">Toplam Maliyet</div><div class="value">${fmtCurrency(totalCost)}</div></div>
-      <div class="kpi-card"><div class="label">Brüt Kâr</div><div class="value ${jobGrossProfit(job)>=0?'pos':'neg'}">${fmtCurrency(jobGrossProfit(job))}</div></div>
-      <div class="kpi-card"><div class="label">Kâr Marjı</div><div class="value">${fmtPercent(jobMargin(job))}</div></div>
+      <div class="kpi-card"><div class="label">Toplam Maliyet</div><div class="value">${jobCostCell(job, totalCost, fmtCurrency)}</div></div>
+      <div class="kpi-card"><div class="label">Brüt Kâr</div><div class="value ${jobCostPending(job)?'':jobGrossProfit(job)>=0?'pos':'neg'}">${jobCostCell(job, jobGrossProfit(job), fmtCurrency)}</div></div>
+      <div class="kpi-card"><div class="label">Kâr Marjı</div><div class="value">${jobCostCell(job, jobMargin(job), fmtPercent)}</div></div>
       <div class="kpi-card"><div class="label">Tahsil Edilen</div><div class="value">${fmtCurrency(jobCollected(job))}</div></div>
       <div class="kpi-card"><div class="label">Kalan Tahsilat</div><div class="value">${fmtCurrency(jobRemaining(job))}</div></div>
     </div>
