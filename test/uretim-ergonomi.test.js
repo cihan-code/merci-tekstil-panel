@@ -120,3 +120,11 @@ test('sürüm seçici yalnız birden çok sürüm varsa görünür ve sıradaki 
   two.state.tab='orders';await two.openOrder(1);
   assert.equal(hasSelector(two),true);
 });
+
+test('G74: desen_png etiketi okunur; bilinmeyen dosya türü ham anahtar yerine okunur yedek alır',()=>{
+  assert.equal(ui.fileKindLabel('desen_png'),'Desen (yüksek çözünürlüklü görsel)');
+  assert.equal(ui.statusLabel('desen_png'),'Desen (yüksek çözünürlüklü görsel)');
+  assert.equal(ui.fileKindLabel('desen_vektor'),'Vektör desen');
+  assert.equal(ui.fileKindLabel('yeni_dosya_turu'),'Yeni dosya turu');
+  assert.equal(ui.fileKindLabel(undefined),'Dosya');
+});

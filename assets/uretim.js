@@ -7,11 +7,13 @@
   // No recipe GET route exists. Copied from agent/operations/recipes.json (version 1).
   const PRODUCTS = {sweat:'Sweatshirt',tisort:'Tişört',polar:'Polar',polo:'Polo yaka',esofman:'Eşofman',sort:'Şort',tam_fermuar:'Tam fermuarlı',yarim_fermuar:'Yarım fermuarlı'};
   const POSITIONS = Object.freeze({gogus:'Göğüs',sirt:'Sırt',kol:'Kol',ense:'Ense',kapusan:'Kapüşon',kapuson:'Kapüşon',sol_gogus:'Sol göğüs',sag_gogus:'Sağ göğüs',sol_kol:'Sol kol',sag_kol:'Sağ kol',bacak:'Bacak',sol_bacak:'Sol bacak',sag_bacak:'Sağ bacak'});
-  const LABELS = {baski:'Baskı',nakis:'Nakış',taslak:'Taslak',onay_bekliyor:'Onay bekliyor',onaylandi:'Onaylandı',onayli:'Onaylı',eski:'Eski sürüm',iptal:'İptal',bekliyor:'Bekliyor',isleniyor:'İşleniyor',tamam:'Tamam',tamamlandi:'Tamamlandı',basarisiz:'Başarısız',manuel_bekliyor:'Elle gönderim bekliyor',elle_gonderildi:'Gruba gönderildi',gonderildi:'Gönderildi',fiyat_bekliyor:'Fiyat bekliyor',teslim_bekliyor:'Teslim bekliyor',teslim_alindi:'Teslim alındı',eslesti:'Eşleşti',teyit:'Teyit gerekli',olcu:'Ölçü',fatura_eslesme:'Fatura eşleşmesi',eksik_alan:'Eksik alan',baglanti_hatasi:'Bağlantı hatası',vektor_kalite:'Vektör kalitesi',eski_surum:'Eski sürüm',musteri_notu:'Müşteri notu',acilis:'Açılış',giris:'Giriş',cikis:'Çıkış',duzeltme:'Düzeltme',tahsis:'Ayırma',tahsis_iade:'Ayırma iadesi',onay_formu:'Onay formu',baski_formu:'Baskı formu',nakis_formu:'Nakış formu',uretim_formu:'Üretim formu',kesim_formu:'Kesim formu',dikim_formu:'Dikim formu',desen_vektor:'Vektör desen',desen_vektor_onizleme:'Vektör önizleme',urun_gorsel:'Ürün görseli',desen_kaynak:'Desen kaynağı',atolye_dosya:'Atölye dosyası',maliyet_aktarim:'Maliyet aktarımı',onay_zinciri:'Onay zinciri (İşler + takip)'};
+  const LABELS = {baski:'Baskı',nakis:'Nakış',taslak:'Taslak',onay_bekliyor:'Onay bekliyor',onaylandi:'Onaylandı',onayli:'Onaylı',eski:'Eski sürüm',iptal:'İptal',bekliyor:'Bekliyor',isleniyor:'İşleniyor',tamam:'Tamam',tamamlandi:'Tamamlandı',basarisiz:'Başarısız',manuel_bekliyor:'Elle gönderim bekliyor',elle_gonderildi:'Gruba gönderildi',gonderildi:'Gönderildi',fiyat_bekliyor:'Fiyat bekliyor',teslim_bekliyor:'Teslim bekliyor',teslim_alindi:'Teslim alındı',eslesti:'Eşleşti',teyit:'Teyit gerekli',olcu:'Ölçü',fatura_eslesme:'Fatura eşleşmesi',eksik_alan:'Eksik alan',baglanti_hatasi:'Bağlantı hatası',vektor_kalite:'Vektör kalitesi',eski_surum:'Eski sürüm',musteri_notu:'Müşteri notu',acilis:'Açılış',giris:'Giriş',cikis:'Çıkış',duzeltme:'Düzeltme',tahsis:'Ayırma',tahsis_iade:'Ayırma iadesi',onay_formu:'Onay formu',baski_formu:'Baskı formu',nakis_formu:'Nakış formu',uretim_formu:'Üretim formu',kesim_formu:'Kesim formu',dikim_formu:'Dikim formu',desen_vektor:'Vektör desen',desen_png:'Desen (yüksek çözünürlüklü görsel)',desen_vektor_onizleme:'Vektör önizleme',urun_gorsel:'Ürün görseli',desen_kaynak:'Desen kaynağı',atolye_dosya:'Atölye dosyası',maliyet_aktarim:'Maliyet aktarımı',onay_zinciri:'Onay zinciri (İşler + takip)'};
   function escapeHtml(value) { return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
   function formatNumber(value) { return value==null || (typeof value==='string'&&!value.trim()) || !Number.isFinite(Number(value)) ? '—' : new Intl.NumberFormat('tr-TR',{maximumFractionDigits:3}).format(Number(value)); }
   function formatKg(value) { const n=formatNumber(value);return n==='—'?n:n+' kg'; }
   function formatDate(value) { if (!value) return '—'; const d = new Date(value); return Number.isNaN(d.getTime()) ? '—' : new Intl.DateTimeFormat('tr-TR').format(d); }
+  // File kinds the server adds later still read as words, not as a raw key.
+  function fileKindLabel(kind) { if (LABELS[kind]) return LABELS[kind]; const t=String(kind ?? '').replace(/_/g,' ').trim(); return t ? t.charAt(0).toLocaleUpperCase('tr')+t.slice(1) : 'Dosya'; }
   function statusLabel(value) { return LABELS[value] || (value == null ? 'Bilgi yok' : String(value)); }
   function positionLabel(value) { return Object.hasOwn(POSITIONS,value) ? POSITIONS[value] : String(value ?? '—'); }
   function applicationLabel(a) {
@@ -141,7 +143,7 @@
   }
   function positiveSizes(sizes){return Object.entries(sizes || {}).filter(([,qty])=>Number(qty)>0).map(([key,qty])=>key+': '+formatNumber(qty)).join(', ');}
   function unmatchedAwaitingKg(rows){return rows.filter(row=>row.delivery_status==='teslim_bekliyor' && row.unit==='kg' && (row.item_id==null||row.match_status!=='eslesti')).reduce((sum,row)=>sum+(Number(row.qty_milli)||0),0)/1000;}
-  function queueFile(job){const payload=parseObject(job.payload_json ?? job.payload),file=payload.file || job.file || {};return {name:file.name || file.filename || file.path?.split(/[\\/]/).pop() || (file.id?'Dosya #'+file.id:''),kind:file.kind?statusLabel(file.kind):''};}
+  function queueFile(job){const payload=parseObject(job.payload_json ?? job.payload),file=payload.file || job.file || {};return {name:file.name || file.filename || file.path?.split(/[\\/]/).pop() || (file.id?'Dosya #'+file.id:''),kind:file.kind?fileKindLabel(file.kind):''};}
   function costApplications(c) { return (c.computation?.applications || []).map(a=>({type:a.type,area:a.area,qty:a.units,size:(c.bnItems || c.computation?.baskiNakisItems || []).find(i=>i.type===a.type&&i.area===a.area)?.size || ''})); }
   function pricePayload(price,items=[]) { return {unitPrice:validateNumber(price,{min:.01,step:.01,required:true}),...(items.length?{bnItems:items}:{})}; }
   function sizeTotal(sizes) { return SIZES.concat(CHILD_SIZES).reduce((n,k) => { const q=Number(sizes?.[k] ?? 0); if (!Number.isSafeInteger(q) || q<0) throw new RangeError('Beden adetleri sıfır veya pozitif tam sayı olmalı.'); return n+q; },0); }
@@ -352,7 +354,7 @@
     return [...groups].map(([label,items])=>({label,items}));
   }
   function kartelaCaption(s){const no=s.kartela?.no ?? s.color_no;return no==null||no===''?'':'Kartela No '+no;}
-  const pure={vectorReasonList,applicationPositions,reasonText,vectorQuality,vectorDetail,designAspect,lockedSize,manualSaveBody,previewBox,orientationIsSafe,placementMarks,unmeasuredApps,scaleNote,unmeasuredCount,nextStep,stepRank,orderBySteps,atolyeSent,CHILD_SIZES,uploadFields,guessUpload,linkTarget,reconcileJobs,designApplication,measurementWarning,lineFiles,missingImages,uploadJobs,parseNumber,inputNumber,validateNumber,displayMessage,positiveSizes,unmatchedAwaitingKg,queueFile,SIZES,PRODUCTS,POSITIONS,positionLabel,applicationLabel,measureSource,measureSummary,measureContext,measureGap,vectorBadge,vectorPollNext,VECTOR_POLL_MS,packageActions,costApplications,pricePayload,escapeHtml,formatNumber,formatKg,formatDate,statusLabel,sizeTotal,adapt,safeHex,hexLight,hexInk,kartelaFabrics,colorLabel,stockLabel,stockGroups,kartelaCaption,fabricTypeOf,fabricColorMatch,fabricStockHint,fabricFields,deleteBody,priceKurus,kurusText};
+  const pure={vectorReasonList,applicationPositions,reasonText,vectorQuality,vectorDetail,designAspect,lockedSize,manualSaveBody,previewBox,orientationIsSafe,placementMarks,unmeasuredApps,scaleNote,unmeasuredCount,nextStep,stepRank,orderBySteps,atolyeSent,CHILD_SIZES,uploadFields,guessUpload,linkTarget,reconcileJobs,designApplication,measurementWarning,lineFiles,missingImages,uploadJobs,parseNumber,inputNumber,validateNumber,displayMessage,positiveSizes,unmatchedAwaitingKg,queueFile,SIZES,PRODUCTS,POSITIONS,positionLabel,applicationLabel,measureSource,measureSummary,measureContext,measureGap,vectorBadge,vectorPollNext,VECTOR_POLL_MS,packageActions,costApplications,pricePayload,escapeHtml,formatNumber,formatKg,formatDate,statusLabel,sizeTotal,fileKindLabel,adapt,safeHex,hexLight,hexInk,kartelaFabrics,colorLabel,stockLabel,stockGroups,kartelaCaption,fabricTypeOf,fabricColorMatch,fabricStockHint,fabricFields,deleteBody,priceKurus,kurusText};
   if (typeof module!=='undefined' && module.exports) module.exports=pure;
   global.MerciProduction=pure;
   if (typeof document==='undefined') return;
@@ -920,7 +922,7 @@
   async function openPdfPreview(preview,file){
     const blob=await api('dosyalar/'+file.id,undefined,undefined,true);
     const u=blobUrl(blob.slice(0,blob.size,'application/pdf'));
-    preview.replaceChildren(el('iframe',{src:u,title:statusLabel(file.kind)+' PDF önizlemesi'}));
+    preview.replaceChildren(el('iframe',{src:u,title:fileKindLabel(file.kind)+' PDF önizlemesi'}));
   }
   function dimensionText(mm){return Number.isFinite(Number(mm)) && Number(mm)>0 ? formatNumber(Number(mm)/10)+' cm' : '';}
   function placementMarker({shot,label,width,height}){
@@ -989,7 +991,7 @@
       const safe=marks.length && await blob.arrayBuffer().then(orientationIsSafe,()=>false);
       if(slot.isConnected===false)return;
       if(onlyMeasured && !safe)return;
-      const image=el('img',{class:'p-thumb',alt:statusLabel(file.kind)});
+      const image=el('img',{class:'p-thumb',alt:fileKindLabel(file.kind)});
       image.addEventListener('load',()=>{
         const matched=safe ? marks.filter(({shot})=>shot.rasterWidth===image.naturalWidth && shot.rasterHeight===image.naturalHeight) : [];
         if(!matched.length){if(onlyMeasured)slot.replaceChildren();return;}
@@ -1016,7 +1018,7 @@
       const preview=el('div',{}),name=fileMetadata[file.id]?.name || fileName(file).split('/').pop() || 'Dosya #'+file.id;
       const pdf=previews || (file.kind==='urun_gorsel' && PDF_EXT.test(fileName(file) || name));
       const openPdf=pdf?button('PDF önizle',()=>openPdfPreview(preview,file)):null;
-      const item=el('div',{class:'p-file'},el('h3',{},statusLabel(file.kind)),text(name),preview,
+      const item=el('div',{class:'p-file'},el('h3',{},fileKindLabel(file.kind)),text(name),preview,
         ['desen_kaynak','desen_kaynak_vektor'].includes(file.kind)?vectorHost(file):null,
         el('div',{class:'p-actions'},button('İndir',()=>download(file)),openPdf));
       grid.append(item);
@@ -1027,7 +1029,7 @@
   async function download(file){const url=blobUrl(await api('dosyalar/'+file.id,undefined,undefined,true));const a=el('a',{href:url,download:(file.path?.split('/').pop() || file.kind+'-'+file.id)});document.body.append(a);a.click();a.remove();}
   function approvalDialog(v){
     const file=v.files.find(f=>f.kind==='onay_formu');if(!file)throw Error('Önce formları hazırlayın.');
-    const dialog=el('dialog',{class:'production p-dialog','aria-labelledby':'approval-title'},el('h2',{id:'approval-title'},'Müşteri onayını kaydet'),text('Onayı kaydeden: '+session.user.name),text('Seçili dosya: '+statusLabel(file.kind)+' #'+file.id),button('Onay formunu indir',()=>download(file)));
+    const dialog=el('dialog',{class:'production p-dialog','aria-labelledby':'approval-title'},el('h2',{id:'approval-title'},'Müşteri onayını kaydet'),text('Onayı kaydeden: '+session.user.name),text('Seçili dosya: '+fileKindLabel(file.kind)+' #'+file.id),button('Onay formunu indir',()=>download(file)));
     const selected=opts([[file.id,'Onay formu #'+file.id]],file.id);selected.disabled=true;dialog.append(field('Onay formu',selected),el('div',{class:'p-actions'},button('Onayı kaydet',async()=>{await api('surumler/'+v.id+'/onay',{fileId:file.id});dialog.close();dialog.remove();await openOrder(state.activeOrder.id,v.id);message('Müşteri onayı '+session.user.name+' adına kaydedildi.');},''),button('Vazgeç',()=>{dialog.close();dialog.remove();})));
     dialog.addEventListener('close',()=>dialog.remove(),{once:true});document.body.append(dialog);dialog.showModal();
   }
@@ -1036,7 +1038,7 @@
     const ready=['onayli','onaylandi'].includes(v.status)&&pack.files.length>0;
     const messageBox=el('textarea',{readonly:true,'aria-label':'Atölye mesajı',value:pack.message || ''});
     const section=card(el('div',{class:'p-row p-between'},el('h3',{},'Atölye paketi'),badge(ready?'Atölye paketi hazır':'Onay / dosya bekleniyor',ready?'good':'warn')),messageBox,button('Mesajı kopyala',async()=>{try{await navigator.clipboard.writeText(messageBox.value);message('Atölye mesajı kopyalandı.');}catch{messageBox.focus();messageBox.select();message('Mesaj seçildi. Kopyalama kısayolunu kullanın.');}}));
-    section.append(table(['Dosya','Durum','İşlem'],pack.files.map(file=>{const j=file.outbox;return [statusLabel(file.kind),badge(j?.status==='tamam'?'Gruba gönderildi':j?.status || 'Paket bekleniyor',j?.status==='tamam'?'good':null),el('div',{class:'p-row'},button('İndir',()=>download(file)),packageActions(j?.status).map(([label,action])=>button(label,async()=>{await api('outbox/'+j.id+'/'+action,{});await openOrder(state.activeOrder.id,v.id);})))];})));
+    section.append(table(['Dosya','Durum','İşlem'],pack.files.map(file=>{const j=file.outbox;return [fileKindLabel(file.kind),badge(j?.status==='tamam'?'Gruba gönderildi':j?.status || 'Paket bekleniyor',j?.status==='tamam'?'good':null),el('div',{class:'p-row'},button('İndir',()=>download(file)),packageActions(j?.status).map(([label,action])=>button(label,async()=>{await api('outbox/'+j.id+'/'+action,{});await openOrder(state.activeOrder.id,v.id);})))];})));
     section.id='order-package';content.append(section);
   }
   function renderCost(result,id,v){
