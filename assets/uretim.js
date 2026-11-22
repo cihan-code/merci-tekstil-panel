@@ -352,7 +352,7 @@
     return [...groups].map(([label,items])=>({label,items}));
   }
   function kartelaCaption(s){const no=s.kartela?.no ?? s.color_no;return no==null||no===''?'':'Kartela No '+no;}
-  const pure={vectorReasonList,applicationPositions,reasonText,vectorQuality,vectorDetail,designAspect,lockedSize,manualSaveBody,previewBox,orientationIsSafe,placementMarks,unmeasuredApps,scaleNote,unmeasuredCount,CHILD_SIZES,uploadFields,guessUpload,linkTarget,reconcileJobs,designApplication,measurementWarning,lineFiles,missingImages,uploadJobs,parseNumber,inputNumber,validateNumber,displayMessage,positiveSizes,unmatchedAwaitingKg,queueFile,SIZES,PRODUCTS,POSITIONS,positionLabel,applicationLabel,measureSource,measureSummary,measureContext,measureGap,vectorBadge,vectorPollNext,VECTOR_POLL_MS,packageActions,costApplications,pricePayload,escapeHtml,formatNumber,formatKg,formatDate,statusLabel,sizeTotal,adapt,safeHex,hexLight,hexInk,kartelaFabrics,colorLabel,stockLabel,stockGroups,kartelaCaption,fabricTypeOf,fabricColorMatch,fabricStockHint,fabricFields,deleteBody,priceKurus,kurusText};
+  const pure={vectorReasonList,applicationPositions,reasonText,vectorQuality,vectorDetail,designAspect,lockedSize,manualSaveBody,previewBox,orientationIsSafe,placementMarks,unmeasuredApps,scaleNote,unmeasuredCount,nextStep,stepRank,orderBySteps,atolyeSent,CHILD_SIZES,uploadFields,guessUpload,linkTarget,reconcileJobs,designApplication,measurementWarning,lineFiles,missingImages,uploadJobs,parseNumber,inputNumber,validateNumber,displayMessage,positiveSizes,unmatchedAwaitingKg,queueFile,SIZES,PRODUCTS,POSITIONS,positionLabel,applicationLabel,measureSource,measureSummary,measureContext,measureGap,vectorBadge,vectorPollNext,VECTOR_POLL_MS,packageActions,costApplications,pricePayload,escapeHtml,formatNumber,formatKg,formatDate,statusLabel,sizeTotal,adapt,safeHex,hexLight,hexInk,kartelaFabrics,colorLabel,stockLabel,stockGroups,kartelaCaption,fabricTypeOf,fabricColorMatch,fabricStockHint,fabricFields,deleteBody,priceKurus,kurusText};
   if (typeof module!=='undefined' && module.exports) module.exports=pure;
   global.MerciProduction=pure;
   if (typeof document==='undefined') return;
@@ -407,7 +407,7 @@
   const num=(name,value='',opts={})=>{
     const constraints={min:0,step:'any',...opts},node=input(name,{...opts,type:'text',inputmode:'decimal',value:inputNumber(value),'data-number':''});node._numberRules=constraints;
     const check=()=>{try{validateNumber(node.value,constraints);node.setCustomValidity('');}catch(error){node.setCustomValidity(error.message);}};
-    node.addEventListener('input',check);node.addEventListener('blur',()=>{check();if(node.validity.valid)node.value=inputNumber(node.value);});check();return node;
+    node.addEventListener('input',check);node.addEventListener('focus',()=>setTimeout(()=>node.select?.(),0));node.addEventListener('blur',()=>{check();if(node.validity.valid)node.value=inputNumber(node.value);});check();return node;
   };
   const readNumber=node=>validateNumber(node.value,node._numberRules || {});
   const opts=(items,selected,empty)=>{
@@ -417,7 +417,9 @@
     return s;
   };
   const badge=(s,tone)=>el('span',{class:'p-badge '+(tone ?? (/basarisiz|eski/.test(s)?'bad':/bekliyor|teyit/.test(s)?'warn':/tamam|onayli|onaylandi|gonderildi/.test(s)?'good':''))},statusLabel(s));
-  function message(s,error=false){ if(notice){notice.textContent=s;notice.className='p-notice'+(error?' error':'');} }
+  // G73: the notice is a fixed toast, so it stays visible wherever the page is scrolled. Errors stay until dismissed.
+  let toastTimer=null;
+  function message(s,error=false){ if(notice){clearTimeout(toastTimer);notice.textContent=s;notice.className='p-notice p-toast'+(error?' error':'');notice.setAttribute?.('role',error?'alert':'status');if(s&&!error)toastTimer=setTimeout(()=>{if(notice&&notice.textContent===s)notice.textContent='';},9000);} }
   function clearUrls(){ measuredResize?.disconnect();for(const u of pageUrls){URL.revokeObjectURL(u);objectUrls.delete(u);} pageUrls=new Set(); }
   function blobUrl(blob){const u=URL.createObjectURL(blob);pageUrls.add(u);objectUrls.add(u);return u;}
   async function api(path,body,method,blob=false){
@@ -472,10 +474,9 @@
   async function logout(){session=null;sessionStorage.removeItem(storageKey);clearUrls();state.stocks=[];state.orders=[];state.activeOrder=null;state.version=null;state.pending=[];fileMetadata={};renderFrame();}
   function renderFrame(){
     clearUrls();root.replaceChildren();
-    root.append(el('header',{class:'p-head'},el('div',{},el('div',{class:'p-brand'},'MerciCo / Üretim'),el('h1',{},mode==='stock'?'Kumaş defteri':'Üretim ve Sipariş'),text(mode==='stock'?'Fiziksel stok, ayırmalar ve sayım aynı defterde.':'Siparişten atölyeye, sürümü ve dosyaları birlikte takip edin.','p-sub')),el('div',{class:'p-row'},el('a',{href:'hub.html'},'Panel merkezi'),session?button('Çıkış · '+session.user.name,logout):null)));
-    notice=el('div',{class:'p-notice',role:'status','aria-live':'polite'});root.append(notice);
+    root.append(el('header',{class:'p-head'},el('div',{},el('div',{class:'p-brand'},'MerciCo / Üretim'),el('h1',{},mode==='stock'?'Kumaş defteri':'Üretim ve Sipariş'),text(mode==='stock'?'Fiziksel stok, ayırmalar ve sayım aynı defterde.':'Siparişten atölyeye, sürümü ve dosyaları birlikte takip edin.','p-sub')),el('div',{class:'p-row p-head-actions'},el('a',{href:'hub.html'},'Panel',el('span',{class:'p-wide'},'\u00a0merkezi')),session?(()=>{const out=button('Çıkış',logout);out.append(el('span',{class:'p-wide'},'· '+session.user.name));return out;})():null)));
+    notice=el('div',{class:'p-notice p-toast',role:'status','aria-live':'polite'});notice.addEventListener('click',()=>message(''));root.append(notice);
     if(!session){renderLogin();return;}
-    root.append(text('Giriş yapan: '+session.user.name+'. İşlemler bu kişi adına kaydedilir.'));
     if(mode==='production')root.append(el('nav',{class:'p-tabs',role:'tablist','aria-label':'Üretim bölümleri'},[['orders','Siparişler'],['stock','Stok ve faturalar'],['confirmations','Teyit gerekenler']].map(([key,label])=>el('button',{id:'tab-'+key,type:'button',role:'tab','aria-controls':'production-content','aria-selected':String(state.tab===key),onclick:()=>run(async()=>{state.tab=key;state.activeOrder=null;renderFrame();await renderTab();})},label))));
     content=el('div',{id:'production-content',role:'tabpanel','aria-labelledby':mode==='production'?'tab-'+state.tab:null});root.append(content);
   }
@@ -497,10 +498,14 @@
     const details=await Promise.all(state.orders.map(o=>api('siparisler/'+o.id)));
     const costs=await Promise.all(state.orders.map(o=>optional('siparisler/'+o.id+'/maliyet')));
     if(!session||state.tab!=='orders')return;
-    content.replaceChildren(card(el('div',{class:'p-row p-between'},el('div',{},el('h2',{},'Siparişler'),text('Güncel sürüm, atölye ve fiyat durumu.')),button('Yeni sipariş',()=>renderWizard(),'')),table(['Sipariş / müşteri','Güncel sürüm','Stok','Atölye','Maliyet',''],details.map((o,i)=>{
-      const v=o.versions?.at(-1),stock=v?adapt('orderStock',v):{label:'Bilgi yok'};const jobs=state.outbox.filter(j=>j.version_id===v?.id&&j.kind==='atolye_dosya');
-      return [el('div',{},el('strong',{},o.order_no),text(o.customer_name || 'Müşteri belirtilmedi'),v&&missingImages(v,fileMetadata).length?badge('Görsel eksik','warn'):null),v?el('div',{},'v'+v.version_no,' ',badge(v.status),wanted.has(v.id)?badge('Müşteri değişiklik istedi','warn'):null):'—',badge(stock.label,stock.tone),jobs.length?el('div',{},jobs.map(j=>el('div',{},badge(j.status)))):'Paket bekleniyor',costs[i].data?adapt('cost',costs[i].data).label:'Sunucu hazır değil',el('div',{class:'p-row'},button('Aç',()=>openOrder(o.id)),button('Sil',()=>deleteDialog(o),'secondary'))];
-    }))));
+    const rows=orderBySteps(details.map((o,i)=>{const v=o.versions?.at(-1);return {o,v,cost:costs[i],step:nextStep(v,{sent:atolyeSent(v,state.outbox),meta:fileMetadata})};}));
+    content.replaceChildren(card(el('div',{class:'p-row p-between p-list-head'},el('div',{},el('h2',{},'Siparişler'),text('Güncel sürüm, atölye ve fiyat durumu.','p-muted p-list-sub')),button('Yeni sipariş',()=>renderWizard(),'')),rows.length?el('div',{class:'p-ocards'},rows.map(({o,v,cost,step})=>{
+      const stock=v?adapt('orderStock',v):{label:'Bilgi yok'};const jobs=state.outbox.filter(j=>j.version_id===v?.id&&j.kind==='atolye_dosya');
+      const badges=el('span',{class:'p-ocard-badges'},v?badge('v'+v.version_no+' · '+statusLabel(v.status),/basarisiz|eski/.test(v.status)?'bad':/bekliyor|teyit/.test(v.status)?'warn':/onayli|onaylandi/.test(v.status)?'good':''):null,step.badge?badge(step.badge,step.tone):null,v&&missingImages(v,fileMetadata).length?badge('Görsel eksik','warn'):null,wanted.has(v?.id)?badge('Müşteri değişiklik istedi','warn'):null);
+      const meta=el('span',{class:'p-ocard-meta'},'Stok: '+stock.label,' · Atölye: '+(jobs.length?jobs.map(j=>statusLabel(j.status)).join(', '):'Paket bekleniyor'),' · Maliyet: '+(cost.data?adapt('cost',cost.data).label:'Sunucu hazır değil'));
+      const open=el('button',{type:'button',class:'p-ocard-main','aria-label':o.order_no+' siparişini aç',onclick:()=>run(()=>openOrder(o.id),open)},el('span',{class:'p-ocard-title'},el('strong',{},o.order_no),' · '+(o.customer_name || 'Müşteri belirtilmedi')),badges,meta);
+      return el('div',{class:'p-ocard'+(stepRank(step)===0?' p-need':'')},open,button('Sil',()=>deleteDialog(o),'secondary p-ocard-del'));
+    })):text('Henüz sipariş yok.','p-empty')));
   }
   // G59: soft delete, always behind a confirmation that names the order. The server explains a refusal; it stays in the dialog.
   function deleteDialog(o){
@@ -510,6 +515,32 @@
     dialog.append(err,el('div',{class:'p-actions'},button('Evet, sil',async()=>{err.hidden=true;try{await api('siparisler/'+o.id+'/sil',deleteBody());}catch(e){err.textContent=e.message;err.hidden=false;return;}close();await renderOrders();message('"'+o.order_no+'" siparişi silindi.');},''),button('Vazgeç',close)));
     dialog.addEventListener('close',()=>dialog.remove(),{once:true});document.body.append(dialog);dialog.showModal();
   }
+  // G73: one "next step" per version, shared by the order list badge and the detail strip.
+  // Unknown statuses map to 'yok' (no strip, no badge) rather than guessing.
+  function atolyeSent(version,outbox=[]){const jobs=(outbox||[]).filter(j=>j.version_id===version?.id&&j.kind==='atolye_dosya');return jobs.length>0&&jobs.every(j=>['tamam','tamamlandi','elle_gonderildi'].includes(j.status));}
+  function nextStep(v,{sent=false,meta={}}={}){
+    const none={code:'yok',badge:'',text:'',tone:''};
+    if(!v)return none;
+    const files=v.files||[],hasForms=files.some(f=>String(f.kind).endsWith('_formu'));
+    if(v.status==='taslak'){
+      if(hasForms)return {code:'gonder',badge:'Onaya gönder',text:'Sıradaki adım: formları kontrol edip onaya gönderin.',tone:'warn'};
+      if(missingImages(v,meta).length)return {code:'gorsel',badge:'Görsel ekle',text:'Sıradaki adım: ürün görselini ekleyin; ölçü ve formlar görsele bağlı.',tone:'warn',target:'order-media',alt:'hazirla'};
+      const n=unmeasuredCount(v);
+      if(n)return {code:'olcu',badge:'Ölçü kontrolü',text:'Sıradaki adım: '+n+' uygulamanın ölçüsünü kontrol edin.',tone:'warn',target:'order-media',alt:'hazirla'};
+      return {code:'hazirla',badge:'Formları hazırla',text:'Sıradaki adım: formları hazırlayın.',tone:'warn'};
+    }
+    if(v.status==='onay_bekliyor'){
+      if(!files.some(f=>f.kind==='onay_formu'))return {code:'belge',badge:'Belge bekleniyor',text:'Bu sürümün belgeleri henüz hazır değil; onay verilemez.',tone:'warn'};
+      return {code:'link',badge:'Müşteri onayı',text:'Sıradaki adım: müşteriye onay linkini gönderin; onay gelince kaydedin.',tone:'warn'};
+    }
+    if(v.status==='onaylandi'){
+      return sent?{code:'bitti',badge:'Atölyeye gönderildi',text:'Atölye paketi gönderildi.',tone:'good'}:{code:'paket',badge:'Atölyeye gönder',text:'Sıradaki adım: atölye paketini gruba gönderin.',tone:'warn',target:'order-package'};
+    }
+    return none;
+  }
+  function stepRank(step){const rank={gorsel:0,olcu:0,hazirla:0,gonder:0,link:0,paket:0,belge:1};return rank[step?.code] ?? 2;}
+  // Orders waiting on a person first, finished ones last; the incoming order is kept inside a group.
+  function orderBySteps(items){return items.map((item,i)=>[item,i]).sort((a,b)=>stepRank(a[0].step)-stepRank(b[0].step)||a[1]-b[1]).map(x=>x[0]);}
   // Applications whose measurement still needs a person; their forms print "Ölçü teyit bekliyor".
   function unmeasuredCount(version){return (version?.lines||[]).flatMap(l=>l.applications||[]).filter(a=>a.needs_confirmation||a.width_mm==null||a.height_mm==null).length;}
   const FORM_TITLES={uretim_formu:'Üretim formu',onay_formu:'Onay formu',baski_formu:'Baskı formu',nakis_formu:'Nakış formu'};
@@ -549,14 +580,21 @@
     box._fabricOriginal=original;
     box.append(el('div',{class:'p-grid'},field('Ürün',product),...fabricBlock,field('Astar',el('input',{name:'lining',type:'checkbox',checked:line.lining===1||line.lining===true})),field('Numune (adet belli değil)',el('input',{name:'numune',type:'checkbox',checked:line.numune===1||line.numune===true})),field('Birim satış fiyatı (TL, KDV hariç, isteğe bağlı)',input('unit_price',{value:kurusText(line.unit_price_kurus),inputmode:'decimal',autocomplete:'off',placeholder:'Örn. 125,50'}))));
     const sizes=el('div',{class:'p-sizes'},SIZES.map(s=>field(s,num('size_'+s,line.sizes[s] || 0,{step:1,required:true}))));
-    const child=el('details',{open:CHILD_SIZES.some(s=>line.sizes[s])},el('summary',{},'Çocuk bedenleri (yaş aralığı)'),el('div',{class:'p-sizes'},CHILD_SIZES.map(s=>field(s,num('size_'+s,line.sizes[s] || 0,{step:1,required:true})))));
+    const child=el('details',{open:CHILD_SIZES.some(s=>line.sizes[s])||null},el('summary',{},'Çocuk bedenleri (yaş aralığı)'),el('div',{class:'p-sizes'},CHILD_SIZES.map(s=>field(s,num('size_'+s,line.sizes[s] || 0,{step:1,required:true})))));
     const noteBox=field('Kumaş / kalıp açıklaması (formlara yazılır)',el('textarea',{name:'note',maxlength:'500',placeholder:'Örn. Yeni kalıp, şardonsuz kumaş, lastikli etek',value:line.note||''}));
     const total=text('Toplam: '+formatNumber(sizeTotal(line.sizes))+' adet','p-number');sizes.addEventListener('input',()=>{try{total.textContent='Toplam: '+formatNumber(sizeTotal(readSizes(box)))+' adet';}catch(e){total.textContent=e.message;}});child.addEventListener('input',()=>sizes.dispatchEvent(new Event('input')));box.append(sizes,child,total,noteBox);
     const mat=el('details',{},el('summary',{},'Ek reçete malzemeleri (kaşkorse, ribana, astar)'),text('Ürünün reçetesindeki malzemeleri kaleme bağlayın. Eksik eşlemeler teyide düşer.'));
     for(const key of ['kaskorse','ribana','astar']){const s=stockOptions(line.material_items[key]);s.name='material_'+key;mat.append(field({kaskorse:'Kaşkorse',ribana:'Ribana',astar:'Astar'}[key],s));}box.append(mat);
     if(line.applications?.length){const apps=el('details',{},el('summary',{},'Mevcut uygulamaların cm ölçüleri'));line.applications.forEach((a,i)=>apps.append(el('div',{class:'p-grid'},field(statusLabel(a.kind)+' · '+positionLabel(a.position)+' en (cm)',num('app_w_'+i,a.width_mm==null?'':a.width_mm/10,{min:.1,step:.1})),field('Boy (cm)',num('app_h_'+i,a.height_mm==null?'':a.height_mm/10,{min:.1,step:.1})),field('Bu ölçüleri elle teyit ettim',input('app_confirm_'+i,{type:'checkbox'})))));box.append(apps);}
     if(media)box.append(newLineMedia(box));
-    box.append(button('Satırı kaldır',()=>box.remove(),'secondary'));return box;
+    // G73: copy keeps product, fabric, colour, lining and price; sizes start at zero, files are not copied.
+    const copy=button('Satırı kopyala',()=>{
+      const get=n=>box.querySelector('[name="'+n+'"]');let price=null;try{price=priceKurus(get('unit_price').value);}catch{}
+      const seed={product_key:get('product_key').value,...(get('fabric_type')?{fabric_type:get('fabric_type').value}:{fabric_item_id:Number(get('fabric_item_id').value)||null}),color_name:get('color_name').value.trim(),lining:get('lining').checked?1:0,unit_price_kurus:price};
+      const host=box.parentNode;if(!host)return;const next=lineEditor(seed,host.children.length,!!box._uploads);host.append(next);next.scrollIntoView?.({block:'center'});
+      (next.querySelector('[name="size_XS"]'))?.focus?.();
+    },'secondary');
+    box.append(el('div',{class:'p-actions p-line-actions'},copy,button('Satırı kaldır',()=>box.remove(),'secondary')));return box;
   }
   function selectedPreview(file){
     return el('div',{class:'p-selected-file'},file.type.startsWith('image/')?el('img',{src:blobUrl(file),alt:file.name}):el('a',{href:blobUrl(file),target:'_blank',rel:'noopener',class:'p-pdf-preview','aria-label':file.name+' PDF önizle'},el('span',{'aria-hidden':'true'},'▤'),el('span',{},'PDF önizle')),el('span',{},file.name));
@@ -593,40 +631,54 @@
       const data=[...lines.children].map(readLine);if(!data.length)throw Error('En az bir ürün satırı ekleyin.');
       if(revision){const fresh=await api('surumler/'+v.id+'/revizyon',{lines:data});await openOrder(o.id,fresh.id);}
       else {const selected=[...lines.children].map(box=>(box._uploads || []).map(job=>({...job})));const result=await api('siparisler',{order_no:f.elements.order_no.value.trim(),customer_name:f.elements.customer_name.value.trim(),job_no:f.elements.job_no.value.trim() || null,lines:data});created=result;const jobs=selected.flatMap((uploads,i)=>uploads.map(job=>({...job,lineId:result.version.lines[i].id,versionId:result.version.id})));state.pending.push(...jobs);await sendJobs(jobs);state.pending=state.pending.filter(job=>!job.done);await openCreated();}
-    },card(el('div',{class:'p-step'},revision?'Revizyon / Yeni sürüm':'1 / Sipariş ve ürünler'),el('h2',{},revision?'Revizyon aç':'Yeni sipariş'),revision?text('Bu liste yeni sürümün tüm satırlarıdır. Değişen alanları düzenleyin; eski sürüm korunur.'):el('div',{class:'p-grid three'},field('Sipariş no',input('order_no',{required:true})),field('Müşteri',input('customer_name',{required:true})),field('İşler no (isteğe bağlı)',input('job_no',{})))),lines,button('Ürün satırı ekle',()=>lines.append(lineEditor({},lines.children.length,!revision))),el('div',{class:'p-actions'},submit(revision?'Yeni sürüm aç':'Siparişi oluştur'),button('Vazgeç',()=>revision?openOrder(o.id,v.id):renderOrders())));
+    },card(el('div',{class:'p-step'},revision?'Revizyon / Yeni sürüm':'1 / Sipariş ve ürünler'),el('h2',{},revision?'Revizyon aç':'Yeni sipariş'),revision?text('Bu liste yeni sürümün tüm satırlarıdır. Değişen alanları düzenleyin; eski sürüm korunur.'):el('div',{class:'p-grid three p-order-fields'},field('Sipariş no',input('order_no',{required:true,autocomplete:'off'})),field('Müşteri',input('customer_name',{required:true})),field('İşler no (isteğe bağlı)',input('job_no',{})))),lines,button('Ürün satırı ekle',()=>lines.append(lineEditor({},lines.children.length,!revision))),el('div',{class:'p-actions'},submit(revision?'Yeni sürüm aç':'Siparişi oluştur'),button('Vazgeç',()=>revision?openOrder(o.id,v.id):renderOrders())));
     content.replaceChildren(f);
+    if(!revision)f.querySelector?.('[name="order_no"]')?.focus?.();
   }
   // G64: customer approval link and the notes the customer left. Notes are plain text and go in as text nodes only.
   function whatsappUrl(link,order){return 'https://wa.me/?text='+encodeURIComponent('Merhaba, MerciTex sipariş onayı: '+(order?.order_no?order.order_no+' numaralı ':'')+'siparişinizin onay formunu bu bağlantıdan inceleyip onaylayabilir ya da değişiklik notu yazabilirsiniz: '+link);}
   function customerBlock(o,v,notes){
-    const rows=Array.isArray(notes)?notes:[],parts=[];
+    const rows=Array.isArray(notes)?notes:[],parts=[];let makeLink=null;
     if(v.status==='onay_bekliyor'){
       const out=el('div',{class:'p-customer-link','aria-live':'polite'});
-      parts.push(el('div',{class:'p-actions'},button('Müşteri onay linki',async()=>{
+      makeLink=async()=>{
         const r=await api('surumler/'+v.id+'/musteri-link',{});
         const box=el('input',{type:'text',readonly:'readonly',value:r.link,'aria-label':'Müşteri onay linki'});
         let copied=false;try{const cb=global.navigator?.clipboard;if(typeof cb?.writeText==='function'){await cb.writeText(r.link);copied=true;}}catch{}
         out.replaceChildren(box,el('div',{class:'p-row'},el('a',{class:'p-button secondary',href:whatsappUrl(r.link,o),target:'_blank',rel:'noopener noreferrer'},"WhatsApp'ta aç")),
           text((copied?'Link panoya kopyalandı. ':'Linki elle kopyalayın. ')+'Son kullanma: '+formatDate(r.expiresAt)+'. Yeni link istenirse bu link geçersiz olur.'));
         message(copied?'Müşteri linki hazır ve panoya kopyalandı.':'Müşteri linki hazır.');
-      },'secondary')),out);
+      };
+      parts.push(el('div',{class:'p-actions'},button('Müşteri onay linki',makeLink,'secondary')),out);
     }
     if(rows.length)parts.push(...rows.map(n=>el('div',{class:'p-stock-item'},el('div',{class:'p-row'},badge('Müşteri değişiklik istedi','warn'),el('strong',{},n.adSoyad||'—'),text(formatDate(n.tarih))),el('p',{class:'p-ink p-customer-note'},n.metin))));
-    return parts.length?card(el('h3',{},'Müşteri onayı'),...parts):null;
+    const block=parts.length?card(el('h3',{},'Müşteri onayı'),...parts):null;
+    if(block)block._makeLink=makeLink;
+    return block;
   }
   async function openOrder(id,versionId){
     clearUrls();clearTimeout(vectorTimer);vectorRows={};extractionRows={};const o=await api('siparisler/'+id);state.activeOrder=o;state.version=versionId?o.versions.find(v=>v.id===versionId):o.versions.at(-1);if(!state.version)throw Error('Sürüm bulunamadı.');
     const v=state.version;[state.outbox,state.confirmations]=await Promise.all([api('outbox').then(rows=>adapt('list',rows)),api('teyitler?status=acik').then(rows=>adapt('list',rows))]);const costs=await optional('siparisler/'+id+'/maliyet');const customerNotes=await optional('surumler/'+v.id+'/musteri-notlari').catch(()=>({data:[]}));if(!session||state.tab!=='orders')return;
     const selector=opts(o.versions.map(v=>[v.id,'v'+v.version_no+' · '+statusLabel(v.status)]),v.id);selector.setAttribute('aria-label','Sipariş sürümü');selector.addEventListener('change',()=>run(()=>openOrder(id,Number(selector.value))));
-    content.replaceChildren(card(el('div',{class:'p-row p-between'},el('div',{},el('h2',{},o.order_no+' / '+(o.customer_name || 'Müşteri yok')),badge(v.status)),el('div',{class:'p-row'},button('Yenile',()=>openOrder(id,v.id)),button('Siparişlere dön',renderOrders))),field('Sürüm',selector)));
+    // G73: the version picker only shows when there is something to pick; refresh and back sit on one quiet row.
+    const prepare=async()=>{await api('surumler/'+v.id+'/hazirla'+(v.files.some(f=>f.kind.endsWith('_formu'))?'?yeniden=1':''),{});await openOrder(id,v.id);const waiting=unmeasuredCount(state.version);message('Formlar hazırlandı.'+(waiting?' '+waiting+' uygulamanın ölçü teyidi bekliyor; formlarda işaretli, atölye formuna alınmadı.':' PDF önizlemelerini kontrol edin.'));};
+    const sendApproval=async()=>{await api('surumler/'+v.id+'/gonder',{});await openOrder(id,v.id);};
+    const customer=customerBlock(o,v,customerNotes.data),step=nextStep(v,{sent:atolyeSent(v,state.outbox),meta:fileMetadata});
+    content.replaceChildren(card(el('div',{class:'p-row p-between p-order-head'},el('div',{},el('h2',{},o.order_no+' / '+(o.customer_name || 'Müşteri yok')),badge(v.status)),el('div',{class:'p-row p-head-nav'},button('Yenile',()=>openOrder(id,v.id)),button('Siparişlere dön',renderOrders))),o.versions.length>1?field('Sürüm',selector):null));
+    if(step.code!=='yok'){
+      const go=target=>()=>{document.getElementById(target)?.scrollIntoView?.({block:'start',behavior:'smooth'});};
+      const act={hazirla:['Formları hazırla',prepare],gonder:['Onaya gönder',sendApproval],link:['Müşteri onay linki',async()=>{if(customer?._makeLink){await customer._makeLink();customer.scrollIntoView?.({block:'center',behavior:'smooth'});}}],gorsel:['Görsele git',go(step.target)],olcu:['Ölçülere git',go(step.target)],paket:['Atölye paketine git',go(step.target)]}[step.code];
+      const secondary=step.code==='link'?button('Müşteri onayladı',()=>approvalDialog(v)):step.alt==='hazirla'?button('Yine de formları hazırla',prepare):null;
+      content.append(el('section',{class:'p-next p-next-'+step.code,'aria-label':'Sıradaki adım'},el('p',{class:'p-next-text'},step.text),el('div',{class:'p-next-actions'},act?button(act[0],act[1],''):null,secondary)));
+    }
     const oldSent=o.versions.filter(old=>old.id!==v.id).some(old=>state.outbox.some(j=>j.version_id===old.id && j.kind==='atolye_dosya' && ['tamam','tamamlandi','elle_gonderildi'].includes(j.status)));
     if(oldSent || (v.status==='eski'&&state.outbox.some(j=>j.version_id===v.id&&j.kind==='atolye_dosya'&&['tamam','tamamlandi','elle_gonderildi'].includes(j.status))))content.append(el('div',{class:'p-notice'},'Eski sürüm atölyeye ulaştı. Atölyeye yeni sürümü gönderin.'));
     content.append(card(el('h3',{},'Ürünler'),table(['Ürün','Renk / kumaş','Bedenler','Adet','Uygulama'],v.lines.map(raw=>{const l=adapt('line',raw),s=state.stocks.find(s=>s.id===l.fabric_item_id);return [(PRODUCTS[l.product_key] || l.product_key)+(l.numune?' · NUMUNE':'')+(l.note?' · '+l.note:''),el('div',{},(l.color_name || '—')+' / '+(s?.name || state.fabricTypes?.find(t=>t.tur===l.fabric_type)?.ad || l.fabric_item_id || '—'),l.stokKalemiYok?el('div',{},badge('Stokta kalem yok','warn')):null),positiveSizes(l.sizes),formatNumber(l.quantity),el('div',{},l.applications.map(a=>text(applicationLabel(a))))];}))));
     if(v.status==='taslak')renderMedia(v);
     else if(v.status==='onay_bekliyor'&&!v.files.some(f=>f.kind==='onay_formu'))content.append(el('div',{class:'p-notice'},'Yeni sürüm açıldı. Bu sunucu sürümü revizyonlarda dosya yükleme ve form hazırlamayı henüz desteklemiyor. Belgeler hazır olana kadar onay verilemez.'));
     const previewHost=el('div',{class:'p-preview-host','aria-live':'polite'});
-    content.append(card(el('div',{class:'p-step'},'3 / Formlar ve onay'),el('h3',{},'Sürüm belgeleri'),el('div',{class:'p-actions'},button('Formları hazırla',async()=>{await api('surumler/'+v.id+'/hazirla'+(v.files.some(f=>f.kind.endsWith('_formu'))?'?yeniden=1':''),{});await openOrder(id,v.id);const waiting=unmeasuredCount(state.version);message('Formlar hazırlandı.'+(waiting?' '+waiting+' uygulamanın ölçü teyidi bekliyor; formlarda işaretli, atölye formuna alınmadı.':' PDF önizlemelerini kontrol edin.'));},''),button('Adetsiz önizleme',async()=>{previewHost.replaceChildren(previewResult(await api('surumler/'+v.id+'/onizleme?adetsiz=1',{})));},'secondary'),button('Onaya gönder',async()=>{await api('surumler/'+v.id+'/gonder',{});await openOrder(id,v.id);}),button('Müşteri onayladı',()=>approvalDialog(v)),button('Revizyon aç',()=>renderWizard(true))),previewHost,renderFiles(v.files.filter(f=>f.kind.endsWith('_formu')),true)));
-    {const customer=customerBlock(o,v,customerNotes.data);if(customer)content.append(customer);}
+    content.append(card(el('div',{class:'p-step'},'3 / Formlar ve onay'),el('h3',{},'Sürüm belgeleri'),el('div',{class:'p-actions'},button('Formları hazırla',prepare,step.code==='yok'?'':'secondary'),button('Adetsiz önizleme',async()=>{previewHost.replaceChildren(previewResult(await api('surumler/'+v.id+'/onizleme?adetsiz=1',{})));},'secondary'),button('Onaya gönder',sendApproval),button('Müşteri onayladı',()=>approvalDialog(v)),button('Revizyon aç',()=>renderWizard(true))),previewHost,renderFiles(v.files.filter(f=>f.kind.endsWith('_formu')),true)));
+    if(customer)content.append(customer);
     if(v.status==='onaylandi'){const pack=await optional('surumler/'+v.id+'/atolye-paketi');if(pack.unavailable)content.append(card(el('h3',{},'Atölye paketi'),text(pack.error)));else renderPackage(pack.data,v);}
     else content.append(card(el('h3',{},'Atölye paketi'),text('Atölye paketi için müşteri onayını kaydedin.')));
     renderCost(costs,id,v);
@@ -985,7 +1037,7 @@
     const messageBox=el('textarea',{readonly:true,'aria-label':'Atölye mesajı',value:pack.message || ''});
     const section=card(el('div',{class:'p-row p-between'},el('h3',{},'Atölye paketi'),badge(ready?'Atölye paketi hazır':'Onay / dosya bekleniyor',ready?'good':'warn')),messageBox,button('Mesajı kopyala',async()=>{try{await navigator.clipboard.writeText(messageBox.value);message('Atölye mesajı kopyalandı.');}catch{messageBox.focus();messageBox.select();message('Mesaj seçildi. Kopyalama kısayolunu kullanın.');}}));
     section.append(table(['Dosya','Durum','İşlem'],pack.files.map(file=>{const j=file.outbox;return [statusLabel(file.kind),badge(j?.status==='tamam'?'Gruba gönderildi':j?.status || 'Paket bekleniyor',j?.status==='tamam'?'good':null),el('div',{class:'p-row'},button('İndir',()=>download(file)),packageActions(j?.status).map(([label,action])=>button(label,async()=>{await api('outbox/'+j.id+'/'+action,{});await openOrder(state.activeOrder.id,v.id);})))];})));
-    content.append(section);
+    section.id='order-package';content.append(section);
   }
   function renderCost(result,id,v){
     const section=card(el('h3',{},'Maliyet'));
