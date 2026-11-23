@@ -21,7 +21,7 @@ test('taslak: görsel eksik, ölçü bekliyor, formlar hazır ve hazırla adıml
   assert.equal(ui.nextStep(version('taslak',{files:[{id:9,kind:'uretim_formu'}]})).code,'gonder');
 });
 
-test('onay bekliyor: belge yoksa bekler, onay formu varsa müşteri linki',()=>{
+test('onay bekliyor: belge yoksa bekler, onay formu varsa müşteri onayı',()=>{
   assert.equal(ui.nextStep(version('onay_bekliyor')).code,'belge');
   assert.equal(ui.nextStep(version('onay_bekliyor',{files:[{id:9,kind:'onay_formu'}]})).code,'link');
 });
@@ -115,7 +115,9 @@ test('sürüm seçici yalnız birden çok sürüm varsa görünür ve sıradaki 
   const strip=one.root.find(e=>/p-next /.test(e.className+' '))[0];
   assert.ok(strip,'şerit var');
   assert.match(strip.textContent,/Sıradaki adım/);
-  assert.ok(strip.find(e=>e.tag==='button'&&e.textContent==='Müşteri onay linki').length===1);
+  assert.ok(strip.find(e=>e.tag==='button'&&e.textContent==='Müşteri onayladı').length===1);
+  assert.equal(strip.find(e=>e.tag==='button'&&/link/i.test(e.textContent)).length,0);
+  assert.doesNotMatch(strip.textContent,/link/i);
   const two=harness(orderResponses([detailVersion(21,1,'eski'),detailVersion(22,2,'onay_bekliyor')]));
   two.state.tab='orders';await two.openOrder(1);
   assert.equal(hasSelector(two),true);

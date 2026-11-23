@@ -533,7 +533,7 @@
     }
     if(v.status==='onay_bekliyor'){
       if(!files.some(f=>f.kind==='onay_formu'))return {code:'belge',badge:'Belge bekleniyor',text:'Bu sürümün belgeleri henüz hazır değil; onay verilemez.',tone:'warn'};
-      return {code:'link',badge:'Müşteri onayı',text:'Sıradaki adım: müşteriye onay linkini gönderin; onay gelince kaydedin.',tone:'warn'};
+      return {code:'link',badge:'Müşteri onayı',text:'Sıradaki adım: müşteri onaylayınca kaydedin.',tone:'warn'};
     }
     if(v.status==='onaylandi'){
       return sent?{code:'bitti',badge:'Atölyeye gönderildi',text:'Atölye paketi gönderildi.',tone:'good'}:{code:'paket',badge:'Atölyeye gönder',text:'Sıradaki adım: atölye paketini gruba gönderin.',tone:'warn',target:'order-package'};
@@ -637,26 +637,11 @@
     content.replaceChildren(f);
     if(!revision)f.querySelector?.('[name="order_no"]')?.focus?.();
   }
-  // G64: customer approval link and the notes the customer left. Notes are plain text and go in as text nodes only.
-  function whatsappUrl(link,order){return 'https://wa.me/?text='+encodeURIComponent('Merhaba, MerciTex sipariş onayı: '+(order?.order_no?order.order_no+' numaralı ':'')+'siparişinizin onay formunu bu bağlantıdan inceleyip onaylayabilir ya da değişiklik notu yazabilirsiniz: '+link);}
+  // G75: customer approval link is off for now; only notes the customer already left are shown (read-only, text nodes only).
   function customerBlock(o,v,notes){
-    const rows=Array.isArray(notes)?notes:[],parts=[];let makeLink=null;
-    if(v.status==='onay_bekliyor'){
-      const out=el('div',{class:'p-customer-link','aria-live':'polite'});
-      makeLink=async()=>{
-        const r=await api('surumler/'+v.id+'/musteri-link',{});
-        const box=el('input',{type:'text',readonly:'readonly',value:r.link,'aria-label':'Müşteri onay linki'});
-        let copied=false;try{const cb=global.navigator?.clipboard;if(typeof cb?.writeText==='function'){await cb.writeText(r.link);copied=true;}}catch{}
-        out.replaceChildren(box,el('div',{class:'p-row'},el('a',{class:'p-button secondary',href:whatsappUrl(r.link,o),target:'_blank',rel:'noopener noreferrer'},"WhatsApp'ta aç")),
-          text((copied?'Link panoya kopyalandı. ':'Linki elle kopyalayın. ')+'Son kullanma: '+formatDate(r.expiresAt)+'. Yeni link istenirse bu link geçersiz olur.'));
-        message(copied?'Müşteri linki hazır ve panoya kopyalandı.':'Müşteri linki hazır.');
-      };
-      parts.push(el('div',{class:'p-actions'},button('Müşteri onay linki',makeLink,'secondary')),out);
-    }
-    if(rows.length)parts.push(...rows.map(n=>el('div',{class:'p-stock-item'},el('div',{class:'p-row'},badge('Müşteri değişiklik istedi','warn'),el('strong',{},n.adSoyad||'—'),text(formatDate(n.tarih))),el('p',{class:'p-ink p-customer-note'},n.metin))));
-    const block=parts.length?card(el('h3',{},'Müşteri onayı'),...parts):null;
-    if(block)block._makeLink=makeLink;
-    return block;
+    const rows=Array.isArray(notes)?notes:[];
+    if(!rows.length)return null;
+    return card(el('h3',{},'Müşteri onayı'),...rows.map(n=>el('div',{class:'p-stock-item'},el('div',{class:'p-row'},badge('Müşteri değişiklik istedi','warn'),el('strong',{},n.adSoyad||'—'),text(formatDate(n.tarih))),el('p',{class:'p-ink p-customer-note'},n.metin))));
   }
   async function openOrder(id,versionId){
     clearUrls();clearTimeout(vectorTimer);vectorRows={};extractionRows={};const o=await api('siparisler/'+id);state.activeOrder=o;state.version=versionId?o.versions.find(v=>v.id===versionId):o.versions.at(-1);if(!state.version)throw Error('Sürüm bulunamadı.');
@@ -669,8 +654,8 @@
     content.replaceChildren(card(el('div',{class:'p-row p-between p-order-head'},el('div',{},el('h2',{},o.order_no+' / '+(o.customer_name || 'Müşteri yok')),badge(v.status)),el('div',{class:'p-row p-head-nav'},button('Yenile',()=>openOrder(id,v.id)),button('Siparişlere dön',renderOrders))),o.versions.length>1?field('Sürüm',selector):null));
     if(step.code!=='yok'){
       const go=target=>()=>{document.getElementById(target)?.scrollIntoView?.({block:'start',behavior:'smooth'});};
-      const act={hazirla:['Formları hazırla',prepare],gonder:['Onaya gönder',sendApproval],link:['Müşteri onay linki',async()=>{if(customer?._makeLink){await customer._makeLink();customer.scrollIntoView?.({block:'center',behavior:'smooth'});}}],gorsel:['Görsele git',go(step.target)],olcu:['Ölçülere git',go(step.target)],paket:['Atölye paketine git',go(step.target)]}[step.code];
-      const secondary=step.code==='link'?button('Müşteri onayladı',()=>approvalDialog(v)):step.alt==='hazirla'?button('Yine de formları hazırla',prepare):null;
+      const act={hazirla:['Formları hazırla',prepare],gonder:['Onaya gönder',sendApproval],link:['Müşteri onayladı',()=>approvalDialog(v)],gorsel:['Görsele git',go(step.target)],olcu:['Ölçülere git',go(step.target)],paket:['Atölye paketine git',go(step.target)]}[step.code];
+      const secondary=step.alt==='hazirla'?button('Yine de formları hazırla',prepare):null;
       content.append(el('section',{class:'p-next p-next-'+step.code,'aria-label':'Sıradaki adım'},el('p',{class:'p-next-text'},step.text),el('div',{class:'p-next-actions'},act?button(act[0],act[1],''):null,secondary)));
     }
     const oldSent=o.versions.filter(old=>old.id!==v.id).some(old=>state.outbox.some(j=>j.version_id===old.id && j.kind==='atolye_dosya' && ['tamam','tamamlandi','elle_gonderildi'].includes(j.status)));

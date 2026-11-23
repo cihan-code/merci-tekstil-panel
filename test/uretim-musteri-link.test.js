@@ -1,5 +1,5 @@
 'use strict';
-// G64: customer approval link button, WhatsApp link and customer notes on the order card. Invented data only.
+// G75: no customer approval link or WhatsApp button; customer notes stay read-only on the order card. Invented data only.
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
@@ -55,7 +55,7 @@ function harness({responses={},clipboard}={}) {
     }};
   context.addEventListener=()=>{};
   const source=SOURCE.replace("  renderFrame();if(session)run(async()=>{await loadCommon();await renderTab();});",
-    '  global.k={customerBlock,whatsappUrl,statusLabel,state,setRefresh:fn=>{refreshInPlace=fn;}};')
+    '  global.k={customerBlock,statusLabel,state,setRefresh:fn=>{refreshInPlace=fn;}};')
     .replace("  window.addEventListener('pagehide'","  global.addEventListener('pagehide'");
   vm.runInNewContext(source,context);
   const refreshed=[];context.k.setRefresh(async v=>{refreshed.push(v.id);});
@@ -66,33 +66,16 @@ const byText=(root,tag,text)=>root.find(e=>e.tag===tag&&e.textContent===text)[0]
 const LINK='https://panel.example.test/onay.html?t='+'A'.repeat(43);
 const ORDER={order_no:'MRC-G64-1'};
 
-test('onay bekleyen sürümde düğme link üretir, panoya kopyalar ve WhatsApp bağlantısını gösterir',async()=>{
-  const copied=[];
-  const h=harness({responses:{'POST surumler/7/musteri-link':{link:LINK,expiresAt:'2026-12-06T10:00:00.000Z',versionId:7}},clipboard:{writeText:async t=>{copied.push(t);}}});
-  const block=h.customerBlock(ORDER,{id:7,status:'onay_bekliyor'},[]);
-  const button=byText(block,'button','Müşteri onay linki');assert.ok(button);
-  await button.click();
-  assert.deepEqual(h.calls.map(c=>c.route+' '+c.method),['surumler/7/musteri-link POST']);
-  assert.deepEqual(copied,[LINK]);
-  const box=block.find(e=>e.tag==='input')[0];assert.equal(box.value,LINK);
-  const wa=block.find(e=>e.tag==='a')[0];
-  assert.equal(wa.textContent,"WhatsApp'ta aç");
-  assert.ok(wa.getAttribute('href').startsWith('https://wa.me/?text='));
-  assert.ok(wa.getAttribute('href').includes(encodeURIComponent(LINK)));
-  assert.ok(wa.getAttribute('href').includes(encodeURIComponent('MRC-G64-1')));
-  assert.ok(wa.getAttribute('href').includes(encodeURIComponent('MerciTex')));
-  assert.match(wa.getAttribute('rel'),/noopener/);
-  assert.match(block.textContent,/panoya kopyalandı/);
+test('onay bekleyen sürümde müşteri onay linki düğmesi ve WhatsApp bağlantısı yok, uç çağrılmıyor',async()=>{
+  const h=harness();
+  assert.equal(h.customerBlock(ORDER,{id:7,status:'onay_bekliyor'},[]),null);
+  const block=h.customerBlock(ORDER,{id:7,status:'onay_bekliyor'},[{id:1,adSoyad:'Ayşe Örnek',metin:'Not',tarih:'2026-11-22T09:00:00.000Z'}]);
+  assert.equal(block.find(e=>e.tag==='button'||e.tag==='a'||e.tag==='input').length,0);
+  assert.deepEqual(h.calls,[]);
+  assert.ok(!/musteri-link|onay linki|wa\.me/.test(SOURCE));
 });
 
-test('pano yoksa düğme yine linki gösterir ve elle kopyalamayı söyler',async()=>{
-  const h=harness({responses:{'POST surumler/7/musteri-link':{link:LINK,expiresAt:'2026-12-06T10:00:00.000Z'}}});
-  const block=h.customerBlock(ORDER,{id:7,status:'onay_bekliyor'},[]);
-  await byText(block,'button','Müşteri onay linki').click();
-  assert.match(block.textContent,/elle kopyalayın/);assert.equal(block.find(e=>e.tag==='input')[0].value,LINK);
-});
-
-test('onay bekleyen olmayan sürümde düğme yok; not yoksa blok hiç çizilmez',()=>{
+test('not yoksa blok hiç çizilmez',()=>{
   const h=harness();
   assert.equal(h.customerBlock(ORDER,{id:7,status:'onaylandi'},[]),null);
   assert.equal(h.customerBlock(ORDER,{id:7,status:'taslak'},undefined),null);
@@ -104,7 +87,6 @@ test('müşteri notu ad, tarih ve düz metin olarak görünür; HTML metin olara
   assert.match(block.textContent,/Müşteri değişiklik istedi/);assert.match(block.textContent,/Ayşe Örnek/);
   assert.match(block.textContent,/Göğüs <b>küçülsün<\/b>/);
   assert.equal(block.find(e=>e.tag==='b').length,0);
-  assert.ok(byText(block,'button','Müşteri onay linki'));
 });
 
 test('teyit türü ve liste rozeti: musteri_notu etiketi var, kaynak kod yalnız textContent/text düğümü kullanır',()=>{
